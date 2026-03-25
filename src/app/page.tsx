@@ -1,3 +1,5 @@
+// Página inicial da aplicação.
+// Neste momento, serve apenas como ponto de entrada simples.
 export default function Home() {
   return (
     <main className="min-h-screen flex items-center justify-center">
