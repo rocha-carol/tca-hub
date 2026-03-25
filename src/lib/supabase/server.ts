@@ -2,7 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 
 // Cria o cliente Supabase para uso no servidor.
-// Permite acesso a sessão e cookies em rotas e páginas server-side.
+// Permite acesso a sessão e cookies em páginas e rotas server-side.
 export async function createClient() {
   const cookieStore = await cookies();
 
