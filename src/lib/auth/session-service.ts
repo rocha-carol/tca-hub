@@ -50,3 +50,16 @@ export async function getAuthenticatedProfile(): Promise<Profile | null> {
 
   return (data || null) as Profile | null;
 }
+
+/**
+ * Verifica se o profile possui os dados mínimos para navegação no app.
+ *
+ * MVP atual: apenas nome com pelo menos 3 caracteres.
+ */
+export function hasMinimumProfile(profile: Pick<Profile, "name"> | null): boolean {
+  if (!profile) {
+    return false;
+  }
+
+  return typeof profile.name === "string" && profile.name.trim().length >= 3;
+}

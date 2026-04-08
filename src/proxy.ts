@@ -5,8 +5,9 @@ import { NextResponse, type NextRequest } from "next/server";
  * Proxy (Next.js 16): proteção de rotas para autenticação.
  *
  * Regras MVP:
- * - /dashboard* e /groups* exigem usuário autenticado
- * - /auth/login e /auth/signup redirecionam para /dashboard se já autenticado
+ * - /dashboard*, /groups*, /advisors* e /profile/setup* exigem usuário autenticado
+ * - /auth/login e /auth/signup redirecionam usuário autenticado
+ * - usuário autenticado com profile incompleto é redirecionado para /profile/setup
  */
 export async function proxy(request: NextRequest) {
   let supabaseResponse = NextResponse.next({
@@ -42,10 +43,24 @@ export async function proxy(request: NextRequest) {
 
   const { pathname } = request.nextUrl;
   const isAuthPage = pathname === "/auth/login" || pathname === "/auth/signup";
+  const isProfileSetupPage = pathname.startsWith("/profile/setup");
   const isProtectedPage =
     pathname.startsWith("/dashboard") ||
     pathname.startsWith("/groups") ||
-    pathname.startsWith("/advisors");
+    pathname.startsWith("/advisors") ||
+    pathname.startsWith("/profile/setup");
+
+  let profileIsComplete = false;
+
+  if (user) {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("name")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    profileIsComplete = typeof profile?.name === "string" && profile.name.trim().length >= 3;
+  }
 
   // Não autenticado tentando acessar rota protegida
   if (!user && isProtectedPage) {
@@ -54,10 +69,24 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
+  // Autenticado com profile incompleto deve concluir setup antes de acessar áreas do app
+  if (user && !profileIsComplete && !isProfileSetupPage) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/profile/setup";
+    return NextResponse.redirect(url);
+  }
+
+  // Autenticado com profile já completo não precisa ficar no setup
+  if (user && profileIsComplete && isProfileSetupPage) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/dashboard";
+    return NextResponse.redirect(url);
+  }
+
   // Autenticado tentando acessar tela de login/cadastro
   if (user && isAuthPage) {
     const url = request.nextUrl.clone();
-    url.pathname = "/dashboard";
+    url.pathname = profileIsComplete ? "/dashboard" : "/profile/setup";
     return NextResponse.redirect(url);
   }
 
@@ -68,6 +97,8 @@ export const config = {
   matcher: [
     "/auth/login",
     "/auth/signup",
+    "/profile/setup",
+    "/profile/setup/:path*",
     "/dashboard/:path*",
     "/groups/:path*",
     "/advisors/:path*",
