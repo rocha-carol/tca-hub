@@ -1,6 +1,97 @@
 import { createClient } from "@/lib/supabase/client";
 import type { SignUpData, SignInData, AuthResponse, AuthError } from "@/types/auth";
 
+type BrowserSupabaseClient = ReturnType<typeof createClient>;
+
+/**
+ * Etapa 3 — Integração auth.users ↔ profiles.
+ *
+ * Garante que todo usuário autenticado possua profile correspondente.
+ * Regras:
+ * - id em profiles sempre igual ao id de auth.users
+ * - se profile não existir, cria com defaults seguros
+ * - se existir, corrige campos essenciais ausentes (nome/email)
+ */
+async function ensureProfileForAuthUser(
+  supabase: BrowserSupabaseClient,
+  authUser: {
+    id: string;
+    email?: string | null;
+    user_metadata?: {
+      name?: unknown;
+    };
+  },
+  preferredName?: string
+) {
+  const normalizedNameFromArg = preferredName?.trim() || "";
+  const normalizedNameFromMetadata =
+    typeof authUser.user_metadata?.name === "string" ? authUser.user_metadata.name.trim() : "";
+
+  const fallbackName = normalizedNameFromArg || normalizedNameFromMetadata || "Usuário";
+  const fallbackEmail = authUser.email || "";
+
+  const { data: existingProfile, error: findError } = await supabase
+    .from("profiles")
+    .select("*")
+    .eq("id", authUser.id)
+    .maybeSingle();
+
+  if (findError && findError.code !== "PGRST116") {
+    throw new Error(`Erro ao verificar profile do usuário: ${findError.message}`);
+  }
+
+  // Profile não existe: cria registro 1:1 com auth.users
+  if (!existingProfile) {
+    const payload = {
+      id: authUser.id,
+      name: fallbackName,
+      email: fallbackEmail,
+      role: "student",
+      active: true,
+    };
+
+    const { data: insertedProfile, error: insertError } = await supabase
+      .from("profiles")
+      .insert(payload)
+      .select("*")
+      .single();
+
+    if (insertError) {
+      throw new Error(`Erro ao criar profile do usuário: ${insertError.message}`);
+    }
+
+    return insertedProfile;
+  }
+
+  // Profile já existe: corrige campos essenciais ausentes sem sobrescrever regra de negócio
+  const patch: Record<string, unknown> = {};
+
+  if (!existingProfile.name && fallbackName) {
+    patch.name = fallbackName;
+  }
+
+  if ((!existingProfile.email || existingProfile.email.trim() === "") && fallbackEmail) {
+    patch.email = fallbackEmail;
+  }
+
+  if (Object.keys(patch).length === 0) {
+    return existingProfile;
+  }
+
+  const { data: updatedProfile, error: updateError } = await supabase
+    .from("profiles")
+    .update(patch)
+    .eq("id", authUser.id)
+    .select("*")
+    .single();
+
+  if (updateError) {
+    throw new Error(`Erro ao atualizar profile do usuário: ${updateError.message}`);
+  }
+
+  return updatedProfile;
+}
+
 /**
  * Efetua cadastro (signup) de novo usuário no sistema.
  *
@@ -17,13 +108,8 @@ import type { SignUpData, SignInData, AuthResponse, AuthError } from "@/types/au
 export async function signUp(data: SignUpData): Promise<AuthResponse> {
   try {
     const supabase = createClient();
-    console.log("[auth-service.signUp] iniciado", {
-      email: data.email,
-      name: data.name,
-      passwordLength: data.password.length,
-    });
 
-    // 1) Criar usuário em Supabase Auth
+    // 1) Criar usuário em Supabase Auth (auth.users)
     // O método signUp retorna o usuário criado e uma sessão
     const { data: authData, error: authError } = await supabase.auth.signUp({
       email: data.email,
@@ -34,13 +120,6 @@ export async function signUp(data: SignUpData): Promise<AuthResponse> {
           name: data.name,
         },
       },
-    });
-
-    console.log("[auth-service.signUp] retorno auth.signUp", {
-      hasUser: Boolean(authData?.user),
-      userId: authData?.user?.id,
-      errorCode: authError?.code,
-      errorMessage: authError?.message,
     });
 
     // Se houver erro na autenticação, lançar exceção
@@ -69,42 +148,8 @@ export async function signUp(data: SignUpData): Promise<AuthResponse> {
       } as AuthError;
     }
 
-    // 2) Criar profile em public.profiles
-    // O profile.id deve ser igual a auth.users.id (relação 1:1)
-    const profilePayload = {
-      id: authData.user.id, // Usar o UUID do usuário autenticado
-      name: data.name,
-      email: data.email,
-      role: "student", // Role padrão para novos usuários
-      active: true,
-    };
-
-    // 2) Criar ou atualizar profile (idempotente)
-    const { error: upsertError } = await supabase
-      .from("profiles")
-      .upsert(profilePayload, { onConflict: "id" });
-
-    console.log("[auth-service.signUp] retorno upsert profile", {
-      hasError: Boolean(upsertError),
-      errorCode: upsertError?.code,
-      errorMessage: upsertError?.message,
-    });
-
-    // 3) Tentar ler profile criado; se falhar, não bloquear signup
-    const { data: profileData } = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("id", authData.user.id)
-      .maybeSingle();
-
-    console.log("[auth-service.signUp] profile após upsert", {
-      hasProfile: Boolean(profileData),
-      profileId: profileData?.id,
-    });
-
-    if (upsertError) {
-      console.warn("Aviso em signUp (profile upsert):", upsertError.message);
-    }
+    // 2) Garantir profile 1:1 integrado com auth.users
+    const profileData = await ensureProfileForAuthUser(supabase, authData.user, data.name);
 
     // 3) Retornar resposta com dados de autenticação e perfil
     return {
@@ -186,18 +231,8 @@ export async function signIn(data: SignInData): Promise<AuthResponse> {
       } as AuthError;
     }
 
-    // 2) Buscar profile do usuário logado
-    const { data: profileData, error: profileError } = await supabase
-      .from("profiles")
-      .select("*")
-      .eq("id", authData.user.id)
-      .maybeSingle();
-
-    // Se não encontrar profile, não bloquear login.
-    // Isso permite autenticar e tratar criação/reparo de profile em etapas seguintes.
-    if (profileError) {
-      console.warn("Aviso em signIn (profile query):", profileError.message);
-    }
+    // 2) Garantir profile 1:1 integrado com auth.users no login
+    const profileData = await ensureProfileForAuthUser(supabase, authData.user);
 
     // 3) Retornar resposta com dados de autenticação e perfil
     return {
