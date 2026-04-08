@@ -2,6 +2,7 @@ import Link from "next/link";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { getAuthenticatedProfile, getAuthenticatedUser } from "@/lib/auth/session-service";
 import { fetchAllGroups } from "@/services/group-service";
 import { fetchAllAdvisors } from "@/services/advisor-service";
 import type { GroupStatus } from "@/types/group";
@@ -18,14 +19,6 @@ function getStatusLabel(status: GroupStatus) {
  * Exibe visão geral do sistema: contadores, grupos recentes e perfil do usuário.
  */
 export default async function DashboardPage() {
-  async function handleSignOut() {
-    "use server";
-
-    const supabase = await createClient();
-    await supabase.auth.signOut();
-    redirect("/auth/login");
-  }
-
   async function handleUpdateProfile(formData: FormData) {
     "use server";
 
@@ -57,10 +50,7 @@ export default async function DashboardPage() {
     redirect("/dashboard");
   }
 
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getAuthenticatedUser();
 
   if (!user) {
     return (
@@ -75,11 +65,7 @@ export default async function DashboardPage() {
     );
   }
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("*")
-    .eq("id", user.id)
-    .maybeSingle();
+  const profile = await getAuthenticatedProfile();
 
   // Busca dados de resumo — falhas silenciosas para não quebrar o dashboard
   let groups: Awaited<ReturnType<typeof fetchAllGroups>> = [];
