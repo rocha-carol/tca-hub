@@ -19,12 +19,23 @@ export default async function AdvisorsPage() {
 
     const name = String(formData.get("name") ?? "").trim();
     const email = String(formData.get("email") ?? "").trim();
+    const roleTitle = String(formData.get("role_title") ?? "").trim();
+    const employeeCode = String(formData.get("employee_code") ?? "").trim();
+    const school = String(formData.get("school") ?? "").trim();
+    const areaOfActivity = String(formData.get("area_of_activity") ?? "").trim();
 
     if (!name || name.length < 2 || !email) {
       redirect("/advisors");
     }
 
-    await createAdvisor({ name, email });
+    await createAdvisor({
+      name,
+      email,
+      role_title: roleTitle || null,
+      employee_code: employeeCode || null,
+      school: school || null,
+      area_of_activity: areaOfActivity || null,
+    });
 
     revalidatePath("/advisors");
     redirect("/advisors");
@@ -85,6 +96,62 @@ export default async function AdvisorsPage() {
               />
             </div>
 
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label htmlFor="role_title" className="block text-sm font-medium text-gray-700 mb-1">
+                  Cargo/Função
+                </label>
+                <input
+                  id="role_title"
+                  name="role_title"
+                  type="text"
+                  placeholder="Ex.: Professor de Ciências"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div>
+                <label htmlFor="employee_code" className="block text-sm font-medium text-gray-700 mb-1">
+                  Código funcional
+                </label>
+                <input
+                  id="employee_code"
+                  name="employee_code"
+                  type="text"
+                  placeholder="Ex.: 123456"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label htmlFor="school" className="block text-sm font-medium text-gray-700 mb-1">
+                  Escola
+                </label>
+                <input
+                  id="school"
+                  name="school"
+                  type="text"
+                  placeholder="Ex.: EMEF Exemplo"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div>
+                <label htmlFor="area_of_activity" className="block text-sm font-medium text-gray-700 mb-1">
+                  Área de atuação
+                </label>
+                <input
+                  id="area_of_activity"
+                  name="area_of_activity"
+                  type="text"
+                  placeholder="Ex.: Ciências da Natureza"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+
             <div className="flex flex-wrap gap-3">
               <button
                 type="submit"
@@ -116,6 +183,11 @@ export default async function AdvisorsPage() {
                   <div>
                     <p className="font-medium text-gray-900">{advisor.name}</p>
                     <p className="text-sm text-gray-600">{advisor.email}</p>
+                    {(advisor.role_title || advisor.school) && (
+                      <p className="text-xs text-gray-500 mt-1">
+                        {[advisor.role_title, advisor.school].filter(Boolean).join(" • ")}
+                      </p>
+                    )}
                   </div>
                   <span className="text-xs text-gray-400">ID: {advisor.id.slice(0, 8)}…</span>
                 </article>

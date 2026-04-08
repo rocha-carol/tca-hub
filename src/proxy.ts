@@ -48,6 +48,7 @@ export async function proxy(request: NextRequest) {
     pathname.startsWith("/dashboard") ||
     pathname.startsWith("/groups") ||
     pathname.startsWith("/advisors") ||
+    pathname.startsWith("/students") ||
     pathname.startsWith("/profile/setup");
 
   let profileIsComplete = false;
@@ -102,5 +103,6 @@ export const config = {
     "/dashboard/:path*",
     "/groups/:path*",
     "/advisors/:path*",
+    "/students/:path*",
   ],
 };

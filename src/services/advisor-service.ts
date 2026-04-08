@@ -9,6 +9,10 @@ export interface CreateAdvisorData {
 	name: string;
 	email: string;
 	profile_id?: string | null;
+	role_title?: string | null;
+	employee_code?: string | null;
+	school?: string | null;
+	area_of_activity?: string | null;
 }
 
 /**
@@ -48,6 +52,10 @@ export async function createAdvisor(data: CreateAdvisorData): Promise<Advisor> {
 			name: data.name,
 			email: data.email,
 			profile_id: data.profile_id ?? null,
+			role_title: data.role_title ?? null,
+			employee_code: data.employee_code ?? null,
+			school: data.school ?? null,
+			area_of_activity: data.area_of_activity ?? null,
 		})
 		.select("*")
 		.single();

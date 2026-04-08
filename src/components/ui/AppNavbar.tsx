@@ -66,6 +66,12 @@ export default async function AppNavbar() {
               >
                 Orientadores
               </Link>
+              <Link
+                href="/students"
+                className="text-sm font-medium text-gray-700 hover:text-gray-900"
+              >
+                Estudantes
+              </Link>
               <span className="hidden sm:inline text-sm text-gray-500">
                 {user.email}
               </span>
