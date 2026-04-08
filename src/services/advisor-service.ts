@@ -8,6 +8,7 @@ function isAdvisorsTableMissing(message: string) {
 export interface CreateAdvisorData {
 	name: string;
 	email: string;
+	profile_id?: string | null;
 }
 
 /**
@@ -43,7 +44,11 @@ export async function createAdvisor(data: CreateAdvisorData): Promise<Advisor> {
 
 	const { data: inserted, error } = await supabase
 		.from("advisors")
-		.insert({ name: data.name, email: data.email })
+		.insert({
+			name: data.name,
+			email: data.email,
+			profile_id: data.profile_id ?? null,
+		})
 		.select("*")
 		.single();
 
