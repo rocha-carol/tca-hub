@@ -173,23 +173,38 @@ export default async function AdvisorsPage() {
         {/* Listagem */}
         <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm">
           <h2 className="text-xl font-semibold text-gray-900 mb-4">Orientadores cadastrados</h2>
+          <p className="text-sm text-gray-600 mb-4">
+            Total de orientadores cadastrados: <strong>{advisors.length}</strong>
+          </p>
 
           {advisors.length === 0 ? (
             <p className="text-gray-700">Nenhum orientador cadastrado ainda.</p>
           ) : (
-            <div className="divide-y divide-gray-100">
+            <div className="space-y-4">
               {advisors.map((advisor) => (
-                <article key={advisor.id} className="py-3 flex items-center justify-between">
-                  <div>
-                    <p className="font-medium text-gray-900">{advisor.name}</p>
-                    <p className="text-sm text-gray-600">{advisor.email}</p>
-                    {(advisor.role_title || advisor.school) && (
-                      <p className="text-xs text-gray-500 mt-1">
-                        {[advisor.role_title, advisor.school].filter(Boolean).join(" • ")}
-                      </p>
-                    )}
+                <article key={advisor.id} className="border border-gray-200 rounded-lg p-4">
+                  <div className="flex items-start justify-between gap-4 mb-3">
+                    <div>
+                      <p className="font-semibold text-gray-900">{advisor.name}</p>
+                      <p className="text-sm text-gray-600">{advisor.email}</p>
+                    </div>
+                    <span className="text-xs text-gray-400">ID: {advisor.id.slice(0, 8)}…</span>
                   </div>
-                  <span className="text-xs text-gray-400">ID: {advisor.id.slice(0, 8)}…</span>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                    <p className="text-gray-700">
+                      <strong>Cargo/Função:</strong> {advisor.role_title || "Não informado"}
+                    </p>
+                    <p className="text-gray-700">
+                      <strong>Código funcional:</strong> {advisor.employee_code || "Não informado"}
+                    </p>
+                    <p className="text-gray-700">
+                      <strong>Escola:</strong> {advisor.school || "Não informada"}
+                    </p>
+                    <p className="text-gray-700">
+                      <strong>Área de atuação:</strong> {advisor.area_of_activity || "Não informada"}
+                    </p>
+                  </div>
                 </article>
               ))}
             </div>

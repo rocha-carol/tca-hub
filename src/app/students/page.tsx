@@ -139,13 +139,40 @@ export default async function StudentsPage() {
         </div>
 
         <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm">
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">Registros institucionais</h2>
+          <h2 className="text-xl font-semibold text-gray-900 mb-4">Estudantes cadastrados</h2>
           <p className="text-sm text-gray-600 mb-3">
             Total de estudantes cadastrados: <strong>{students.length}</strong>
           </p>
-          <p className="text-sm text-gray-500">
-            A visualização detalhada da lista de estudantes será consolidada na próxima etapa.
-          </p>
+
+          {students.length === 0 ? (
+            <p className="text-gray-700">Nenhum estudante cadastrado ainda.</p>
+          ) : (
+            <div className="space-y-4 mt-4">
+              {students.map((student) => (
+                <article key={student.id} className="border border-gray-200 rounded-lg p-4">
+                  <div className="flex items-start justify-between gap-4 mb-3">
+                    <div>
+                      <p className="font-semibold text-gray-900">{student.name}</p>
+                      <p className="text-sm text-gray-600">{student.email}</p>
+                    </div>
+                    <span className="text-xs text-gray-400">ID: {student.id.slice(0, 8)}…</span>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                    <p className="text-gray-700">
+                      <strong>Matrícula:</strong> {student.registration_code || "Não informada"}
+                    </p>
+                    <p className="text-gray-700">
+                      <strong>Série/Ano:</strong> {student.grade || "Não informado"}
+                    </p>
+                    <p className="text-gray-700 md:col-span-2">
+                      <strong>Escola:</strong> {student.school || "Não informada"}
+                    </p>
+                  </div>
+                </article>
+              ))}
+            </div>
+          )}
         </div>
       </section>
     </main>
