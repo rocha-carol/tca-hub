@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 
@@ -17,11 +18,55 @@ export default async function DashboardPage() {
     redirect("/auth/login");
   }
 
+  async function handleUpdateProfile(formData: FormData) {
+    "use server";
+
+    const supabase = await createClient();
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) {
+      redirect("/auth/login");
+    }
+
+    const rawName = formData.get("name");
+    const name = typeof rawName === "string" ? rawName.trim() : "";
+
+    if (!name || name.length < 3) {
+      // Para MVP: validação simples sem bloquear com erro complexo de UI.
+      // Mantém consistência mínima de dados.
+      redirect("/dashboard");
+    }
+
+    await supabase
+      .from("profiles")
+      .update({ name })
+      .eq("id", user.id);
+
+    // Mantém metadata do auth sincronizada com o profile.
+    await supabase.auth.updateUser({
+      data: {
+        name,
+      },
+    });
+
+    revalidatePath("/dashboard");
+    redirect("/dashboard");
+  }
+
   // Buscar sessão do usuário logado
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("*")
+    .eq("id", user?.id ?? "")
+    .maybeSingle();
 
   // Se não há usuário logado, mostrar mensagem de não autenticado
   if (!user) {
@@ -93,7 +138,10 @@ export default async function DashboardPage() {
             <h3 className="text-lg font-semibold text-gray-800 mb-4">Informações do Usuário</h3>
             <ul className="space-y-2 text-gray-700">
               <li>
-                <strong>Nome de usuário:</strong> {user.user_metadata?.name || "Não definido"}
+                <strong>Nome de usuário:</strong> {profile?.name || user.user_metadata?.name || "Não definido"}
+              </li>
+              <li>
+                <strong>Perfil:</strong> {profile?.role || "student"}
               </li>
               <li>
                 <strong>Confirmado:</strong> {user.email_confirmed_at ? "Sim ✓" : "Não"}
@@ -102,6 +150,28 @@ export default async function DashboardPage() {
                 <strong>Data de criação:</strong> {new Date(user.created_at).toLocaleDateString("pt-BR")}
               </li>
             </ul>
+
+            {/* Edição mínima de perfil (MVP) */}
+            <div className="mt-6 border-t pt-6">
+              <h4 className="text-md font-semibold text-gray-800 mb-3">Editar nome do perfil</h4>
+
+              <form action={handleUpdateProfile} className="flex flex-col sm:flex-row gap-3">
+                <input
+                  type="text"
+                  name="name"
+                  defaultValue={profile?.name || user.user_metadata?.name || ""}
+                  placeholder="Digite seu nome"
+                  className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+
+                <button
+                  type="submit"
+                  className="bg-blue-500 hover:bg-blue-600 text-white font-medium py-2 px-4 rounded-md transition"
+                >
+                  Salvar nome
+                </button>
+              </form>
+            </div>
           </div>
         </div>
 
