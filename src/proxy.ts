@@ -5,7 +5,7 @@ import { NextResponse, type NextRequest } from "next/server";
  * Proxy (Next.js 16): proteção de rotas para autenticação.
  *
  * Regras MVP:
- * - /dashboard* exige usuário autenticado
+ * - /dashboard* e /groups* exigem usuário autenticado
  * - /auth/login e /auth/signup redirecionam para /dashboard se já autenticado
  */
 export async function proxy(request: NextRequest) {
@@ -42,7 +42,7 @@ export async function proxy(request: NextRequest) {
 
   const { pathname } = request.nextUrl;
   const isAuthPage = pathname === "/auth/login" || pathname === "/auth/signup";
-  const isProtectedPage = pathname.startsWith("/dashboard");
+  const isProtectedPage = pathname.startsWith("/dashboard") || pathname.startsWith("/groups");
 
   // Não autenticado tentando acessar rota protegida
   if (!user && isProtectedPage) {
@@ -66,5 +66,6 @@ export const config = {
     "/auth/login",
     "/auth/signup",
     "/dashboard/:path*",
+    "/groups/:path*",
   ],
 };

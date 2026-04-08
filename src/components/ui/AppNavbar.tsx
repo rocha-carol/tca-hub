@@ -54,6 +54,12 @@ export default async function AppNavbar() {
               >
                 Dashboard
               </Link>
+              <Link
+                href="/groups"
+                className="text-sm font-medium text-gray-700 hover:text-gray-900"
+              >
+                Grupos
+              </Link>
               <span className="hidden sm:inline text-sm text-gray-500">
                 {user.email}
               </span>
