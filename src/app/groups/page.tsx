@@ -10,15 +10,26 @@ function getStatusLabel(status: GroupStatus) {
   return "Concluído";
 }
 
+interface GroupsPageProps {
+  searchParams?: Promise<{ status?: string }>;
+}
+
 /**
  * Página inicial de Grupos (MVP).
  *
  * Esta etapa entrega uma base navegável do módulo,
  * com estado vazio e CTA para criação futura de grupo.
  */
-export default async function GroupsPage() {
+export default async function GroupsPage({ searchParams }: GroupsPageProps) {
   let groups: Group[] = [];
   let groupsError: string | null = null;
+
+  const params = searchParams ? await searchParams : {};
+  const rawStatus = params.status ?? "all";
+  const currentFilter: "all" | GroupStatus =
+    rawStatus === "planejamento" || rawStatus === "em_andamento" || rawStatus === "concluido"
+      ? rawStatus
+      : "all";
 
   async function handleCreateGroup(formData: FormData) {
     "use server";
@@ -56,6 +67,11 @@ export default async function GroupsPage() {
   } catch (error) {
     groupsError = error instanceof Error ? error.message : "Erro desconhecido ao carregar grupos.";
   }
+
+  const filteredGroups =
+    currentFilter === "all"
+      ? groups
+      : groups.filter((group) => (group.status || "planejamento") === currentFilter);
 
   return (
     <main className="min-h-screen bg-gray-50">
@@ -191,13 +207,56 @@ export default async function GroupsPage() {
         <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm">
           <h2 className="text-xl font-semibold text-gray-900 mb-4">Grupos cadastrados</h2>
 
-          {groups.length === 0 ? (
-            <p className="text-gray-700">Nenhum grupo encontrado. Crie o primeiro acima.</p>
+          <div className="flex flex-wrap gap-2 mb-4">
+            <Link
+              href="/groups"
+              className={`px-3 py-1.5 rounded-md text-sm font-medium ${
+                currentFilter === "all"
+                  ? "bg-blue-600 text-white"
+                  : "bg-gray-100 hover:bg-gray-200 text-gray-700"
+              }`}
+            >
+              Todos
+            </Link>
+            <Link
+              href="/groups?status=planejamento"
+              className={`px-3 py-1.5 rounded-md text-sm font-medium ${
+                currentFilter === "planejamento"
+                  ? "bg-blue-600 text-white"
+                  : "bg-gray-100 hover:bg-gray-200 text-gray-700"
+              }`}
+            >
+              Planejamento
+            </Link>
+            <Link
+              href="/groups?status=em_andamento"
+              className={`px-3 py-1.5 rounded-md text-sm font-medium ${
+                currentFilter === "em_andamento"
+                  ? "bg-blue-600 text-white"
+                  : "bg-gray-100 hover:bg-gray-200 text-gray-700"
+              }`}
+            >
+              Em andamento
+            </Link>
+            <Link
+              href="/groups?status=concluido"
+              className={`px-3 py-1.5 rounded-md text-sm font-medium ${
+                currentFilter === "concluido"
+                  ? "bg-blue-600 text-white"
+                  : "bg-gray-100 hover:bg-gray-200 text-gray-700"
+              }`}
+            >
+              Concluído
+            </Link>
+          </div>
+
+          {filteredGroups.length === 0 ? (
+            <p className="text-gray-700">Nenhum grupo encontrado para este filtro.</p>
           ) : (
             <div className="space-y-4">
-              {groups.map((group, index) => (
+              {filteredGroups.map((group, index) => (
                 <article key={group.id} className="border border-gray-200 rounded-md p-4">
-                  <h3 className="font-semibold text-gray-900 mb-2">Grupo {groups.length - index}</h3>
+                  <h3 className="font-semibold text-gray-900 mb-2">Grupo {filteredGroups.length - index}</h3>
                   <p className="text-xs text-gray-500 mb-2">
                     Status: {getStatusLabel((group.status as GroupStatus) || "planejamento")}
                   </p>
