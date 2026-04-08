@@ -90,3 +90,33 @@ export async function createGroup(data: CreateGroupData): Promise<Group> {
 
 	return inserted as Group;
 }
+
+/**
+ * Busca um grupo pelo ID.
+ *
+ * Retorna null se o grupo não for encontrado.
+ */
+export async function fetchGroupById(id: string): Promise<Group | null> {
+	const supabase = await createClient();
+
+	const { data, error } = await supabase
+		.from("groups")
+		.select("*")
+		.eq("id", id)
+		.single();
+
+	if (error) {
+		if (error.code === "PGRST116") {
+			// Nenhuma linha encontrada
+			return null;
+		}
+		if (isGroupsTableMissing(error.message)) {
+			throw new Error(
+				"Tabela groups ainda não existe no Supabase. Execute o script database/001_create_groups_table.sql no SQL Editor."
+			);
+		}
+		throw new Error(`Erro ao buscar grupo: ${error.message}`);
+	}
+
+	return data as Group;
+}

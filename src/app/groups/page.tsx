@@ -214,6 +214,14 @@ export default async function GroupsPage() {
                   <p className="text-sm text-gray-700 mt-1">
                     <strong>Descrição:</strong> {group.description || "Sem descrição"}
                   </p>
+                  <div className="mt-3">
+                    <Link
+                      href={`/groups/${group.id}`}
+                      className="text-blue-600 hover:underline text-sm font-medium"
+                    >
+                      Ver detalhes →
+                    </Link>
+                  </div>
                 </article>
               ))}
             </div>
