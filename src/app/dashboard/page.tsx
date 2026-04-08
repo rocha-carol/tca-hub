@@ -2,12 +2,13 @@ import Link from "next/link";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { fetchAllGroups } from "@/services/group-service";
+import { fetchAllAdvisors } from "@/services/advisor-service";
 
 /**
- * Página de Dashboard.
+ * Dashboard principal do TCA Hub.
  *
- * Esta é uma server component que exibe dados do usuário autenticado.
- * Rota: /dashboard
+ * Exibe visão geral do sistema: contadores, grupos recentes e perfil do usuário.
  */
 export default async function DashboardPage() {
   async function handleSignOut() {
@@ -35,8 +36,6 @@ export default async function DashboardPage() {
     const name = typeof rawName === "string" ? rawName.trim() : "";
 
     if (!name || name.length < 3) {
-      // Para MVP: validação simples sem bloquear com erro complexo de UI.
-      // Mantém consistência mínima de dados.
       redirect("/dashboard");
     }
 
@@ -45,40 +44,23 @@ export default async function DashboardPage() {
       .update({ name })
       .eq("id", user.id);
 
-    // Mantém metadata do auth sincronizada com o profile.
-    await supabase.auth.updateUser({
-      data: {
-        name,
-      },
-    });
+    await supabase.auth.updateUser({ data: { name } });
 
     revalidatePath("/dashboard");
     redirect("/dashboard");
   }
 
-  // Buscar sessão do usuário logado
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("*")
-    .eq("id", user?.id ?? "")
-    .maybeSingle();
-
-  // Se não há usuário logado, mostrar mensagem de não autenticado
   if (!user) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
-        <div className="w-full max-w-md bg-white rounded-lg shadow-md p-6 text-center">
-          <h1 className="text-2xl font-bold text-gray-800 mb-4">Acesso Não Autorizado</h1>
-          <p className="text-gray-600 mb-6">Você precisa estar logado para acessar o dashboard.</p>
-          <Link
-            href="/auth/login"
-            className="inline-block bg-blue-500 hover:bg-blue-600 text-white font-medium py-2 px-6 rounded-md transition"
-          >
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <div className="bg-white rounded-lg shadow-md p-6 text-center">
+          <p className="text-gray-600 mb-4">Você precisa estar logado para acessar o dashboard.</p>
+          <Link href="/auth/login" className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-6 rounded-md">
             Ir para Login
           </Link>
         </div>
@@ -86,122 +68,127 @@ export default async function DashboardPage() {
     );
   }
 
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("*")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  // Busca dados de resumo — falhas silenciosas para não quebrar o dashboard
+  let groups: Awaited<ReturnType<typeof fetchAllGroups>> = [];
+  let advisorCount = 0;
+
+  try {
+    groups = await fetchAllGroups();
+  } catch {
+    // tabela não existe ainda
+  }
+
+  try {
+    const advisors = await fetchAllAdvisors();
+    advisorCount = advisors.length;
+  } catch {
+    // tabela não existe ainda
+  }
+
+  const recentGroups = groups.slice(0, 5);
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
-      <div className="max-w-4xl mx-auto">
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold text-gray-800 mb-2">Welcome, {user.email}</h1>
-          <p className="text-gray-600">Você está logado no TCA Hub</p>
-        </div>
+    <main className="min-h-screen bg-gray-50">
+      <section className="max-w-5xl mx-auto px-6 py-10">
+        <header className="mb-8">
+          <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
+          <p className="text-gray-600 mt-1">
+            Olá, {profile?.name || user.email}
+          </p>
+        </header>
 
-        {/* Card principal */}
-        <div className="bg-white rounded-lg shadow-md p-8 mb-6">
-          <h2 className="text-2xl font-bold text-gray-800 mb-6">Dashboard</h2>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-            {/* Info Card 1 */}
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-              <h3 className="text-sm font-medium text-blue-900 mb-2">ID do Usuário</h3>
-              <p className="text-blue-700 font-mono text-sm truncate">{user.id}</p>
-            </div>
-
-            {/* Info Card 2 */}
-            <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-              <h3 className="text-sm font-medium text-green-900 mb-2">Email</h3>
-              <p className="text-green-700">{user.email}</p>
-            </div>
-
-            {/* Info Card 3 */}
-            <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
-              <h3 className="text-sm font-medium text-purple-900 mb-2">Status</h3>
-              <p className="text-purple-700 font-semibold">✓ Autenticado</p>
-            </div>
-
-            {/* Info Card 4 */}
-            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-              <h3 className="text-sm font-medium text-yellow-900 mb-2">Última atualização</h3>
-              <p className="text-yellow-700 text-sm">
-                {new Date().toLocaleDateString("pt-BR", {
-                  year: "numeric",
-                  month: "long",
-                  day: "numeric",
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })}
-              </p>
-            </div>
+        {/* Contadores */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
+          <div className="bg-white border border-gray-200 rounded-lg p-5 shadow-sm">
+            <p className="text-sm font-medium text-gray-500">Total de grupos</p>
+            <p className="text-4xl font-bold text-blue-600 mt-1">{groups.length}</p>
+            <Link href="/groups" className="text-sm text-blue-600 hover:underline mt-2 inline-block">
+              Ver todos os grupos →
+            </Link>
           </div>
 
-          {/* Seção de informações do usuário */}
-          <div className="border-t pt-6">
-            <h3 className="text-lg font-semibold text-gray-800 mb-4">Informações do Usuário</h3>
-            <ul className="space-y-2 text-gray-700">
-              <li>
-                <strong>Nome de usuário:</strong> {profile?.name || user.user_metadata?.name || "Não definido"}
-              </li>
-              <li>
-                <strong>Perfil:</strong> {profile?.role || "student"}
-              </li>
-              <li>
-                <strong>Confirmado:</strong> {user.email_confirmed_at ? "Sim ✓" : "Não"}
-              </li>
-              <li>
-                <strong>Data de criação:</strong> {new Date(user.created_at).toLocaleDateString("pt-BR")}
-              </li>
-            </ul>
-
-            {/* Edição mínima de perfil (MVP) */}
-            <div className="mt-6 border-t pt-6">
-              <h4 className="text-md font-semibold text-gray-800 mb-3">Editar nome do perfil</h4>
-
-              <form action={handleUpdateProfile} className="flex flex-col sm:flex-row gap-3">
-                <input
-                  type="text"
-                  name="name"
-                  defaultValue={profile?.name || user.user_metadata?.name || ""}
-                  placeholder="Digite seu nome"
-                  className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-
-                <button
-                  type="submit"
-                  className="bg-blue-500 hover:bg-blue-600 text-white font-medium py-2 px-4 rounded-md transition"
-                >
-                  Salvar nome
-                </button>
-              </form>
-            </div>
+          <div className="bg-white border border-gray-200 rounded-lg p-5 shadow-sm">
+            <p className="text-sm font-medium text-gray-500">Orientadores cadastrados</p>
+            <p className="text-4xl font-bold text-green-600 mt-1">{advisorCount}</p>
+            <Link href="/advisors" className="text-sm text-green-600 hover:underline mt-2 inline-block">
+              Ver orientadores →
+            </Link>
           </div>
         </div>
 
-        {/* Ações */}
-        <div className="flex gap-4 justify-center">
-          <Link
-            href="/"
-            className="bg-gray-500 hover:bg-gray-600 text-white font-medium py-2 px-6 rounded-md transition"
-          >
-            Voltar para Home
-          </Link>
+        {/* Grupos recentes */}
+        <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm mb-8">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-semibold text-gray-900">Grupos recentes</h2>
+            <Link href="/groups" className="text-sm text-blue-600 hover:underline">
+              Ver todos
+            </Link>
+          </div>
 
-          <form action={handleSignOut}>
+          {recentGroups.length === 0 ? (
+            <p className="text-gray-500 text-sm">
+              Nenhum grupo cadastrado.{" "}
+              <Link href="/groups" className="text-blue-600 hover:underline">
+                Criar primeiro grupo
+              </Link>
+            </p>
+          ) : (
+            <div className="divide-y divide-gray-100">
+              {recentGroups.map((group) => (
+                <div key={group.id} className="py-3 flex items-center justify-between">
+                  <div>
+                    <p className="font-medium text-gray-900">{group.member_1_name}</p>
+                    <p className="text-sm text-gray-500">
+                      {group.theme || "Sem tema"} · {group.member_1_series}
+                    </p>
+                  </div>
+                  <Link
+                    href={`/groups/${group.id}`}
+                    className="text-sm text-blue-600 hover:underline"
+                  >
+                    Ver detalhes →
+                  </Link>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Perfil */}
+        <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm">
+          <h2 className="text-xl font-semibold text-gray-900 mb-4">Meu perfil</h2>
+
+          <ul className="space-y-1 text-sm text-gray-700 mb-5">
+            <li><strong>Nome:</strong> {profile?.name || user.user_metadata?.name || "Não definido"}</li>
+            <li><strong>E-mail:</strong> {user.email}</li>
+            <li><strong>Perfil:</strong> {profile?.role || "student"}</li>
+          </ul>
+
+          <form action={handleUpdateProfile} className="flex flex-col sm:flex-row gap-3">
+            <input
+              type="text"
+              name="name"
+              defaultValue={profile?.name || user.user_metadata?.name || ""}
+              placeholder="Editar nome"
+              className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
             <button
               type="submit"
-              className="bg-red-500 hover:bg-red-600 text-white font-medium py-2 px-6 rounded-md transition"
+              className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md"
             >
-              Logout
+              Salvar nome
             </button>
           </form>
         </div>
-
-        {/* Info box */}
-        <div className="mt-8 bg-blue-100 border border-blue-400 text-blue-800 px-4 py-3 rounded">
-          <p className="text-sm">
-            <strong>Nota:</strong> Este é um dashboard básico de teste para validar o fluxo de autenticação. As
-            funcionalidades reais serão implementadas nas próximas etapas.
-          </p>
-        </div>
-      </div>
-    </div>
+      </section>
+    </main>
   );
 }
+
+
