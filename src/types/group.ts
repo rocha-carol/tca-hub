@@ -2,7 +2,13 @@
 // Um grupo pode ter orientador principal e coorientador.
 export interface Group {
   id: string;
-  name: string;
+  owner_id: string;
+  member_1_name: string;
+  member_1_series: string;
+  member_2_name: string | null;
+  member_2_series: string | null;
+  member_3_name: string | null;
+  member_3_series: string | null;
   theme: string | null;
   description: string | null;
   primary_advisor_id: string | null;
