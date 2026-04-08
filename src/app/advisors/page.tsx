@@ -88,8 +88,7 @@ export default async function AdvisorsPage() {
             <div className="flex flex-wrap gap-3">
               <button
                 type="submit"
-                disabled={Boolean(advisorsError)}
-                className="bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2 rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
+                className="bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2 rounded-md"
               >
                 Cadastrar orientador
               </button>

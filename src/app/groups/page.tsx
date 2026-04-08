@@ -167,7 +167,6 @@ export default async function GroupsPage() {
             <div className="flex flex-wrap gap-3">
               <button
                 type="submit"
-                disabled={Boolean(groupsError)}
                 className="bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2 rounded-md"
               >
                 Criar grupo
