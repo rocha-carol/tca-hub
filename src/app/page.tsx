@@ -1,3 +1,5 @@
+import Link from "next/link";
+import { createClient } from "@/lib/supabase/server";
 import { fetchAllProfiles } from "@/services/profile-service";
 import type { Profile } from "@/types/profile";
 
@@ -17,6 +19,11 @@ export const dynamic = "force-dynamic";
 export default async function Home() {
   let profiles: Profile[] = [];
   let erro: string | null = null;
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
   try {
     // Chamada à função de serviço para buscar profiles.
@@ -41,6 +48,45 @@ export default async function Home() {
 
       {/* Conteúdo principal */}
       <div className="max-w-4xl mx-auto px-6 py-12">
+        {/* Bloco de sessão (MVP) */}
+        <section className="mb-10">
+          <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm">
+            {user ? (
+              <>
+                <h2 className="text-2xl font-semibold text-gray-900 mb-2">Bem-vinda de volta</h2>
+                <p className="text-gray-700 mb-4">
+                  Você está autenticada como <strong>{user.email}</strong>.
+                </p>
+                <Link
+                  href="/dashboard"
+                  className="inline-block bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2 rounded-md"
+                >
+                  Ir para o Dashboard
+                </Link>
+              </>
+            ) : (
+              <>
+                <h2 className="text-2xl font-semibold text-gray-900 mb-2">Comece seu acesso</h2>
+                <p className="text-gray-700 mb-4">Faça login ou crie sua conta para acessar o dashboard.</p>
+                <div className="flex gap-3">
+                  <Link
+                    href="/auth/login"
+                    className="inline-block bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2 rounded-md"
+                  >
+                    Fazer login
+                  </Link>
+                  <Link
+                    href="/auth/signup"
+                    className="inline-block bg-gray-100 hover:bg-gray-200 text-gray-900 font-medium px-4 py-2 rounded-md"
+                  >
+                    Criar conta
+                  </Link>
+                </div>
+              </>
+            )}
+          </div>
+        </section>
+
         {/* Seção de Profiles */}
         <section>
           <h2 className="text-2xl font-semibold text-gray-900 mb-6">

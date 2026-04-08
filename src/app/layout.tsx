@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import AppNavbar from "@/components/ui/AppNavbar";
 import "./globals.css";
 
 // Define os metadados básicos da aplicação.
@@ -17,7 +18,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="pt-BR">
-      <body>{children}</body>
+      <body>
+        <AppNavbar />
+        {children}
+      </body>
     </html>
   );
 }
