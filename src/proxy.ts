@@ -42,7 +42,10 @@ export async function proxy(request: NextRequest) {
 
   const { pathname } = request.nextUrl;
   const isAuthPage = pathname === "/auth/login" || pathname === "/auth/signup";
-  const isProtectedPage = pathname.startsWith("/dashboard") || pathname.startsWith("/groups");
+  const isProtectedPage =
+    pathname.startsWith("/dashboard") ||
+    pathname.startsWith("/groups") ||
+    pathname.startsWith("/advisors");
 
   // Não autenticado tentando acessar rota protegida
   if (!user && isProtectedPage) {
@@ -67,5 +70,6 @@ export const config = {
     "/auth/signup",
     "/dashboard/:path*",
     "/groups/:path*",
+    "/advisors/:path*",
   ],
 };

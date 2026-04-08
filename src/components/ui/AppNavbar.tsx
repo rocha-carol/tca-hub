@@ -60,6 +60,12 @@ export default async function AppNavbar() {
               >
                 Grupos
               </Link>
+              <Link
+                href="/advisors"
+                className="text-sm font-medium text-gray-700 hover:text-gray-900"
+              >
+                Orientadores
+              </Link>
               <span className="hidden sm:inline text-sm text-gray-500">
                 {user.email}
               </span>
