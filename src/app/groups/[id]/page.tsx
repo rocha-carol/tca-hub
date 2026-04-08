@@ -1,25 +1,39 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { fetchGroupById } from "@/services/group-service";
+import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
+import { fetchGroupById, updateGroupAdvisors } from "@/services/group-service";
+import { fetchAllAdvisors } from "@/services/advisor-service";
 
 interface GroupDetailPageProps {
   params: Promise<{ id: string }>;
 }
 
 /**
- * Página de detalhe de um grupo (MVP).
+ * Página de detalhe de um grupo.
  *
- * Mostra todos os dados do grupo: integrantes, série, tema e descrição.
- * Orientadores são exibidos como placeholder — associação real será feita em etapa futura.
+ * Permite visualizar todos os dados do grupo e associar orientadores
+ * via seletor com os orientadores cadastrados no sistema.
  */
 export default async function GroupDetailPage({ params }: GroupDetailPageProps) {
   const { id } = await params;
+
+  async function handleAssignAdvisors(formData: FormData) {
+    "use server";
+
+    const primaryAdvisorId = String(formData.get("primary_advisor_id") ?? "").trim() || null;
+    const coAdvisorId = String(formData.get("co_advisor_id") ?? "").trim() || null;
+
+    await updateGroupAdvisors(id, primaryAdvisorId, coAdvisorId);
+
+    revalidatePath(`/groups/${id}`);
+    redirect(`/groups/${id}`);
+  }
 
   let group;
   try {
     group = await fetchGroupById(id);
   } catch {
-    // Erro de banco — exibe mensagem amigável
     return (
       <main className="min-h-screen bg-gray-50">
         <section className="max-w-2xl mx-auto px-6 py-10">
@@ -41,6 +55,18 @@ export default async function GroupDetailPage({ params }: GroupDetailPageProps) 
     notFound();
   }
 
+  // Carrega orientadores para preencher o seletor — falha silenciosa se tabela não existir
+  let advisors: Awaited<ReturnType<typeof fetchAllAdvisors>> = [];
+  try {
+    advisors = await fetchAllAdvisors();
+  } catch {
+    // sem orientadores cadastrados — seletor ficará vazio
+  }
+
+  // Resolve nome dos orientadores vinculados
+  const primaryAdvisor = advisors.find((a) => a.id === group.primary_advisor_id);
+  const coAdvisor = advisors.find((a) => a.id === group.co_advisor_id);
+
   return (
     <main className="min-h-screen bg-gray-50">
       <section className="max-w-2xl mx-auto px-6 py-10">
@@ -57,7 +83,6 @@ export default async function GroupDetailPage({ params }: GroupDetailPageProps) 
           <h2 className="text-xl font-semibold text-gray-900 mb-4">Integrantes</h2>
 
           <div className="space-y-3">
-            {/* Integrante 1 — obrigatório */}
             <div className="flex items-center justify-between border border-gray-100 rounded-md px-4 py-3 bg-gray-50">
               <div>
                 <p className="font-medium text-gray-900">{group.member_1_name}</p>
@@ -68,7 +93,6 @@ export default async function GroupDetailPage({ params }: GroupDetailPageProps) 
               </span>
             </div>
 
-            {/* Integrante 2 — opcional */}
             {group.member_2_name && (
               <div className="flex items-center justify-between border border-gray-100 rounded-md px-4 py-3 bg-gray-50">
                 <div>
@@ -81,7 +105,6 @@ export default async function GroupDetailPage({ params }: GroupDetailPageProps) 
               </div>
             )}
 
-            {/* Integrante 3 — opcional */}
             {group.member_3_name && (
               <div className="flex items-center justify-between border border-gray-100 rounded-md px-4 py-3 bg-gray-50">
                 <div>
@@ -114,24 +137,89 @@ export default async function GroupDetailPage({ params }: GroupDetailPageProps) 
           </dl>
         </div>
 
-        {/* Orientação — placeholder para etapa futura */}
+        {/* Orientação */}
         <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm mb-6">
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">Orientação</h2>
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">Orientação</h2>
 
-          <dl className="space-y-3">
-            <div>
-              <dt className="text-sm font-medium text-gray-700">Orientador principal</dt>
-              <dd className="text-gray-400 mt-1 italic">
-                {group.primary_advisor_id ?? "A definir"}
-              </dd>
-            </div>
-            <div>
-              <dt className="text-sm font-medium text-gray-700">Coorientador</dt>
-              <dd className="text-gray-400 mt-1 italic">
-                {group.co_advisor_id ?? "A definir"}
-              </dd>
-            </div>
-          </dl>
+          {/* Resumo atual */}
+          <div className="mb-5 space-y-1">
+            <p className="text-sm text-gray-700">
+              <span className="font-medium">Orientador principal:</span>{" "}
+              {primaryAdvisor ? (
+                <span className="text-gray-900">{primaryAdvisor.name}</span>
+              ) : (
+                <span className="text-gray-400 italic">A definir</span>
+              )}
+            </p>
+            <p className="text-sm text-gray-700">
+              <span className="font-medium">Coorientador:</span>{" "}
+              {coAdvisor ? (
+                <span className="text-gray-900">{coAdvisor.name}</span>
+              ) : (
+                <span className="text-gray-400 italic">A definir</span>
+              )}
+            </p>
+          </div>
+
+          {/* Formulário de associação */}
+          {advisors.length > 0 ? (
+            <form action={handleAssignAdvisors} className="space-y-4 border-t border-gray-100 pt-4">
+              <p className="text-sm font-medium text-gray-700">Atualizar orientadores:</p>
+
+              <div>
+                <label htmlFor="primary_advisor_id" className="block text-sm text-gray-600 mb-1">
+                  Orientador principal
+                </label>
+                <select
+                  id="primary_advisor_id"
+                  name="primary_advisor_id"
+                  defaultValue={group.primary_advisor_id ?? ""}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">— Nenhum —</option>
+                  {advisors.map((advisor) => (
+                    <option key={advisor.id} value={advisor.id}>
+                      {advisor.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label htmlFor="co_advisor_id" className="block text-sm text-gray-600 mb-1">
+                  Coorientador
+                </label>
+                <select
+                  id="co_advisor_id"
+                  name="co_advisor_id"
+                  defaultValue={group.co_advisor_id ?? ""}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">— Nenhum —</option>
+                  {advisors.map((advisor) => (
+                    <option key={advisor.id} value={advisor.id}>
+                      {advisor.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <button
+                type="submit"
+                className="bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2 rounded-md text-sm"
+              >
+                Salvar orientadores
+              </button>
+            </form>
+          ) : (
+            <p className="text-sm text-gray-500 border-t border-gray-100 pt-4">
+              Nenhum orientador cadastrado.{" "}
+              <Link href="/advisors" className="text-blue-600 hover:underline">
+                Cadastre um orientador
+              </Link>{" "}
+              para associar ao grupo.
+            </p>
+          )}
         </div>
 
         <footer className="text-gray-500 text-xs mt-4">
@@ -150,3 +238,4 @@ export default async function GroupDetailPage({ params }: GroupDetailPageProps) 
     </main>
   );
 }
+

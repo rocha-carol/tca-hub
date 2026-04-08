@@ -120,3 +120,28 @@ export async function fetchGroupById(id: string): Promise<Group | null> {
 
 	return data as Group;
 }
+
+/**
+ * Atualiza os orientadores de um grupo.
+ *
+ * Passa null para remover o vínculo.
+ */
+export async function updateGroupAdvisors(
+	groupId: string,
+	primaryAdvisorId: string | null,
+	coAdvisorId: string | null
+): Promise<void> {
+	const supabase = await createClient();
+
+	const { error } = await supabase
+		.from("groups")
+		.update({
+			primary_advisor_id: primaryAdvisorId,
+			co_advisor_id: coAdvisorId,
+		})
+		.eq("id", groupId);
+
+	if (error) {
+		throw new Error(`Erro ao atualizar orientadores: ${error.message}`);
+	}
+}
