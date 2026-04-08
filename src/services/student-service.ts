@@ -5,6 +5,19 @@ function isStudentsTableMissing(message: string) {
 	return message.includes("Could not find the table 'public.students'");
 }
 
+function isStudentsActiveColumnMissing(message: string) {
+	return message.includes("active") && message.includes("schema cache");
+}
+
+function normalizeStudentId(id: string | number) {
+	if (typeof id === "number") {
+		return id;
+	}
+
+	const trimmedId = id.trim();
+	return /^\d+$/.test(trimmedId) ? Number(trimmedId) : trimmedId;
+}
+
 export interface CreateStudentData {
 	name: string;
 	email: string;
@@ -12,6 +25,14 @@ export interface CreateStudentData {
 	school?: string | null;
 	grade?: string | null;
 	profile_id?: string | null;
+}
+
+export interface UpdateStudentData {
+	name: string;
+	email: string;
+	registration_code?: string | null;
+	school?: string | null;
+	grade?: string | null;
 }
 
 /**
@@ -68,4 +89,63 @@ export async function createStudent(data: CreateStudentData): Promise<Student> {
 	}
 
 	return inserted as Student;
+}
+
+/**
+ * Atualiza os dados de um estudante já cadastrado.
+ */
+export async function updateStudent(
+	studentId: string | number,
+	data: UpdateStudentData
+): Promise<void> {
+	const supabase = await createClient();
+
+	const { error } = await supabase
+		.from("students")
+		.update({
+			name: data.name,
+			email: data.email,
+			registration_code: data.registration_code ?? null,
+			school: data.school ?? null,
+			grade: data.grade ?? null,
+		})
+		.eq("id", normalizeStudentId(studentId));
+
+	if (error) {
+		if (isStudentsTableMissing(error.message)) {
+			throw new Error(
+				"Tabela students ainda não existe no Supabase. Estruture a tabela para o cadastro institucional antes de usar o módulo."
+			);
+		}
+
+		throw new Error(`Erro ao atualizar estudante: ${error.message}`);
+	}
+}
+
+/**
+ * Inativa um estudante sem remover o histórico do cadastro.
+ */
+export async function deactivateStudent(studentId: string | number): Promise<void> {
+	const supabase = await createClient();
+
+	const { error } = await supabase
+		.from("students")
+		.update({ active: false })
+		.eq("id", normalizeStudentId(studentId));
+
+	if (error) {
+		if (isStudentsActiveColumnMissing(error.message)) {
+			throw new Error(
+				"Coluna active ainda não existe em students. No Supabase SQL Editor, execute: alter table public.students add column if not exists active boolean not null default true;"
+			);
+		}
+
+		if (isStudentsTableMissing(error.message)) {
+			throw new Error(
+				"Tabela students ainda não existe no Supabase. Estruture a tabela para o cadastro institucional antes de usar o módulo."
+			);
+		}
+
+		throw new Error(`Erro ao inativar estudante: ${error.message}`);
+	}
 }

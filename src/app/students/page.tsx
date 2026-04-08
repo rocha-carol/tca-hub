@@ -1,7 +1,12 @@
 import Link from "next/link";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { createStudent, fetchAllStudents } from "@/services/student-service";
+import {
+  createStudent,
+  deactivateStudent,
+  fetchAllStudents,
+  updateStudent,
+} from "@/services/student-service";
 import type { Student } from "@/types/student";
 
 /**
@@ -38,11 +43,55 @@ export default async function StudentsPage() {
     redirect("/students");
   }
 
+  async function handleUpdateStudent(formData: FormData) {
+    "use server";
+
+    const id = String(formData.get("id") ?? "").trim();
+    const name = String(formData.get("name") ?? "").trim();
+    const email = String(formData.get("email") ?? "").trim();
+    const registrationCode = String(formData.get("registration_code") ?? "").trim();
+    const school = String(formData.get("school") ?? "").trim();
+    const grade = String(formData.get("grade") ?? "").trim();
+
+    if (!id || !name || name.length < 2 || !email) {
+      redirect("/students");
+    }
+
+    await updateStudent(id, {
+      name,
+      email,
+      registration_code: registrationCode || null,
+      school: school || null,
+      grade: grade || null,
+    });
+
+    revalidatePath("/students");
+    redirect("/students");
+  }
+
+  async function handleDeactivateStudent(formData: FormData) {
+    "use server";
+
+    const id = String(formData.get("id") ?? "").trim();
+
+    if (!id) {
+      redirect("/students");
+    }
+
+    await deactivateStudent(id);
+
+    revalidatePath("/students");
+    redirect("/students");
+  }
+
   try {
     students = await fetchAllStudents();
   } catch (error) {
     studentsError = error instanceof Error ? error.message : "Erro desconhecido ao carregar estudantes.";
   }
+
+  const activeStudentsCount = students.filter((student) => student.active !== false).length;
+  const inactiveStudentsCount = students.length - activeStudentsCount;
 
   return (
     <main className="min-h-screen bg-gray-50">
@@ -140,8 +189,11 @@ export default async function StudentsPage() {
 
         <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm">
           <h2 className="text-xl font-semibold text-gray-900 mb-4">Estudantes cadastrados</h2>
-          <p className="text-sm text-gray-600 mb-3">
+          <p className="text-sm text-gray-600">
             Total de estudantes cadastrados: <strong>{students.length}</strong>
+          </p>
+          <p className="text-sm text-gray-600 mb-3">
+            Ativos: <strong>{activeStudentsCount}</strong> • Inativos: <strong>{inactiveStudentsCount}</strong>
           </p>
 
           {students.length === 0 ? (
@@ -155,7 +207,18 @@ export default async function StudentsPage() {
                       <p className="font-semibold text-gray-900">{student.name}</p>
                       <p className="text-sm text-gray-600">{student.email}</p>
                     </div>
-                    <span className="text-xs text-gray-400">ID: {String(student.id).slice(0, 8)}…</span>
+                    <div className="text-right">
+                      <span className="block text-xs text-gray-400">ID: {String(student.id).slice(0, 8)}…</span>
+                      <span
+                        className={`inline-flex mt-2 rounded-full px-2 py-1 text-xs font-semibold ${
+                          student.active === false
+                            ? "bg-gray-100 text-gray-700"
+                            : "bg-green-100 text-green-700"
+                        }`}
+                      >
+                        {student.active === false ? "Inativo" : "Ativo"}
+                      </span>
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
@@ -169,6 +232,98 @@ export default async function StudentsPage() {
                       <strong>Escola:</strong> {student.school || "Não informada"}
                     </p>
                   </div>
+
+                  <form action={handleUpdateStudent} className="mt-4 border-t border-gray-100 pt-4 space-y-3">
+                    <input type="hidden" name="id" value={String(student.id)} />
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div>
+                        <label htmlFor={`student-name-${student.id}`} className="block text-sm font-medium text-gray-700 mb-1">
+                          Nome completo
+                        </label>
+                        <input
+                          id={`student-name-${student.id}`}
+                          name="name"
+                          type="text"
+                          defaultValue={student.name}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+
+                      <div>
+                        <label htmlFor={`student-email-${student.id}`} className="block text-sm font-medium text-gray-700 mb-1">
+                          E-mail
+                        </label>
+                        <input
+                          id={`student-email-${student.id}`}
+                          name="email"
+                          type="email"
+                          defaultValue={student.email}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+
+                      <div>
+                        <label htmlFor={`student-registration-${student.id}`} className="block text-sm font-medium text-gray-700 mb-1">
+                          Código de matrícula
+                        </label>
+                        <input
+                          id={`student-registration-${student.id}`}
+                          name="registration_code"
+                          type="text"
+                          defaultValue={student.registration_code ?? ""}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+
+                      <div>
+                        <label htmlFor={`student-grade-${student.id}`} className="block text-sm font-medium text-gray-700 mb-1">
+                          Série/Ano
+                        </label>
+                        <input
+                          id={`student-grade-${student.id}`}
+                          name="grade"
+                          type="text"
+                          defaultValue={student.grade ?? ""}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label htmlFor={`student-school-${student.id}`} className="block text-sm font-medium text-gray-700 mb-1">
+                        Escola
+                      </label>
+                      <input
+                        id={`student-school-${student.id}`}
+                        name="school"
+                        type="text"
+                        defaultValue={student.school ?? ""}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+
+                    <div className="flex flex-wrap gap-3">
+                      <button
+                        type="submit"
+                        className="bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2 rounded-md text-sm"
+                      >
+                        Salvar alterações
+                      </button>
+                    </div>
+                  </form>
+
+                  {student.active !== false && (
+                    <form action={handleDeactivateStudent} className="mt-3">
+                      <input type="hidden" name="id" value={String(student.id)} />
+                      <button
+                        type="submit"
+                        className="bg-amber-100 hover:bg-amber-200 text-amber-900 font-medium px-4 py-2 rounded-md text-sm"
+                      >
+                        Inativar cadastro
+                      </button>
+                    </form>
+                  )}
                 </article>
               ))}
             </div>

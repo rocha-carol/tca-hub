@@ -1,7 +1,12 @@
 import Link from "next/link";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { fetchAllAdvisors, createAdvisor } from "@/services/advisor-service";
+import {
+  createAdvisor,
+  deactivateAdvisor,
+  fetchAllAdvisors,
+  updateAdvisor,
+} from "@/services/advisor-service";
 import type { Advisor } from "@/types/advisor";
 
 /**
@@ -41,12 +46,58 @@ export default async function AdvisorsPage() {
     redirect("/advisors");
   }
 
+  async function handleUpdateAdvisor(formData: FormData) {
+    "use server";
+
+    const id = String(formData.get("id") ?? "").trim();
+    const name = String(formData.get("name") ?? "").trim();
+    const email = String(formData.get("email") ?? "").trim();
+    const roleTitle = String(formData.get("role_title") ?? "").trim();
+    const employeeCode = String(formData.get("employee_code") ?? "").trim();
+    const school = String(formData.get("school") ?? "").trim();
+    const areaOfActivity = String(formData.get("area_of_activity") ?? "").trim();
+
+    if (!id || !name || name.length < 2 || !email) {
+      redirect("/advisors");
+    }
+
+    await updateAdvisor(id, {
+      name,
+      email,
+      role_title: roleTitle || null,
+      employee_code: employeeCode || null,
+      school: school || null,
+      area_of_activity: areaOfActivity || null,
+    });
+
+    revalidatePath("/advisors");
+    redirect("/advisors");
+  }
+
+  async function handleDeactivateAdvisor(formData: FormData) {
+    "use server";
+
+    const id = String(formData.get("id") ?? "").trim();
+
+    if (!id) {
+      redirect("/advisors");
+    }
+
+    await deactivateAdvisor(id);
+
+    revalidatePath("/advisors");
+    redirect("/advisors");
+  }
+
   try {
     advisors = await fetchAllAdvisors();
   } catch (error) {
     advisorsError =
       error instanceof Error ? error.message : "Erro desconhecido ao carregar orientadores.";
   }
+
+  const activeAdvisorsCount = advisors.filter((advisor) => advisor.active !== false).length;
+  const inactiveAdvisorsCount = advisors.length - activeAdvisorsCount;
 
   return (
     <main className="min-h-screen bg-gray-50">
@@ -173,8 +224,11 @@ export default async function AdvisorsPage() {
         {/* Listagem */}
         <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm">
           <h2 className="text-xl font-semibold text-gray-900 mb-4">Orientadores cadastrados</h2>
-          <p className="text-sm text-gray-600 mb-4">
+          <p className="text-sm text-gray-600">
             Total de orientadores cadastrados: <strong>{advisors.length}</strong>
+          </p>
+          <p className="text-sm text-gray-600 mb-4">
+            Ativos: <strong>{activeAdvisorsCount}</strong> • Inativos: <strong>{inactiveAdvisorsCount}</strong>
           </p>
 
           {advisors.length === 0 ? (
@@ -188,7 +242,18 @@ export default async function AdvisorsPage() {
                       <p className="font-semibold text-gray-900">{advisor.name}</p>
                       <p className="text-sm text-gray-600">{advisor.email}</p>
                     </div>
-                    <span className="text-xs text-gray-400">ID: {String(advisor.id).slice(0, 8)}…</span>
+                    <div className="text-right">
+                      <span className="block text-xs text-gray-400">ID: {String(advisor.id).slice(0, 8)}…</span>
+                      <span
+                        className={`inline-flex mt-2 rounded-full px-2 py-1 text-xs font-semibold ${
+                          advisor.active === false
+                            ? "bg-gray-100 text-gray-700"
+                            : "bg-green-100 text-green-700"
+                        }`}
+                      >
+                        {advisor.active === false ? "Inativo" : "Ativo"}
+                      </span>
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
@@ -205,6 +270,111 @@ export default async function AdvisorsPage() {
                       <strong>Área de atuação:</strong> {advisor.area_of_activity || "Não informada"}
                     </p>
                   </div>
+
+                  <form action={handleUpdateAdvisor} className="mt-4 border-t border-gray-100 pt-4 space-y-3">
+                    <input type="hidden" name="id" value={String(advisor.id)} />
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div>
+                        <label htmlFor={`advisor-name-${advisor.id}`} className="block text-sm font-medium text-gray-700 mb-1">
+                          Nome completo
+                        </label>
+                        <input
+                          id={`advisor-name-${advisor.id}`}
+                          name="name"
+                          type="text"
+                          defaultValue={advisor.name}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+
+                      <div>
+                        <label htmlFor={`advisor-email-${advisor.id}`} className="block text-sm font-medium text-gray-700 mb-1">
+                          E-mail
+                        </label>
+                        <input
+                          id={`advisor-email-${advisor.id}`}
+                          name="email"
+                          type="email"
+                          defaultValue={advisor.email}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+
+                      <div>
+                        <label htmlFor={`advisor-role-${advisor.id}`} className="block text-sm font-medium text-gray-700 mb-1">
+                          Cargo/Função
+                        </label>
+                        <input
+                          id={`advisor-role-${advisor.id}`}
+                          name="role_title"
+                          type="text"
+                          defaultValue={advisor.role_title ?? ""}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+
+                      <div>
+                        <label htmlFor={`advisor-code-${advisor.id}`} className="block text-sm font-medium text-gray-700 mb-1">
+                          Código funcional
+                        </label>
+                        <input
+                          id={`advisor-code-${advisor.id}`}
+                          name="employee_code"
+                          type="text"
+                          defaultValue={advisor.employee_code ?? ""}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+
+                      <div>
+                        <label htmlFor={`advisor-school-${advisor.id}`} className="block text-sm font-medium text-gray-700 mb-1">
+                          Escola
+                        </label>
+                        <input
+                          id={`advisor-school-${advisor.id}`}
+                          name="school"
+                          type="text"
+                          defaultValue={advisor.school ?? ""}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+
+                      <div>
+                        <label htmlFor={`advisor-area-${advisor.id}`} className="block text-sm font-medium text-gray-700 mb-1">
+                          Área de atuação
+                        </label>
+                        <input
+                          id={`advisor-area-${advisor.id}`}
+                          name="area_of_activity"
+                          type="text"
+                          defaultValue={advisor.area_of_activity ?? ""}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap gap-3">
+                      <button
+                        type="submit"
+                        className="bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2 rounded-md text-sm"
+                      >
+                        Salvar alterações
+                      </button>
+                    </div>
+                  </form>
+
+                  {advisor.active !== false && (
+                    <form action={handleDeactivateAdvisor} className="mt-3">
+                      <input type="hidden" name="id" value={String(advisor.id)} />
+                      <button
+                        type="submit"
+                        className="bg-amber-100 hover:bg-amber-200 text-amber-900 font-medium px-4 py-2 rounded-md text-sm"
+                      >
+                        Inativar cadastro
+                      </button>
+                    </form>
+                  )}
                 </article>
               ))}
             </div>
