@@ -140,12 +140,15 @@ export default async function DashboardPage() {
             </p>
           ) : (
             <div className="divide-y divide-gray-100">
-              {recentGroups.map((group) => (
+              {recentGroups.map((group, index) => (
                 <div key={group.id} className="py-3 flex items-center justify-between">
                   <div>
-                    <p className="font-medium text-gray-900">{group.member_1_name}</p>
+                    <p className="font-medium text-gray-900">Grupo {groups.length - index}</p>
+                    <p className="text-sm text-gray-700">
+                      {group.member_1_name} — {group.member_1_series}
+                    </p>
                     <p className="text-sm text-gray-500">
-                      {group.theme || "Sem tema"} · {group.member_1_series}
+                      {group.theme || "Sem tema"}
                     </p>
                   </div>
                   <Link
