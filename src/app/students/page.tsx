@@ -155,7 +155,7 @@ export default async function StudentsPage() {
                       <p className="font-semibold text-gray-900">{student.name}</p>
                       <p className="text-sm text-gray-600">{student.email}</p>
                     </div>
-                    <span className="text-xs text-gray-400">ID: {student.id.slice(0, 8)}…</span>
+                    <span className="text-xs text-gray-400">ID: {String(student.id).slice(0, 8)}…</span>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">

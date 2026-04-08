@@ -2,7 +2,7 @@
  * Representa um estudante cadastrado no sistema.
  */
 export interface Student {
-  id: string;
+  id: string | number;
   profile_id: string | null;
   name: string;
   email: string;

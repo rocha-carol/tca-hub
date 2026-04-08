@@ -188,7 +188,7 @@ export default async function AdvisorsPage() {
                       <p className="font-semibold text-gray-900">{advisor.name}</p>
                       <p className="text-sm text-gray-600">{advisor.email}</p>
                     </div>
-                    <span className="text-xs text-gray-400">ID: {advisor.id.slice(0, 8)}…</span>
+                    <span className="text-xs text-gray-400">ID: {String(advisor.id).slice(0, 8)}…</span>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">

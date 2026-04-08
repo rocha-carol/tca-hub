@@ -2,7 +2,7 @@
  * Representa um orientador cadastrado no sistema.
  */
 export interface Advisor {
-  id: string;
+  id: string | number;
   profile_id: string | null;
   name: string;
   email: string;
