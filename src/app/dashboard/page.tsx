@@ -4,6 +4,13 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { fetchAllGroups } from "@/services/group-service";
 import { fetchAllAdvisors } from "@/services/advisor-service";
+import type { GroupStatus } from "@/types/group";
+
+function getStatusLabel(status: GroupStatus) {
+  if (status === "planejamento") return "Planejamento";
+  if (status === "em_andamento") return "Em andamento";
+  return "Concluído";
+}
 
 /**
  * Dashboard principal do TCA Hub.
@@ -92,6 +99,11 @@ export default async function DashboardPage() {
   }
 
   const recentGroups = groups.slice(0, 5);
+  const statusCount = {
+    planejamento: groups.filter((g) => !g.status || g.status === "planejamento").length,
+    em_andamento: groups.filter((g) => g.status === "em_andamento").length,
+    concluido: groups.filter((g) => g.status === "concluido").length,
+  };
 
   return (
     <main className="min-h-screen bg-gray-50">
@@ -122,6 +134,15 @@ export default async function DashboardPage() {
           </div>
         </div>
 
+        <div className="bg-white border border-gray-200 rounded-lg p-5 shadow-sm mb-8">
+          <h2 className="text-lg font-semibold text-gray-900 mb-3">Progresso dos grupos</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
+            <p className="text-gray-700">Planejamento: <strong>{statusCount.planejamento}</strong></p>
+            <p className="text-gray-700">Em andamento: <strong>{statusCount.em_andamento}</strong></p>
+            <p className="text-gray-700">Concluídos: <strong>{statusCount.concluido}</strong></p>
+          </div>
+        </div>
+
         {/* Grupos recentes */}
         <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm mb-8">
           <div className="flex items-center justify-between mb-4">
@@ -146,6 +167,9 @@ export default async function DashboardPage() {
                     <p className="font-medium text-gray-900">Grupo {groups.length - index}</p>
                     <p className="text-sm text-gray-700">
                       {group.member_1_name} — {group.member_1_series}
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      Status: {getStatusLabel((group.status as GroupStatus) || "planejamento")}
                     </p>
                     <p className="text-sm text-gray-500">
                       {group.theme || "Sem tema"}

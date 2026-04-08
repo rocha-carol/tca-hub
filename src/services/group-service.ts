@@ -1,8 +1,12 @@
 import { createClient } from "@/lib/supabase/server";
-import type { Group } from "@/types/group";
+import type { Group, GroupStatus } from "@/types/group";
 
 function isGroupsTableMissing(message: string) {
 	return message.includes("Could not find the table 'public.groups'");
+}
+
+function isStatusColumnMissing(message: string) {
+	return message.includes("status") && message.includes("schema cache");
 }
 
 export interface CreateGroupData {
@@ -14,6 +18,7 @@ export interface CreateGroupData {
 	member_3_series?: string | null;
 	theme?: string | null;
 	description?: string | null;
+	status?: GroupStatus;
 }
 
 /**
@@ -68,6 +73,7 @@ export async function createGroup(data: CreateGroupData): Promise<Group> {
 		member_3_series: data.member_3_series ?? null,
 		theme: data.theme ?? null,
 		description: data.description ?? null,
+		status: data.status ?? "planejamento",
 		primary_advisor_id: null,
 		co_advisor_id: null,
 	};
@@ -79,6 +85,12 @@ export async function createGroup(data: CreateGroupData): Promise<Group> {
 		.single();
 
 	if (error) {
+		if (isStatusColumnMissing(error.message)) {
+			throw new Error(
+				"Coluna status ainda não existe em groups. Execute: alter table public.groups add column if not exists status text not null default 'planejamento';"
+			);
+		}
+
 		if (isGroupsTableMissing(error.message)) {
 			throw new Error(
 				"Tabela groups ainda não existe no Supabase. Execute o script database/001_create_groups_table.sql no SQL Editor."
@@ -143,5 +155,27 @@ export async function updateGroupAdvisors(
 
 	if (error) {
 		throw new Error(`Erro ao atualizar orientadores: ${error.message}`);
+	}
+}
+
+/**
+ * Atualiza o status de um grupo.
+ */
+export async function updateGroupStatus(groupId: string, status: GroupStatus): Promise<void> {
+	const supabase = await createClient();
+
+	const { error } = await supabase
+		.from("groups")
+		.update({ status })
+		.eq("id", groupId);
+
+	if (error) {
+		if (isStatusColumnMissing(error.message)) {
+			throw new Error(
+				"Coluna status ainda não existe em groups. Execute: alter table public.groups add column if not exists status text not null default 'planejamento';"
+			);
+		}
+
+		throw new Error(`Erro ao atualizar status do grupo: ${error.message}`);
 	}
 }

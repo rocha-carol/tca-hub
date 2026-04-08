@@ -2,7 +2,13 @@ import Link from "next/link";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createGroup, fetchAllGroups } from "@/services/group-service";
-import type { Group } from "@/types/group";
+import type { Group, GroupStatus } from "@/types/group";
+
+function getStatusLabel(status: GroupStatus) {
+  if (status === "planejamento") return "Planejamento";
+  if (status === "em_andamento") return "Em andamento";
+  return "Concluído";
+}
 
 /**
  * Página inicial de Grupos (MVP).
@@ -188,31 +194,25 @@ export default async function GroupsPage() {
           {groups.length === 0 ? (
             <p className="text-gray-700">Nenhum grupo encontrado. Crie o primeiro acima.</p>
           ) : (
-            <div className="space-y-3">
-              {groups.map((group) => (
+            <div className="space-y-4">
+              {groups.map((group, index) => (
                 <article key={group.id} className="border border-gray-200 rounded-md p-4">
-                  <h3 className="font-semibold text-gray-900">Grupo criado</h3>
-                  <ul className="text-sm text-gray-700 mt-2 space-y-1">
-                    <li>
-                      <strong>Integrante 1:</strong> {group.member_1_name} — {group.member_1_series}
-                    </li>
+                  <h3 className="font-semibold text-gray-900 mb-2">Grupo {groups.length - index}</h3>
+                  <p className="text-xs text-gray-500 mb-2">
+                    Status: {getStatusLabel((group.status as GroupStatus) || "planejamento")}
+                  </p>
+                  <ul className="text-sm text-gray-800 space-y-0.5">
+                    <li>{group.member_1_name} — {group.member_1_series}</li>
                     {group.member_2_name && (
-                      <li>
-                        <strong>Integrante 2:</strong> {group.member_2_name} — {group.member_2_series || "Sem série"}
-                      </li>
+                      <li>{group.member_2_name} — {group.member_2_series || "Sem série"}</li>
                     )}
                     {group.member_3_name && (
-                      <li>
-                        <strong>Integrante 3:</strong> {group.member_3_name} — {group.member_3_series || "Sem série"}
-                      </li>
+                      <li>{group.member_3_name} — {group.member_3_series || "Sem série"}</li>
                     )}
                   </ul>
-                  <p className="text-sm text-gray-600 mt-3">
-                    <strong>Tema:</strong> {group.theme || "Não informado"}
-                  </p>
-                  <p className="text-sm text-gray-700 mt-1">
-                    <strong>Descrição:</strong> {group.description || "Sem descrição"}
-                  </p>
+                  {group.theme && (
+                    <p className="text-sm text-gray-500 mt-2">Tema: {group.theme}</p>
+                  )}
                   <div className="mt-3">
                     <Link
                       href={`/groups/${group.id}`}

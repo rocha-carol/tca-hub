@@ -2,8 +2,15 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { fetchGroupById, updateGroupAdvisors } from "@/services/group-service";
+import { fetchGroupById, updateGroupAdvisors, updateGroupStatus } from "@/services/group-service";
 import { fetchAllAdvisors } from "@/services/advisor-service";
+import type { GroupStatus } from "@/types/group";
+
+function getStatusLabel(status: GroupStatus) {
+  if (status === "planejamento") return "Planejamento";
+  if (status === "em_andamento") return "Em andamento";
+  return "Concluído";
+}
 
 interface GroupDetailPageProps {
   params: Promise<{ id: string }>;
@@ -27,6 +34,23 @@ export default async function GroupDetailPage({ params }: GroupDetailPageProps) 
     await updateGroupAdvisors(id, primaryAdvisorId, coAdvisorId);
 
     revalidatePath(`/groups/${id}`);
+    redirect(`/groups/${id}`);
+  }
+
+  async function handleUpdateStatus(formData: FormData) {
+    "use server";
+
+    const rawStatus = String(formData.get("status") ?? "planejamento").trim();
+    const validStatus: GroupStatus[] = ["planejamento", "em_andamento", "concluido"];
+    const status = validStatus.includes(rawStatus as GroupStatus)
+      ? (rawStatus as GroupStatus)
+      : "planejamento";
+
+    await updateGroupStatus(id, status);
+
+    revalidatePath(`/groups/${id}`);
+    revalidatePath("/groups");
+    revalidatePath("/dashboard");
     redirect(`/groups/${id}`);
   }
 
@@ -66,6 +90,10 @@ export default async function GroupDetailPage({ params }: GroupDetailPageProps) 
   // Resolve nome dos orientadores vinculados
   const primaryAdvisor = advisors.find((a) => a.id === group.primary_advisor_id);
   const coAdvisor = advisors.find((a) => a.id === group.co_advisor_id);
+  const currentStatus: GroupStatus =
+    group.status === "em_andamento" || group.status === "concluido"
+      ? group.status
+      : "planejamento";
 
   return (
     <main className="min-h-screen bg-gray-50">
@@ -135,6 +163,37 @@ export default async function GroupDetailPage({ params }: GroupDetailPageProps) 
               </dd>
             </div>
           </dl>
+
+          <div className="mt-5 pt-4 border-t border-gray-100">
+            <p className="text-sm text-gray-700 mb-2">
+              <span className="font-medium">Status atual:</span> {getStatusLabel(currentStatus)}
+            </p>
+
+            <form action={handleUpdateStatus} className="flex flex-col sm:flex-row sm:items-end gap-3">
+              <div className="flex-1">
+                <label htmlFor="status" className="block text-sm text-gray-600 mb-1">
+                  Atualizar status do grupo
+                </label>
+                <select
+                  id="status"
+                  name="status"
+                  defaultValue={currentStatus}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="planejamento">Planejamento</option>
+                  <option value="em_andamento">Em andamento</option>
+                  <option value="concluido">Concluído</option>
+                </select>
+              </div>
+
+              <button
+                type="submit"
+                className="bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2 rounded-md text-sm"
+              >
+                Salvar status
+              </button>
+            </form>
+          </div>
         </div>
 
         {/* Orientação */}
