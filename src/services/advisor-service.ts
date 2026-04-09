@@ -52,6 +52,21 @@ export interface UpdateAdvisorData {
 	max_orientacoes?: number | null;
 }
 
+export interface ImportAdvisorRow {
+	name: string;
+	email: string;
+	role_title?: string | null;
+	employee_code?: string | null;
+	school?: string | null;
+	area_of_activity?: string | null;
+	max_orientacoes?: number | null;
+}
+
+export interface ImportAdvisorsResult {
+	importedCount: number;
+	skippedCount: number;
+}
+
 /**
  * Busca todos os orientadores cadastrados.
  *
@@ -215,4 +230,82 @@ export async function deactivateAdvisor(advisorId: string | number): Promise<voi
 
 		throw new Error(`Erro ao inativar orientador: ${error.message}`);
 	}
+}
+
+/**
+ * Importa orientadores por arquivo (CSV), fazendo upsert por e-mail.
+ */
+export async function importAdvisors(rows: ImportAdvisorRow[]): Promise<ImportAdvisorsResult> {
+	const supabase = await createClient();
+
+	const normalizedRows = rows
+		.map((row) => ({
+			name: row.name.trim(),
+			email: row.email.trim().toLowerCase(),
+			role_title: row.role_title?.trim() || null,
+			employee_code: row.employee_code?.trim() || null,
+			school: row.school?.trim() || null,
+			area_of_activity: row.area_of_activity?.trim() || null,
+			max_orientacoes:
+				typeof row.max_orientacoes === "number" && row.max_orientacoes > 0
+					? row.max_orientacoes
+					: null,
+		}))
+		.filter((row) => row.name.length >= 2 && row.email.length > 0);
+
+	if (normalizedRows.length === 0) {
+		return { importedCount: 0, skippedCount: rows.length };
+	}
+
+	const uniqueByEmail = new Map<string, ImportAdvisorRow>();
+	for (const row of normalizedRows) {
+		uniqueByEmail.set(row.email, row);
+	}
+
+	const payload = Array.from(uniqueByEmail.values()).map((row) => ({
+		name: row.name,
+		email: row.email,
+		role_title: row.role_title ?? null,
+		employee_code: row.employee_code ?? null,
+		school: row.school ?? null,
+		area_of_activity: row.area_of_activity ?? null,
+		max_orientacoes: row.max_orientacoes ?? 5,
+		active: true,
+	}));
+
+	const { error } = await supabase
+		.from("advisors")
+		.upsert(payload, { onConflict: "email" });
+
+	if (error) {
+		if (isAdvisorsTableMissing(error.message)) {
+			throw new Error(
+				"Tabela advisors ainda não existe no Supabase. Execute o script database/003_create_advisors_table.sql no SQL Editor."
+			);
+		}
+
+		if (
+			isAdvisorsColumnMissing(error.message, "role_title") ||
+			isAdvisorsColumnMissing(error.message, "employee_code") ||
+			isAdvisorsColumnMissing(error.message, "school") ||
+			isAdvisorsColumnMissing(error.message, "area_of_activity")
+		) {
+			throw new Error(
+				"Estrutura de advisors incompleta no Supabase. Adicione as colunas role_title, employee_code, school e area_of_activity antes da importação."
+			);
+		}
+
+		if (isAdvisorsPermissionDenied(error.message, error.code)) {
+			throw new Error(
+				"Importação de advisors bloqueada por policy/RLS no Supabase. Garanta policies INSERT e UPDATE para usuários autenticados."
+			);
+		}
+
+		throw new Error(`Erro ao importar orientadores: ${error.message}`);
+	}
+
+	return {
+		importedCount: payload.length,
+		skippedCount: rows.length - payload.length,
+	};
 }

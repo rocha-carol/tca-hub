@@ -5,8 +5,10 @@ import {
   createStudent,
   deactivateStudent,
   fetchAllStudents,
+  importStudents,
   updateStudent,
 } from "@/services/student-service";
+import { parseCsvText } from "@/lib/import/csv";
 import type { Student } from "@/types/student";
 
 /**
@@ -14,7 +16,13 @@ import type { Student } from "@/types/student";
  *
  * Estrutura cadastro institucional de estudantes para etapas seguintes.
  */
-export default async function StudentsPage() {
+interface StudentsPageProps {
+  searchParams: Promise<{ import_status?: string; import_count?: string; import_skipped?: string }>;
+}
+
+export default async function StudentsPage({ searchParams }: StudentsPageProps) {
+  const { import_status, import_count, import_skipped } = await searchParams;
+
   let students: Student[] = [];
   let studentsError: string | null = null;
 
@@ -84,6 +92,47 @@ export default async function StudentsPage() {
     redirect("/students");
   }
 
+  async function handleImportStudents(formData: FormData) {
+    "use server";
+
+    const file = formData.get("import_file");
+    if (!(file instanceof File) || file.size === 0) {
+      redirect("/students?import_status=invalid_file");
+    }
+
+    let text = "";
+    try {
+      text = await file.text();
+    } catch {
+      redirect("/students?import_status=invalid_file");
+    }
+
+    let rows: ReturnType<typeof parseCsvText>["rows"] = [];
+    try {
+      rows = parseCsvText(text).rows;
+    } catch {
+      redirect("/students?import_status=invalid_csv");
+    }
+
+    const mappedRows = rows.map((row) => ({
+      name: row.name || row.nome || "",
+      email: row.email || row.e_mail || "",
+      registration_code: row.registration_code || row.matricula || row.codigo_matricula || null,
+      school: row.school || row.escola || null,
+      grade: row.grade || row.serie || row.ano || null,
+    }));
+
+    try {
+      const result = await importStudents(mappedRows);
+      revalidatePath("/students");
+      redirect(
+        `/students?import_status=success&import_count=${result.importedCount}&import_skipped=${result.skippedCount}`
+      );
+    } catch {
+      redirect("/students?import_status=error");
+    }
+  }
+
   try {
     students = await fetchAllStudents();
   } catch (error) {
@@ -107,6 +156,65 @@ export default async function StudentsPage() {
             <p className="text-amber-800 text-sm">{studentsError}</p>
           </div>
         )}
+
+        {import_status === "success" && (
+          <div className="bg-green-50 border border-green-300 rounded-lg p-4 mb-6">
+            <p className="text-green-900 font-medium">Importação concluída com sucesso.</p>
+            <p className="text-green-800 text-sm mt-1">
+              Registros importados/atualizados: <strong>{import_count || "0"}</strong>
+              {" • "}
+              Linhas ignoradas: <strong>{import_skipped || "0"}</strong>
+            </p>
+          </div>
+        )}
+        {import_status === "invalid_file" && (
+          <div className="bg-red-50 border border-red-300 rounded-lg p-4 mb-6">
+            <p className="text-red-900 font-medium">Arquivo inválido.</p>
+            <p className="text-red-800 text-sm mt-1">Selecione um arquivo CSV para importar.</p>
+          </div>
+        )}
+        {import_status === "invalid_csv" && (
+          <div className="bg-red-50 border border-red-300 rounded-lg p-4 mb-6">
+            <p className="text-red-900 font-medium">CSV inválido.</p>
+            <p className="text-red-800 text-sm mt-1">Use cabeçalho e ao menos uma linha de dados.</p>
+          </div>
+        )}
+        {import_status === "error" && (
+          <div className="bg-red-50 border border-red-300 rounded-lg p-4 mb-6">
+            <p className="text-red-900 font-medium">Falha na importação.</p>
+            <p className="text-red-800 text-sm mt-1">Verifique o formato do arquivo e tente novamente.</p>
+          </div>
+        )}
+
+        <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm mb-8">
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">Importar estudantes por arquivo</h2>
+          <p className="text-sm text-gray-600 mb-4">
+            Envie um CSV com colunas como: <code>name,email,registration_code,school,grade</code>
+            {" "}(também aceitamos: <code>nome,matricula,escola,serie</code>).
+          </p>
+
+          <form action={handleImportStudents} className="flex flex-col sm:flex-row gap-3 sm:items-end">
+            <div className="flex-1">
+              <label htmlFor="import_file" className="block text-sm font-medium text-gray-700 mb-1">
+                Arquivo CSV
+              </label>
+              <input
+                id="import_file"
+                name="import_file"
+                type="file"
+                accept=".csv,text/csv,.txt"
+                className="block w-full text-sm text-gray-700 file:mr-3 file:py-2 file:px-3 file:rounded-md file:border-0 file:bg-gray-100 hover:file:bg-gray-200"
+              />
+            </div>
+
+            <button
+              type="submit"
+              className="bg-indigo-600 hover:bg-indigo-700 text-white font-medium px-4 py-2 rounded-md"
+            >
+              Importar CSV
+            </button>
+          </form>
+        </div>
 
         <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm mb-8">
           <h2 className="text-xl font-semibold text-gray-900 mb-4">Cadastrar estudante</h2>

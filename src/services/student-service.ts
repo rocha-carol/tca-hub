@@ -48,6 +48,19 @@ export interface UpdateStudentData {
 	grade?: string | null;
 }
 
+export interface ImportStudentRow {
+	name: string;
+	email: string;
+	registration_code?: string | null;
+	school?: string | null;
+	grade?: string | null;
+}
+
+export interface ImportStudentsResult {
+	importedCount: number;
+	skippedCount: number;
+}
+
 /**
  * Busca estudantes cadastrados.
  *
@@ -205,4 +218,74 @@ export async function deactivateStudent(studentId: string | number): Promise<voi
 
 		throw new Error(`Erro ao inativar estudante: ${error.message}`);
 	}
+}
+
+/**
+ * Importa estudantes por arquivo (CSV), fazendo upsert por e-mail.
+ */
+export async function importStudents(rows: ImportStudentRow[]): Promise<ImportStudentsResult> {
+	const supabase = await createClient();
+
+	const normalizedRows = rows
+		.map((row) => ({
+			name: row.name.trim(),
+			email: row.email.trim().toLowerCase(),
+			registration_code: row.registration_code?.trim() || null,
+			school: row.school?.trim() || null,
+			grade: row.grade?.trim() || null,
+		}))
+		.filter((row) => row.name.length >= 2 && row.email.length > 0);
+
+	if (normalizedRows.length === 0) {
+		return { importedCount: 0, skippedCount: rows.length };
+	}
+
+	const uniqueByEmail = new Map<string, ImportStudentRow>();
+	for (const row of normalizedRows) {
+		uniqueByEmail.set(row.email, row);
+	}
+
+	const payload = Array.from(uniqueByEmail.values()).map((row) => ({
+		name: row.name,
+		email: row.email,
+		registration_code: row.registration_code ?? null,
+		school: row.school ?? null,
+		grade: row.grade ?? null,
+		active: true,
+	}));
+
+	const { error } = await supabase
+		.from("students")
+		.upsert(payload, { onConflict: "email" });
+
+	if (error) {
+		if (isStudentsTableMissing(error.message)) {
+			throw new Error(
+				"Tabela students ainda não existe no Supabase. Estruture a tabela para o cadastro institucional antes de usar o módulo."
+			);
+		}
+
+		if (
+			isStudentsColumnMissing(error.message, "registration_code") ||
+			isStudentsColumnMissing(error.message, "school") ||
+			isStudentsColumnMissing(error.message, "grade")
+		) {
+			throw new Error(
+				"Estrutura de students incompleta no Supabase. Adicione as colunas registration_code, school e grade antes da importação."
+			);
+		}
+
+		if (isStudentsPermissionDenied(error.message, error.code)) {
+			throw new Error(
+				"Importação de students bloqueada por policy/RLS no Supabase. Garanta policies INSERT e UPDATE para usuários autenticados."
+			);
+		}
+
+		throw new Error(`Erro ao importar estudantes: ${error.message}`);
+	}
+
+	return {
+		importedCount: payload.length,
+		skippedCount: rows.length - payload.length,
+	};
 }
