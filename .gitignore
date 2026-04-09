@@ -42,3 +42,6 @@ next-env.d.ts
 
 # database scripts (referência local, não precisa ir pro repositório)
 /database
+
+# anotações locais de planejamento/pêndencias
+/PENDENCIAS.local.md
