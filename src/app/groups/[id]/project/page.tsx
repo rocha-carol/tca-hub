@@ -1054,6 +1054,49 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
           <p className="text-gray-600 mt-1">Grupo: {group.theme || group.member_1_name}</p>
         </header>
 
+        <div className="bg-white border border-blue-100 rounded-lg p-6 shadow-sm mb-6">
+          <h2 className="text-lg font-semibold text-blue-900 mb-2">Sobre o TCA (Ciclo Autoral)</h2>
+
+          <p className="text-sm text-gray-700 leading-relaxed">
+            O Ciclo Autoral compreende os anos finais do Ensino Fundamental e fortalece a capacidade dos estudantes
+            de analisar a realidade, argumentar, sistematizar conhecimentos e propor caminhos de transformação social.
+            No TCA, os temas partem de problemas sociais e comunitários observados no território em que vivem e estudam.
+          </p>
+
+          <p className="text-sm text-gray-700 leading-relaxed mt-2">
+            Esse trabalho favorece o protagonismo estudantil, o reconhecimento das diferenças e a participação efetiva
+            na construção de propostas para melhorar o mundo em que vivem.
+          </p>
+
+          <details className="mt-3">
+            <summary className="cursor-pointer text-sm font-medium text-blue-800 hover:text-blue-900">
+              Objetivos pedagógicos do TCA
+            </summary>
+            <ul className="list-disc pl-5 mt-2 space-y-1 text-sm text-gray-700">
+              <li>
+                Apoiar a elaboração de projetos de transformação no ciclo autoral com materiais de apoio e atividades
+                prático-pedagógicas.
+              </li>
+              <li>Valorizar os TCAs desenvolvidos na rede.</li>
+              <li>
+                Fomentar experiências pedagógicas colaborativas que integrem saberes escolares e envolvam a comunidade.
+              </li>
+            </ul>
+          </details>
+
+          <p className="text-xs text-gray-500 mt-3">
+            Fonte oficial: 
+            <a
+              href="https://educacao.sme.prefeitura.sp.gov.br/ensino-fundamental/trabalho-colaborativo-de-autoria/"
+              target="_blank"
+              rel="noreferrer"
+              className="text-blue-700 hover:underline"
+            >
+              Secretaria Municipal de Educação de São Paulo — Trabalho Colaborativo de Autoria (TCA)
+            </a>
+          </p>
+        </div>
+
         {sectionsError && (
           <div className="bg-amber-50 border border-amber-300 rounded-lg p-4 mb-6">
             <p className="text-amber-900 font-medium">Configuração pendente das seções do projeto</p>
