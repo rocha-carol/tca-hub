@@ -18,9 +18,15 @@ import {
   createProjectSectionNextStep,
   fetchGroupProjectSectionNextSteps,
 } from "@/services/project-section-next-step-service";
+import {
+  createProjectDevelopmentChecklistItem,
+  fetchGroupProjectDevelopmentChecklistItems,
+  updateProjectDevelopmentChecklistItemStatus,
+} from "@/services/project-development-checklist-service";
 import { fetchGroupById } from "@/services/group-service";
 import { getAuthenticatedProfile } from "@/lib/auth/session-service";
 import type { ProjectSectionStatus } from "@/types/project-section";
+import type { ProjectDevelopmentChecklistStatus } from "@/types/project-development-checklist-item";
 
 interface GroupProjectPageProps {
   params: Promise<{ id: string }>;
@@ -35,6 +41,9 @@ interface GroupProjectPageProps {
     answer_question?: string;
     next_step_status?: string;
     next_step_section?: string;
+    checklist_status?: string;
+    checklist_action?: string;
+    checklist_item?: string;
   }>;
 }
 
@@ -50,6 +59,7 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
   const profile = await getAuthenticatedProfile();
   const canCommentAsAdvisor = profile?.role === "advisor" || profile?.role === "coordinator";
   const canAnswerAsAdvisor = profile?.role === "advisor" || profile?.role === "coordinator";
+  const canManageChecklist = profile?.role === "advisor" || profile?.role === "coordinator";
   const canAskAsStudent = profile?.role === "student";
 
   const group = await fetchGroupById(id);
@@ -218,6 +228,68 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
     redirect(`/groups/${id}/project?next_step_status=success&next_step_section=${sectionId}`);
   }
 
+  async function handleAddChecklistItem(formData: FormData) {
+    "use server";
+
+    const authenticatedProfile = await getAuthenticatedProfile();
+    if (!authenticatedProfile || (authenticatedProfile.role !== "advisor" && authenticatedProfile.role !== "coordinator")) {
+      redirect(`/groups/${id}/project?checklist_status=forbidden&checklist_action=add`);
+    }
+
+    const itemText = String(formData.get("item_text") ?? "").trim();
+    const sectionIdRaw = String(formData.get("section_id") ?? "").trim();
+    const sectionId = sectionIdRaw ? sectionIdRaw : null;
+
+    if (itemText.length < 3) {
+      redirect(`/groups/${id}/project?checklist_status=invalid&checklist_action=add`);
+    }
+
+    try {
+      await createProjectDevelopmentChecklistItem({
+        group_id: id,
+        section_id: sectionId,
+        item_text: itemText,
+        created_by_profile_id: authenticatedProfile.id,
+        created_by_role: authenticatedProfile.role === "coordinator" ? "coordinator" : "advisor",
+        created_by_name: authenticatedProfile.name,
+      });
+    } catch {
+      redirect(`/groups/${id}/project?checklist_status=error&checklist_action=add`);
+    }
+
+    revalidatePath(`/groups/${id}/project`);
+    redirect(`/groups/${id}/project?checklist_status=success&checklist_action=add`);
+  }
+
+  async function handleToggleChecklistItemStatus(formData: FormData) {
+    "use server";
+
+    const authenticatedProfile = await getAuthenticatedProfile();
+    if (!authenticatedProfile || (authenticatedProfile.role !== "advisor" && authenticatedProfile.role !== "coordinator")) {
+      redirect(`/groups/${id}/project?checklist_status=forbidden&checklist_action=toggle`);
+    }
+
+    const itemId = String(formData.get("item_id") ?? "").trim();
+    const rawStatus = String(formData.get("next_status") ?? "").trim();
+    const allowed: ProjectDevelopmentChecklistStatus[] = ["pendente", "concluido"];
+    const nextStatus = allowed.includes(rawStatus as ProjectDevelopmentChecklistStatus)
+      ? (rawStatus as ProjectDevelopmentChecklistStatus)
+      : null;
+
+    if (!itemId || !nextStatus) {
+      redirect(`/groups/${id}/project?checklist_status=invalid&checklist_action=toggle&checklist_item=${itemId}`);
+    }
+
+    try {
+      await updateProjectDevelopmentChecklistItemStatus(itemId, nextStatus);
+    } catch {
+      redirect(`/groups/${id}/project?checklist_status=error&checklist_action=toggle&checklist_item=${itemId}`);
+    }
+
+    revalidatePath(`/groups/${id}/project`);
+    redirect(`/groups/${id}/project?checklist_status=success&checklist_action=toggle&checklist_item=${itemId}`);
+  }
+
   let sections = [] as Awaited<ReturnType<typeof ensureGroupProjectSectionsStructure>>;
   let sectionsError: string | null = null;
   let comments = [] as Awaited<ReturnType<typeof fetchGroupProjectSectionComments>>;
@@ -228,6 +300,8 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
   let answersError: string | null = null;
   let nextSteps = [] as Awaited<ReturnType<typeof fetchGroupProjectSectionNextSteps>>;
   let nextStepsError: string | null = null;
+  let checklistItems = [] as Awaited<ReturnType<typeof fetchGroupProjectDevelopmentChecklistItems>>;
+  let checklistError: string | null = null;
 
   try {
     sections = await ensureGroupProjectSectionsStructure(id);
@@ -257,6 +331,12 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
     nextSteps = await fetchGroupProjectSectionNextSteps(id);
   } catch (error) {
     nextStepsError = error instanceof Error ? error.message : "Erro ao carregar próximos passos.";
+  }
+
+  try {
+    checklistItems = await fetchGroupProjectDevelopmentChecklistItems(id);
+  } catch (error) {
+    checklistError = error instanceof Error ? error.message : "Erro ao carregar checklist de desenvolvimento.";
   }
 
   const commentsBySection = new Map<string, typeof comments>();
@@ -289,6 +369,11 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
     const list = nextStepsBySection.get(key) ?? [];
     list.push(nextStep);
     nextStepsBySection.set(key, list);
+  }
+
+  const sectionTitleById = new Map<string, string>();
+  for (const section of sections) {
+    sectionTitleById.set(String(section.id), `${section.section_order}. ${section.section_title}`);
   }
 
   return (
@@ -336,6 +421,151 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
             <p className="text-amber-800 text-sm mt-1">{nextStepsError}</p>
           </div>
         )}
+
+        {checklistError && (
+          <div className="bg-amber-50 border border-amber-300 rounded-lg p-4 mb-6">
+            <p className="text-amber-900 font-medium">Configuração pendente do checklist de desenvolvimento</p>
+            <p className="text-amber-800 text-sm mt-1">{checklistError}</p>
+          </div>
+        )}
+
+        <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm mb-6">
+          <h2 className="text-lg font-semibold text-gray-900 mb-2">Checklist de desenvolvimento</h2>
+
+          {query.checklist_status === "success" && query.checklist_action === "add" && (
+            <p className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-md px-3 py-2 mb-3">
+              Item adicionado ao checklist com sucesso.
+            </p>
+          )}
+          {query.checklist_status === "success" && query.checklist_action === "toggle" && (
+            <p className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-md px-3 py-2 mb-3">
+              Status do item atualizado com sucesso.
+            </p>
+          )}
+          {query.checklist_status === "invalid" && (
+            <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2 mb-3">
+              Dados inválidos no checklist. Revise os campos e tente novamente.
+            </p>
+          )}
+          {query.checklist_status === "error" && (
+            <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2 mb-3">
+              Não foi possível salvar alterações no checklist. Tente novamente.
+            </p>
+          )}
+          {query.checklist_status === "forbidden" && (
+            <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2 mb-3">
+              Apenas orientadores (ou coordenação) podem alterar o checklist nesta etapa.
+            </p>
+          )}
+
+          <div className="space-y-2 mb-4">
+            {checklistItems.length === 0 ? (
+              <p className="text-sm text-gray-500">Ainda não há itens no checklist deste grupo.</p>
+            ) : (
+              checklistItems.map((item) => (
+                <div
+                  key={String(item.id)}
+                  className={`border rounded-md px-3 py-2 ${
+                    item.status === "concluido" ? "border-green-200 bg-green-50" : "border-gray-100 bg-gray-50"
+                  }`}
+                >
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <p className={`text-sm ${item.status === "concluido" ? "text-green-900" : "text-gray-900"}`}>
+                        {item.item_text}
+                      </p>
+                      <p className="text-xs text-gray-500 mt-1">
+                        {item.created_by_name} ({item.created_by_role === "advisor" ? "orientador" : "coordenação"})
+                        {item.section_id ? ` • ${sectionTitleById.get(String(item.section_id)) || "Seção"}` : " • Geral"}
+                        {item.created_at
+                          ? ` • ${new Date(item.created_at).toLocaleString("pt-BR", {
+                              day: "2-digit",
+                              month: "2-digit",
+                              year: "numeric",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}`
+                          : ""}
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`text-xs font-semibold px-2 py-1 rounded-full ${
+                          item.status === "concluido"
+                            ? "bg-green-100 text-green-700"
+                            : "bg-amber-100 text-amber-700"
+                        }`}
+                      >
+                        {item.status === "concluido" ? "Concluído" : "Pendente"}
+                      </span>
+
+                      {canManageChecklist && (
+                        <form action={handleToggleChecklistItemStatus}>
+                          <input type="hidden" name="item_id" value={String(item.id)} />
+                          <input
+                            type="hidden"
+                            name="next_status"
+                            value={item.status === "concluido" ? "pendente" : "concluido"}
+                          />
+                          <button
+                            type="submit"
+                            className="text-xs font-medium px-2 py-1 rounded-md border border-gray-300 bg-white hover:bg-gray-100 text-gray-700"
+                          >
+                            {item.status === "concluido" ? "Reabrir" : "Concluir"}
+                          </button>
+                        </form>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          {canManageChecklist && (
+            <form action={handleAddChecklistItem} className="space-y-3 border-t border-gray-100 pt-4">
+              <div>
+                <label htmlFor="checklist-item-text" className="block text-sm text-gray-700 mb-1">
+                  Novo item
+                </label>
+                <textarea
+                  id="checklist-item-text"
+                  name="item_text"
+                  rows={3}
+                  placeholder="Ex.: Revisar introdução e inserir referências bibliográficas da seção 1."
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div>
+                <label htmlFor="checklist-section-id" className="block text-sm text-gray-700 mb-1">
+                  Seção relacionada (opcional)
+                </label>
+                <select
+                  id="checklist-section-id"
+                  name="section_id"
+                  defaultValue=""
+                  className="w-full md:w-80 px-3 py-2 border border-gray-300 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">Geral (sem seção específica)</option>
+                  {sections.map((section) => (
+                    <option key={String(section.id)} value={String(section.id)}>
+                      {section.section_order}. {section.section_title}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <button
+                type="submit"
+                className="bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2 rounded-md text-sm"
+              >
+                Adicionar item ao checklist
+              </button>
+            </form>
+          )}
+        </div>
 
         {sections.length === 0 ? (
           <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm">
