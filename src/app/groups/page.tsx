@@ -27,7 +27,7 @@ function idsAreEqual(left: string | number | null | undefined, right: string | n
 }
 
 interface GroupsPageProps {
-  searchParams?: Promise<{ status?: string }>;
+  searchParams?: Promise<{ status?: string; from?: string }>;
 }
 
 /**
@@ -44,6 +44,7 @@ export default async function GroupsPage({ searchParams }: GroupsPageProps) {
 
   const params = searchParams ? await searchParams : {};
   const rawStatus = params.status ?? "all";
+  const fromCoordinator = params.from === "coordinator";
   const currentFilter: "all" | GroupStatus =
     rawStatus === "planejamento" || rawStatus === "em_andamento" || rawStatus === "concluido"
       ? rawStatus
@@ -141,6 +142,15 @@ export default async function GroupsPage({ searchParams }: GroupsPageProps) {
             Organize os membros e acompanhe os grupos de TCA.
           </p>
         </header>
+
+        {fromCoordinator && (
+          <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-4 mb-6">
+            <p className="text-indigo-900 font-medium">Modo coordenador: criação manual de grupos</p>
+            <p className="text-indigo-800 text-sm mt-1">
+              Selecione estudantes cadastrados ou preencha manualmente os integrantes para criar um grupo.
+            </p>
+          </div>
+        )}
 
         {groupsError && (
           <div className="bg-amber-50 border border-amber-300 rounded-lg p-4 mb-6">

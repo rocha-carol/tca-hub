@@ -67,6 +67,7 @@ export default async function DashboardPage() {
   }
 
   const profile = await getAuthenticatedProfile();
+  const isCoordinator = profile?.role === "coordinator";
 
   // Busca dados de resumo — falhas silenciosas para não quebrar o dashboard
   let groups: Awaited<ReturnType<typeof fetchAllGroups>> = [];
@@ -138,9 +139,22 @@ export default async function DashboardPage() {
         </div>
 
         {/* Painel do coordenador */}
-        {coordinatorSummary && (
+        {isCoordinator && coordinatorSummary && (
           <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm mb-8">
             <h2 className="text-xl font-semibold text-gray-900 mb-5">Painel do coordenador</h2>
+
+            <div className="mb-5 rounded-md border border-indigo-200 bg-indigo-50 px-4 py-3">
+              <p className="text-sm font-medium text-indigo-900">Ação rápida do coordenador</p>
+              <p className="text-xs text-indigo-800 mt-1">
+                Criação manual de grupos para organizar estudantes sem vínculo ou ajustar composições.
+              </p>
+              <Link
+                href="/groups?from=coordinator"
+                className="inline-block mt-2 text-xs font-semibold text-indigo-700 hover:underline"
+              >
+                Criar grupo manualmente →
+              </Link>
+            </div>
 
             {/* Alertas */}
             {(coordinatorSummary.groupsWithoutAdvisor > 0 || coordinatorSummary.advisorsFullCount > 0) && (
