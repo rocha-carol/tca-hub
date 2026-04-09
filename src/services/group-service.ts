@@ -410,7 +410,8 @@ export async function initiateAdvisorIndication(
  */
 export async function respondAdvisorIndication(
 	groupId: string,
-	decision: Exclude<AdvisorIndicationStatus, "pendente">
+	decision: Exclude<AdvisorIndicationStatus, "pendente">,
+	coAdvisorId?: string | null
 ): Promise<void> {
 	const group = await fetchGroupById(groupId);
 	if (!group) {
@@ -419,6 +420,11 @@ export async function respondAdvisorIndication(
 
 	if (!group.indicated_advisor_id) {
 		throw new Error("Não existe indicação pendente para este grupo.");
+	}
+
+	const normalizedCoAdvisorId = coAdvisorId?.trim() ? coAdvisorId.trim() : null;
+	if (decision === "aceita" && normalizedCoAdvisorId === group.indicated_advisor_id) {
+		throw new Error("Coorientador não pode ser o mesmo orientador principal indicado.");
 	}
 
 	if (decision === "aceita") {
@@ -431,6 +437,7 @@ export async function respondAdvisorIndication(
 		decision === "aceita"
 			? {
 				primary_advisor_id: group.indicated_advisor_id,
+				co_advisor_id: normalizedCoAdvisorId,
 				indication_status: "aceita",
 				indication_updated_at: new Date().toISOString(),
 			}

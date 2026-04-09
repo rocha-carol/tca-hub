@@ -175,17 +175,21 @@ export default async function GroupDetailPage({ params, searchParams }: GroupDet
     "use server";
 
     const decision = String(formData.get("decision") ?? "").trim();
+    const coAdvisorId = String(formData.get("co_advisor_id") ?? "").trim() || null;
 
     if (decision !== "aceita" && decision !== "recusada") {
       redirect(`/groups/${id}`);
     }
 
     try {
-      await respondAdvisorIndication(id, decision);
+      await respondAdvisorIndication(id, decision, coAdvisorId);
     } catch (error) {
       const message = error instanceof Error ? error.message.toLowerCase() : "";
       if (message.includes("indisponível") || message.includes("limite")) {
         redirect(`/groups/${id}?indication_response=unavailable`);
+      }
+      if (message.includes("coorientador") && message.includes("mesmo")) {
+        redirect(`/groups/${id}?indication_response=invalid_co`);
       }
       redirect(`/groups/${id}?indication_response=error`);
     }
@@ -396,9 +400,37 @@ export default async function GroupDetailPage({ params, searchParams }: GroupDet
                 Registre abaixo se a indicação foi aceita ou recusada.
               </p>
 
+              {indication_response === "invalid_co" && (
+                <p className="text-xs text-red-700 mt-2 font-medium">
+                  O coorientador não pode ser o mesmo orientador principal indicado.
+                </p>
+              )}
+
               <div className="flex gap-2 mt-3">
-                <form action={handleRespondAdvisorIndication}>
+                <form action={handleRespondAdvisorIndication} className="space-y-2">
                   <input type="hidden" name="decision" value="aceita" />
+
+                  <div>
+                    <label htmlFor="pending-co-advisor-id" className="block text-xs text-amber-900 mb-1">
+                      Coorientador opcional
+                    </label>
+                    <select
+                      id="pending-co-advisor-id"
+                      name="co_advisor_id"
+                      defaultValue={group.co_advisor_id ?? ""}
+                      className="w-full px-2.5 py-1.5 border border-amber-300 rounded-md text-black bg-white text-xs focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    >
+                      <option value="">— Nenhum —</option>
+                      {advisors
+                        .filter((advisor) => !idsAreEqual(advisor.id, indicatedAdvisor.id))
+                        .map((advisor) => (
+                          <option key={advisor.id} value={advisor.id}>
+                            {advisor.name}
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+
                   <button
                     type="submit"
                     className="bg-green-600 hover:bg-green-700 text-white text-xs font-medium px-3 py-1.5 rounded-md"
