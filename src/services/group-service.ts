@@ -27,6 +27,141 @@ function isIndicationColumnMissing(message: string) {
 	);
 }
 
+function mapSupabaseErrorToIndicationMessage(message: string) {
+	if (isIndicationColumnMissing(message)) {
+		return "Fluxo de indicação ainda não está preparado no Supabase. Execute o arquivo local database/009_add_advisor_indication_flow.sql no SQL Editor.";
+	}
+
+	return null;
+}
+
+async function recalculateAdvisorIndicationQueue(excludedGroupId?: string): Promise<void> {
+	const supabase = await createClient();
+
+	const { data: advisorsData, error: advisorsError } = await supabase
+		.from("advisors")
+		.select("id, active, max_orientacoes")
+		.eq("active", true);
+
+	if (advisorsError) {
+		throw new Error(`Erro ao buscar orientadores para recálculo da fila: ${advisorsError.message}`);
+	}
+
+	const advisorCapacityMap = new Map<string, number>();
+	for (const advisor of advisorsData || []) {
+		advisorCapacityMap.set(String(advisor.id), advisor.max_orientacoes ?? 5);
+	}
+
+	const { data: occupiedGroups, error: occupiedGroupsError } = await supabase
+		.from("groups")
+		.select("primary_advisor_id")
+		.not("primary_advisor_id", "is", null);
+
+	if (occupiedGroupsError) {
+		throw new Error(`Erro ao calcular carga dos orientadores: ${occupiedGroupsError.message}`);
+	}
+
+	const loadMap = new Map<string, number>();
+	for (const row of occupiedGroups || []) {
+		const advisorId = String(row.primary_advisor_id ?? "");
+		if (!advisorId) continue;
+		loadMap.set(advisorId, (loadMap.get(advisorId) ?? 0) + 1);
+	}
+
+	let openGroupsQuery = supabase
+		.from("groups")
+		.select("id, indicated_advisor_id, indication_status, primary_advisor_id, created_at")
+		.is("primary_advisor_id", null)
+		.order("created_at", { ascending: true });
+
+	if (excludedGroupId) {
+		openGroupsQuery = openGroupsQuery.neq("id", excludedGroupId);
+	}
+
+	const { data: openGroups, error: openGroupsError } = await openGroupsQuery;
+
+	if (openGroupsError) {
+		const indicationMessage = mapSupabaseErrorToIndicationMessage(openGroupsError.message);
+		if (indicationMessage) {
+			throw new Error(indicationMessage);
+		}
+
+		throw new Error(`Erro ao buscar grupos para recálculo da fila: ${openGroupsError.message}`);
+	}
+
+	const { data: preferencesRows, error: preferencesError } = await supabase
+		.from("group_advisor_preferences")
+		.select("group_id, advisor_id, preference_order")
+		.order("group_id", { ascending: true })
+		.order("preference_order", { ascending: true });
+
+	if (preferencesError) {
+		throw new Error(`Erro ao buscar preferências para recálculo da fila: ${preferencesError.message}`);
+	}
+
+	const preferencesMap = new Map<string, Array<{ advisor_id: string }>>();
+	for (const row of preferencesRows || []) {
+		const groupId = String(row.group_id);
+		const list = preferencesMap.get(groupId) ?? [];
+		list.push({ advisor_id: String(row.advisor_id) });
+		preferencesMap.set(groupId, list);
+	}
+
+	for (const group of openGroups || []) {
+		const groupId = String(group.id);
+		const preferences = preferencesMap.get(groupId) ?? [];
+
+		let nextIndicatedAdvisorId: string | null = null;
+
+		for (const pref of preferences) {
+			const advisorId = String(pref.advisor_id);
+			const maxOrientacoes = advisorCapacityMap.get(advisorId);
+
+			if (!maxOrientacoes) {
+				continue;
+			}
+
+			const currentLoad = loadMap.get(advisorId) ?? 0;
+			if (currentLoad < maxOrientacoes) {
+				nextIndicatedAdvisorId = advisorId;
+				loadMap.set(advisorId, currentLoad + 1);
+				break;
+			}
+		}
+
+		const currentIndicatedAdvisorId = group.indicated_advisor_id ? String(group.indicated_advisor_id) : null;
+		const currentStatus = group.indication_status ? String(group.indication_status) : null;
+
+		const nextStatus = nextIndicatedAdvisorId ? "pendente" : null;
+
+		const shouldUpdate =
+			currentIndicatedAdvisorId !== nextIndicatedAdvisorId ||
+			currentStatus !== nextStatus;
+
+		if (!shouldUpdate) {
+			continue;
+		}
+
+		const { error: updateError } = await supabase
+			.from("groups")
+			.update({
+				indicated_advisor_id: nextIndicatedAdvisorId,
+				indication_status: nextStatus,
+				indication_updated_at: new Date().toISOString(),
+			})
+			.eq("id", groupId);
+
+		if (updateError) {
+			const indicationMessage = mapSupabaseErrorToIndicationMessage(updateError.message);
+			if (indicationMessage) {
+				throw new Error(indicationMessage);
+			}
+
+			throw new Error(`Erro ao atualizar fila de indicação para o grupo ${groupId}: ${updateError.message}`);
+		}
+	}
+}
+
 async function ensureAdvisorAvailableForPrimaryAssignment(
 	advisorId: string,
 	groupId: string
@@ -231,14 +366,15 @@ export async function updateGroupAdvisors(
 		.eq("id", groupId);
 
 	if (error) {
-		if (isIndicationColumnMissing(error.message)) {
-			throw new Error(
-				"Fluxo de indicação ainda não está preparado no Supabase. Execute o arquivo local database/009_add_advisor_indication_flow.sql no SQL Editor."
-			);
+		const indicationMessage = mapSupabaseErrorToIndicationMessage(error.message);
+		if (indicationMessage) {
+			throw new Error(indicationMessage);
 		}
 
 		throw new Error(`Erro ao atualizar orientadores: ${error.message}`);
 	}
+
+	await recalculateAdvisorIndicationQueue(groupId);
 }
 
 /**
@@ -260,10 +396,9 @@ export async function initiateAdvisorIndication(
 		.eq("id", groupId);
 
 	if (error) {
-		if (isIndicationColumnMissing(error.message)) {
-			throw new Error(
-				"Fluxo de indicação ainda não está preparado no Supabase. Execute o arquivo local database/009_add_advisor_indication_flow.sql no SQL Editor."
-			);
+		const indicationMessage = mapSupabaseErrorToIndicationMessage(error.message);
+		if (indicationMessage) {
+			throw new Error(indicationMessage);
 		}
 
 		throw new Error(`Erro ao iniciar indicação de orientador: ${error.message}`);
@@ -311,13 +446,16 @@ export async function respondAdvisorIndication(
 		.eq("id", groupId);
 
 	if (error) {
-		if (isIndicationColumnMissing(error.message)) {
-			throw new Error(
-				"Fluxo de indicação ainda não está preparado no Supabase. Execute o arquivo local database/009_add_advisor_indication_flow.sql no SQL Editor."
-			);
+		const indicationMessage = mapSupabaseErrorToIndicationMessage(error.message);
+		if (indicationMessage) {
+			throw new Error(indicationMessage);
 		}
 
 		throw new Error(`Erro ao registrar resposta da indicação: ${error.message}`);
+	}
+
+	if (decision === "aceita") {
+		await recalculateAdvisorIndicationQueue(groupId);
 	}
 }
 
