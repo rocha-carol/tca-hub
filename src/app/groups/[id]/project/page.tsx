@@ -60,6 +60,10 @@ import {
   createProjectSectionVersion,
   fetchGroupProjectSectionVersions,
 } from "@/services/project-section-version-service";
+import {
+  createProjectSectionAuthorshipIndicator,
+  fetchProjectSectionAuthorshipIndicators,
+} from "@/services/project-section-authorship-indicator-service";
 import { fetchGroupById } from "@/services/group-service";
 import { getAuthenticatedProfile } from "@/lib/auth/session-service";
 import { generatePedagogicalFeedbackWithAI } from "@/lib/ai/pedagogical-feedback-service";
@@ -73,6 +77,7 @@ import type {
   GroupInteractiveGuideAudience,
   GroupInteractiveGuideType,
 } from "@/types/group-interactive-guide";
+import type { ProjectSectionAuthorshipIndicator } from "@/types/project-section-authorship-indicator";
 
 interface GroupProjectPageProps {
   params: Promise<{ id: string }>;
@@ -107,6 +112,9 @@ interface GroupProjectPageProps {
     ai_feedback_status?: string;
     ai_feedback_action?: string;
     ai_feedback_section?: string;
+    authorship_status?: string;
+    authorship_action?: string;
+    authorship_section?: string;
   }>;
 }
 
@@ -131,6 +139,7 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
   const canManageRepertory = !!profile;
   const canManageInteractiveGuides = !!profile;
   const canManageAIFeedback = profile?.role === "advisor" || profile?.role === "coordinator";
+  const canManageAuthorshipIndicator = profile?.role === "advisor" || profile?.role === "coordinator";
   const canAskAsStudent = profile?.role === "student";
 
   const group = await fetchGroupById(id);
@@ -769,6 +778,52 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
     redirect(`/groups/${id}/project?ai_feedback_status=success&ai_feedback_action=generate&ai_feedback_section=${sectionId}`);
   }
 
+  async function handleAddAuthorshipIndicator(formData: FormData) {
+    "use server";
+
+    const authenticatedProfile = await getAuthenticatedProfile();
+    if (!authenticatedProfile || (authenticatedProfile.role !== "advisor" && authenticatedProfile.role !== "coordinator")) {
+      redirect(`/groups/${id}/project?authorship_status=forbidden&authorship_action=add`);
+    }
+
+    const sectionId = String(formData.get("section_id") ?? "").trim();
+    const studentPercent = Number(String(formData.get("student_percent") ?? "").trim());
+    const advisorPercent = Number(String(formData.get("advisor_percent") ?? "").trim());
+    const coordinatorPercent = Number(String(formData.get("coordinator_percent") ?? "").trim());
+    const analysisBasis = String(formData.get("analysis_basis") ?? "").trim();
+    const recommendationRaw = String(formData.get("recommendation") ?? "").trim();
+    const recommendation = recommendationRaw.length > 0 ? recommendationRaw : null;
+
+    const total = studentPercent + advisorPercent + coordinatorPercent;
+    const isPercentValid =
+      [studentPercent, advisorPercent, coordinatorPercent].every((v) => Number.isFinite(v) && v >= 0 && v <= 100) &&
+      total === 100;
+
+    if (!sectionId || analysisBasis.length < 3 || !isPercentValid) {
+      redirect(`/groups/${id}/project?authorship_status=invalid&authorship_action=add&authorship_section=${sectionId}`);
+    }
+
+    try {
+      await createProjectSectionAuthorshipIndicator({
+        group_id: id,
+        section_id: sectionId,
+        student_percent: studentPercent,
+        advisor_percent: advisorPercent,
+        coordinator_percent: coordinatorPercent,
+        analysis_basis: analysisBasis,
+        recommendation,
+        author_profile_id: authenticatedProfile.id,
+        author_role: authenticatedProfile.role === "coordinator" ? "coordinator" : "advisor",
+        author_name: authenticatedProfile.name,
+      });
+    } catch {
+      redirect(`/groups/${id}/project?authorship_status=error&authorship_action=add&authorship_section=${sectionId}`);
+    }
+
+    revalidatePath(`/groups/${id}/project`);
+    redirect(`/groups/${id}/project?authorship_status=success&authorship_action=add&authorship_section=${sectionId}`);
+  }
+
   let sections = [] as Awaited<ReturnType<typeof ensureGroupProjectSectionsStructure>>;
   let sectionsError: string | null = null;
   let comments = [] as Awaited<ReturnType<typeof fetchGroupProjectSectionComments>>;
@@ -799,6 +854,8 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
   let aiFeedbackError: string | null = null;
   let sectionVersions = [] as Awaited<ReturnType<typeof fetchGroupProjectSectionVersions>>;
   let sectionVersionsError: string | null = null;
+  let authorshipIndicators = [] as Awaited<ReturnType<typeof fetchProjectSectionAuthorshipIndicators>>;
+  let authorshipIndicatorsError: string | null = null;
 
   try {
     sections = await ensureGroupProjectSectionsStructure(id);
@@ -890,6 +947,12 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
     sectionVersionsError = error instanceof Error ? error.message : "Erro ao carregar histórico de versões.";
   }
 
+  try {
+    authorshipIndicators = await fetchProjectSectionAuthorshipIndicators(id);
+  } catch (error) {
+    authorshipIndicatorsError = error instanceof Error ? error.message : "Erro ao carregar indicador de autoria.";
+  }
+
   const commentsBySection = new Map<string, typeof comments>();
   for (const comment of comments) {
     const key = String(comment.section_id);
@@ -938,6 +1001,46 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
     const list = versionsBySection.get(key) ?? [];
     list.push(version);
     versionsBySection.set(key, list);
+  }
+
+  const latestAuthorshipBySection = new Map<string, ProjectSectionAuthorshipIndicator>();
+  for (const indicator of authorshipIndicators) {
+    const key = String(indicator.section_id);
+    if (!latestAuthorshipBySection.has(key)) {
+      latestAuthorshipBySection.set(key, indicator);
+    }
+  }
+
+  function getSuggestedAuthorshipPercentages(sectionId: string) {
+    const versions = versionsBySection.get(sectionId) || [];
+
+    const totals = {
+      student: 0,
+      advisor: 0,
+      coordinator: 0,
+    };
+
+    for (const version of versions) {
+      if (version.author_role === "student") totals.student += 1;
+      if (version.author_role === "advisor") totals.advisor += 1;
+      if (version.author_role === "coordinator") totals.coordinator += 1;
+    }
+
+    const count = totals.student + totals.advisor + totals.coordinator;
+    if (count === 0) {
+      return { student: 0, advisor: 0, coordinator: 0 };
+    }
+
+    const student = Math.round((totals.student * 100) / count);
+    const advisor = Math.round((totals.advisor * 100) / count);
+    const coordinator = Math.round((totals.coordinator * 100) / count);
+    const diff = 100 - (student + advisor + coordinator);
+
+    return {
+      student,
+      advisor: advisor + diff,
+      coordinator,
+    };
   }
 
   return (
@@ -1053,6 +1156,13 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
           <div className="bg-amber-50 border border-amber-300 rounded-lg p-4 mb-6">
             <p className="text-amber-900 font-medium">Configuração pendente do histórico de versões das seções</p>
             <p className="text-amber-800 text-sm mt-1">{sectionVersionsError}</p>
+          </div>
+        )}
+
+        {authorshipIndicatorsError && (
+          <div className="bg-amber-50 border border-amber-300 rounded-lg p-4 mb-6">
+            <p className="text-amber-900 font-medium">Configuração pendente do indicador de autoria</p>
+            <p className="text-amber-800 text-sm mt-1">{authorshipIndicatorsError}</p>
           </div>
         )}
 
@@ -1765,6 +1875,159 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
                 className="bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2 rounded-md text-sm"
               >
                 Gerar feedback com IA
+              </button>
+            </form>
+          )}
+        </div>
+
+        <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm mb-6">
+          <h2 className="text-lg font-semibold text-gray-900 mb-2">Indicador de autoria</h2>
+
+          {query.authorship_status === "success" && query.authorship_action === "add" && (
+            <p className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-md px-3 py-2 mb-3">
+              Indicador de autoria registrado com sucesso.
+            </p>
+          )}
+          {query.authorship_status === "invalid" && (
+            <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2 mb-3">
+              Dados inválidos. Os percentuais devem totalizar 100 e a base da análise deve ter pelo menos 3 caracteres.
+            </p>
+          )}
+          {query.authorship_status === "error" && (
+            <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2 mb-3">
+              Não foi possível registrar o indicador de autoria. Tente novamente.
+            </p>
+          )}
+          {query.authorship_status === "forbidden" && (
+            <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2 mb-3">
+              Apenas orientadores (ou coordenação) podem registrar indicador de autoria.
+            </p>
+          )}
+
+          <div className="space-y-2 mb-4">
+            {sections.length === 0 ? (
+              <p className="text-sm text-gray-500">Não há seções disponíveis para calcular autoria.</p>
+            ) : (
+              sections.map((section) => {
+                const latest = latestAuthorshipBySection.get(String(section.id));
+                const suggestion = getSuggestedAuthorshipPercentages(String(section.id));
+
+                return (
+                  <div key={`authorship-${String(section.id)}`} className="border border-gray-100 rounded-md px-3 py-2 bg-gray-50">
+                    <p className="text-sm font-medium text-gray-900">
+                      {section.section_order}. {section.section_title}
+                    </p>
+
+                    {latest ? (
+                      <>
+                        <p className="text-xs text-gray-700 mt-1">
+                          Último indicador: Estudantes {latest.student_percent}% • Orientador {latest.advisor_percent}% • Coordenação {latest.coordinator_percent}%
+                        </p>
+                        <p className="text-xs text-gray-600 mt-1 whitespace-pre-line">Base: {latest.analysis_basis}</p>
+                        {latest.recommendation && (
+                          <p className="text-xs text-blue-700 mt-1 whitespace-pre-line">Recomendação: {latest.recommendation}</p>
+                        )}
+                      </>
+                    ) : (
+                      <p className="text-xs text-gray-500 mt-1">Nenhum indicador manual registrado ainda para esta seção.</p>
+                    )}
+
+                    <p className="text-xs text-indigo-700 mt-1">
+                      Sugestão automática (pelo histórico de versões): Estudantes {suggestion.student}% • Orientador {suggestion.advisor}% • Coordenação {suggestion.coordinator}%
+                    </p>
+                  </div>
+                );
+              })
+            )}
+          </div>
+
+          {canManageAuthorshipIndicator && (
+            <form action={handleAddAuthorshipIndicator} className="space-y-3 border-t border-gray-100 pt-4">
+              <div>
+                <label htmlFor="authorship-section" className="block text-sm text-gray-700 mb-1">Seção para análise</label>
+                <select
+                  id="authorship-section"
+                  name="section_id"
+                  defaultValue={query.authorship_section || ""}
+                  className="w-full md:w-96 px-3 py-2 border border-gray-300 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">Selecione uma seção...</option>
+                  {sections.map((section) => (
+                    <option key={String(section.id)} value={String(section.id)}>
+                      {section.section_order}. {section.section_title}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div>
+                  <label htmlFor="authorship-student" className="block text-sm text-gray-700 mb-1">Estudantes (%)</label>
+                  <input
+                    id="authorship-student"
+                    name="student_percent"
+                    type="number"
+                    min={0}
+                    max={100}
+                    defaultValue={0}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white"
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="authorship-advisor" className="block text-sm text-gray-700 mb-1">Orientador (%)</label>
+                  <input
+                    id="authorship-advisor"
+                    name="advisor_percent"
+                    type="number"
+                    min={0}
+                    max={100}
+                    defaultValue={0}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white"
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="authorship-coordinator" className="block text-sm text-gray-700 mb-1">Coordenação (%)</label>
+                  <input
+                    id="authorship-coordinator"
+                    name="coordinator_percent"
+                    type="number"
+                    min={0}
+                    max={100}
+                    defaultValue={0}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label htmlFor="authorship-basis" className="block text-sm text-gray-700 mb-1">Base da análise</label>
+                <textarea
+                  id="authorship-basis"
+                  name="analysis_basis"
+                  rows={2}
+                  placeholder="Ex.: análise baseada no histórico de versões, participação em encontros e qualidade da produção escrita."
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white"
+                />
+              </div>
+
+              <div>
+                <label htmlFor="authorship-recommendation" className="block text-sm text-gray-700 mb-1">Recomendação pedagógica (opcional)</label>
+                <textarea
+                  id="authorship-recommendation"
+                  name="recommendation"
+                  rows={2}
+                  placeholder="Ex.: reforçar registro individual de contribuição em cada entrega parcial."
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white"
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2 rounded-md text-sm"
+              >
+                Registrar indicador de autoria
               </button>
             </form>
           )}
