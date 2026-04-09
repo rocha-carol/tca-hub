@@ -39,6 +39,7 @@ export interface CreateAdvisorData {
 	employee_code?: string | null;
 	school?: string | null;
 	area_of_activity?: string | null;
+	max_orientacoes?: number | null;
 }
 
 export interface UpdateAdvisorData {
@@ -48,6 +49,7 @@ export interface UpdateAdvisorData {
 	employee_code?: string | null;
 	school?: string | null;
 	area_of_activity?: string | null;
+	max_orientacoes?: number | null;
 }
 
 /**
@@ -96,6 +98,7 @@ export async function createAdvisor(data: CreateAdvisorData): Promise<Advisor> {
 			employee_code: data.employee_code ?? null,
 			school: data.school ?? null,
 			area_of_activity: data.area_of_activity ?? null,
+			...(data.max_orientacoes != null ? { max_orientacoes: data.max_orientacoes } : {}),
 		})
 		.select("*")
 		.single();
@@ -148,6 +151,7 @@ export async function updateAdvisor(
 			employee_code: data.employee_code ?? null,
 			school: data.school ?? null,
 			area_of_activity: data.area_of_activity ?? null,
+			...(data.max_orientacoes != null ? { max_orientacoes: data.max_orientacoes } : {}),
 		})
 		.eq("id", normalizeAdvisorId(advisorId));
 

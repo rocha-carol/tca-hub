@@ -11,5 +11,6 @@ export interface Advisor {
   school?: string | null;
   area_of_activity?: string | null;
   active?: boolean;
+  max_orientacoes?: number;
   created_at?: string;
 }

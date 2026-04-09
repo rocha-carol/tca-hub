@@ -28,6 +28,10 @@ export default async function AdvisorsPage() {
     const employeeCode = String(formData.get("employee_code") ?? "").trim();
     const school = String(formData.get("school") ?? "").trim();
     const areaOfActivity = String(formData.get("area_of_activity") ?? "").trim();
+    const rawMaxOrientacoes = String(formData.get("max_orientacoes") ?? "").trim();
+    const maxOrientacoes = rawMaxOrientacoes && /^\d+$/.test(rawMaxOrientacoes)
+      ? Math.max(1, Number(rawMaxOrientacoes))
+      : null;
 
     if (!name || name.length < 2 || !email) {
       redirect("/advisors");
@@ -40,6 +44,7 @@ export default async function AdvisorsPage() {
       employee_code: employeeCode || null,
       school: school || null,
       area_of_activity: areaOfActivity || null,
+      max_orientacoes: maxOrientacoes,
     });
 
     revalidatePath("/advisors");
@@ -56,6 +61,10 @@ export default async function AdvisorsPage() {
     const employeeCode = String(formData.get("employee_code") ?? "").trim();
     const school = String(formData.get("school") ?? "").trim();
     const areaOfActivity = String(formData.get("area_of_activity") ?? "").trim();
+    const rawMaxOrientacoes = String(formData.get("max_orientacoes") ?? "").trim();
+    const maxOrientacoes = rawMaxOrientacoes && /^\d+$/.test(rawMaxOrientacoes)
+      ? Math.max(1, Number(rawMaxOrientacoes))
+      : null;
 
     if (!id || !name || name.length < 2 || !email) {
       redirect("/advisors");
@@ -68,6 +77,7 @@ export default async function AdvisorsPage() {
       employee_code: employeeCode || null,
       school: school || null,
       area_of_activity: areaOfActivity || null,
+      max_orientacoes: maxOrientacoes,
     });
 
     revalidatePath("/advisors");
@@ -203,6 +213,22 @@ export default async function AdvisorsPage() {
               </div>
             </div>
 
+            <div className="max-w-xs">
+              <label htmlFor="max_orientacoes" className="block text-sm font-medium text-gray-700 mb-1">
+                Máx. de orientações simultâneas
+              </label>
+              <input
+                id="max_orientacoes"
+                name="max_orientacoes"
+                type="number"
+                min="1"
+                max="99"
+                placeholder="5"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <p className="text-xs text-gray-500 mt-1">Padrão: 5. Define quantos grupos este orientador pode assumir como orientador principal ao mesmo tempo.</p>
+            </div>
+
             <div className="flex flex-wrap gap-3">
               <button
                 type="submit"
@@ -268,6 +294,9 @@ export default async function AdvisorsPage() {
                     </p>
                     <p className="text-gray-700">
                       <strong>Área de atuação:</strong> {advisor.area_of_activity || "Não informada"}
+                    </p>
+                    <p className="text-gray-700">
+                      <strong>Máx. orientações:</strong> {advisor.max_orientacoes ?? 5}
                     </p>
                   </div>
 
@@ -349,6 +378,21 @@ export default async function AdvisorsPage() {
                           name="area_of_activity"
                           type="text"
                           defaultValue={advisor.area_of_activity ?? ""}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+
+                      <div>
+                        <label htmlFor={`advisor-max-${advisor.id}`} className="block text-sm font-medium text-gray-700 mb-1">
+                          Máx. orientações simultâneas
+                        </label>
+                        <input
+                          id={`advisor-max-${advisor.id}`}
+                          name="max_orientacoes"
+                          type="number"
+                          min="1"
+                          max="99"
+                          defaultValue={advisor.max_orientacoes ?? 5}
                           className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
                         />
                       </div>

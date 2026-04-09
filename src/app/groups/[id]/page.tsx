@@ -9,6 +9,7 @@ import {
   fetchGroupAdvisorPreferences,
   replaceGroupAdvisorPreferences,
 } from "@/services/group-advisor-preference-service";
+import { suggestPrimaryAdvisorByPreference } from "@/services/advisor-indication-service";
 import type { Student } from "@/types/student";
 import type { GroupStatus } from "@/types/group";
 
@@ -58,6 +59,7 @@ function renderMemberCard(
 
 interface GroupDetailPageProps {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ indication?: string }>;
 }
 
 /**
@@ -66,8 +68,9 @@ interface GroupDetailPageProps {
  * Permite visualizar todos os dados do grupo e associar orientadores
  * via seletor com os orientadores cadastrados no sistema.
  */
-export default async function GroupDetailPage({ params }: GroupDetailPageProps) {
+export default async function GroupDetailPage({ params, searchParams }: GroupDetailPageProps) {
   const { id } = await params;
+  const { indication } = await searchParams;
 
   async function handleAssignAdvisors(formData: FormData) {
     "use server";
@@ -122,6 +125,24 @@ export default async function GroupDetailPage({ params }: GroupDetailPageProps) 
     redirect(`/groups/${id}`);
   }
 
+  async function handleIndicatePrimaryAdvisorByPreference() {
+    "use server";
+
+    const result = await suggestPrimaryAdvisorByPreference(id);
+
+    if (!result.suggested) {
+      redirect(`/groups/${id}?indication=unavailable`);
+    }
+
+    const group = await fetchGroupById(id);
+    await updateGroupAdvisors(id, String(result.suggested.id), group?.co_advisor_id ?? null);
+
+    revalidatePath(`/groups/${id}`);
+    revalidatePath("/groups");
+    revalidatePath("/dashboard");
+    redirect(`/groups/${id}?indication=success`);
+  }
+
   let group;
   try {
     group = await fetchGroupById(id);
@@ -169,6 +190,15 @@ export default async function GroupDetailPage({ params }: GroupDetailPageProps) 
   } catch (error) {
     advisorPreferencesError =
       error instanceof Error ? error.message : "Erro desconhecido ao carregar preferências.";
+  }
+
+  // Verificação de disponibilidade por preferência (para exibição informativa)
+  let indicationChecked: Awaited<ReturnType<typeof suggestPrimaryAdvisorByPreference>>["checked"] = [];
+  try {
+    const indicationResult = await suggestPrimaryAdvisorByPreference(id);
+    indicationChecked = indicationResult.checked;
+  } catch {
+    // falha silenciosa — informativo apenas
   }
 
   // Resolve nome dos orientadores vinculados
@@ -294,21 +324,63 @@ export default async function GroupDetailPage({ params }: GroupDetailPageProps) 
           <div className="mb-5 rounded-md border border-blue-100 bg-blue-50 p-4">
             <p className="text-sm font-medium text-blue-900 mb-2">Lista ordenada de preferência de orientadores</p>
             <ul className="space-y-1 text-sm text-blue-900">
-              <li>
-                <span className="font-medium">1ª preferência:</span>{" "}
-                {preferredAdvisor1 ? preferredAdvisor1.name : "Não definida"}
-              </li>
-              <li>
-                <span className="font-medium">2ª preferência:</span>{" "}
-                {preferredAdvisor2 ? preferredAdvisor2.name : "Não definida"}
-              </li>
-              <li>
-                <span className="font-medium">3ª preferência:</span>{" "}
-                {preferredAdvisor3 ? preferredAdvisor3.name : "Não definida"}
-              </li>
+              {[
+                { label: "1ª preferência", advisor: preferredAdvisor1 },
+                { label: "2ª preferência", advisor: preferredAdvisor2 },
+                { label: "3ª preferência", advisor: preferredAdvisor3 },
+              ].map(({ label, advisor }, index) => {
+                const check = advisor
+                  ? indicationChecked.find((c) => idsAreEqual(c.advisor.id, advisor.id))
+                  : undefined;
+                return (
+                  <li key={index} className="flex items-center justify-between gap-2">
+                    <span>
+                      <span className="font-medium">{label}:</span>{" "}
+                      {advisor ? advisor.name : "Não definida"}
+                    </span>
+                    {check && (
+                      <span
+                        className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                          check.available
+                            ? "bg-green-100 text-green-800"
+                            : "bg-red-100 text-red-800"
+                        }`}
+                      >
+                        {check.available
+                          ? `Disponível (${check.currentCount}/${check.maxOrientacoes})`
+                          : `Indisponível (${check.currentCount}/${check.maxOrientacoes})`}
+                      </span>
+                    )}
+                  </li>
+                );
+              })}
             </ul>
             {advisorPreferencesError && (
               <p className="text-xs text-amber-800 mt-2">{advisorPreferencesError}</p>
+            )}
+
+            {/* Indicação sequencial */}
+            {advisorPreferences.length > 0 && (
+              <div className="mt-3 pt-3 border-t border-blue-200">
+                {indication === "unavailable" && (
+                  <p className="text-xs text-red-700 mb-2 font-medium">
+                    Nenhum orientador da lista de preferências está disponível no momento.
+                  </p>
+                )}
+                {indication === "success" && (
+                  <p className="text-xs text-green-700 mb-2 font-medium">
+                    Orientador principal indicado com sucesso pela lista de preferências.
+                  </p>
+                )}
+                <form action={handleIndicatePrimaryAdvisorByPreference}>
+                  <button
+                    type="submit"
+                    className="bg-blue-700 hover:bg-blue-800 text-white text-xs font-medium px-3 py-1.5 rounded-md"
+                  >
+                    Indicar orientador por preferência
+                  </button>
+                </form>
+              </div>
             )}
           </div>
 
