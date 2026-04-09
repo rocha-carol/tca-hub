@@ -36,12 +36,17 @@ import {
   createGroupInternalNotification,
   fetchGroupInternalNotifications,
 } from "@/services/group-internal-notification-service";
+import {
+  fetchGroupFinalProduct,
+  upsertGroupFinalProduct,
+} from "@/services/group-final-product-service";
 import { fetchGroupById } from "@/services/group-service";
 import { getAuthenticatedProfile } from "@/lib/auth/session-service";
 import type { ProjectSectionStatus } from "@/types/project-section";
 import type { ProjectDevelopmentChecklistStatus } from "@/types/project-development-checklist-item";
 import type { GroupInPersonMeetingStatus } from "@/types/group-in-person-meeting";
 import type { GroupInternalNotificationType } from "@/types/group-internal-notification";
+import type { GroupFinalProductStatus } from "@/types/group-final-product";
 
 interface GroupProjectPageProps {
   params: Promise<{ id: string }>;
@@ -66,6 +71,7 @@ interface GroupProjectPageProps {
     meeting_id?: string;
     notification_status?: string;
     notification_action?: string;
+    final_product_status?: string;
   }>;
 }
 
@@ -85,6 +91,7 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
   const canManageSchedule = profile?.role === "advisor" || profile?.role === "coordinator";
   const canManageMeetings = profile?.role === "advisor" || profile?.role === "coordinator";
   const canManageInternalNotifications = profile?.role === "advisor" || profile?.role === "coordinator";
+  const canManageFinalProduct = !!profile;
   const canAskAsStudent = profile?.role === "student";
 
   const group = await fetchGroupById(id);
@@ -463,6 +470,53 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
     redirect(`/groups/${id}/project?notification_status=success&notification_action=add`);
   }
 
+  async function handleUpsertFinalProduct(formData: FormData) {
+    "use server";
+
+    const authenticatedProfile = await getAuthenticatedProfile();
+    if (!authenticatedProfile) {
+      redirect(`/groups/${id}/project?final_product_status=forbidden`);
+    }
+
+    const title = String(formData.get("title") ?? "").trim();
+    const descriptionRaw = String(formData.get("description") ?? "").trim();
+    const description = descriptionRaw.length > 0 ? descriptionRaw : null;
+    const productFormat = String(formData.get("product_format") ?? "outro").trim() || "outro";
+    const finalLinkRaw = String(formData.get("final_link") ?? "").trim();
+    const finalLink = finalLinkRaw.length > 0 ? finalLinkRaw : null;
+    const presentationNotesRaw = String(formData.get("presentation_notes") ?? "").trim();
+    const presentationNotes = presentationNotesRaw.length > 0 ? presentationNotesRaw : null;
+    const rawStatus = String(formData.get("status") ?? "rascunho").trim();
+    const allowedStatus: GroupFinalProductStatus[] = ["rascunho", "finalizado"];
+    const status = allowedStatus.includes(rawStatus as GroupFinalProductStatus)
+      ? (rawStatus as GroupFinalProductStatus)
+      : "rascunho";
+
+    if (title.length < 3) {
+      redirect(`/groups/${id}/project?final_product_status=invalid`);
+    }
+
+    try {
+      await upsertGroupFinalProduct({
+        group_id: id,
+        title,
+        description,
+        product_format: productFormat,
+        final_link: finalLink,
+        presentation_notes: presentationNotes,
+        status,
+        author_profile_id: authenticatedProfile.id,
+        author_role: authenticatedProfile.role,
+        author_name: authenticatedProfile.name,
+      });
+    } catch {
+      redirect(`/groups/${id}/project?final_product_status=error`);
+    }
+
+    revalidatePath(`/groups/${id}/project`);
+    redirect(`/groups/${id}/project?final_product_status=success`);
+  }
+
   let sections = [] as Awaited<ReturnType<typeof ensureGroupProjectSectionsStructure>>;
   let sectionsError: string | null = null;
   let comments = [] as Awaited<ReturnType<typeof fetchGroupProjectSectionComments>>;
@@ -481,6 +535,8 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
   let inPersonMeetingsError: string | null = null;
   let internalNotifications = [] as Awaited<ReturnType<typeof fetchGroupInternalNotifications>>;
   let internalNotificationsError: string | null = null;
+  let finalProduct = null as Awaited<ReturnType<typeof fetchGroupFinalProduct>>;
+  let finalProductError: string | null = null;
 
   try {
     sections = await ensureGroupProjectSectionsStructure(id);
@@ -534,6 +590,12 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
     internalNotifications = await fetchGroupInternalNotifications(id);
   } catch (error) {
     internalNotificationsError = error instanceof Error ? error.message : "Erro ao carregar notificações internas.";
+  }
+
+  try {
+    finalProduct = await fetchGroupFinalProduct(id);
+  } catch (error) {
+    finalProductError = error instanceof Error ? error.message : "Erro ao carregar módulo de produto final.";
   }
 
   const commentsBySection = new Map<string, typeof comments>();
@@ -651,6 +713,139 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
             <p className="text-amber-800 text-sm mt-1">{internalNotificationsError}</p>
           </div>
         )}
+
+        {finalProductError && (
+          <div className="bg-amber-50 border border-amber-300 rounded-lg p-4 mb-6">
+            <p className="text-amber-900 font-medium">Configuração pendente do módulo de produto final</p>
+            <p className="text-amber-800 text-sm mt-1">{finalProductError}</p>
+          </div>
+        )}
+
+        <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm mb-6">
+          <h2 className="text-lg font-semibold text-gray-900 mb-2">Módulo de produto final</h2>
+
+          {query.final_product_status === "success" && (
+            <p className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-md px-3 py-2 mb-3">
+              Produto final salvo com sucesso.
+            </p>
+          )}
+          {query.final_product_status === "invalid" && (
+            <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2 mb-3">
+              Título inválido. Informe ao menos 3 caracteres.
+            </p>
+          )}
+          {query.final_product_status === "error" && (
+            <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2 mb-3">
+              Não foi possível salvar o produto final. Tente novamente.
+            </p>
+          )}
+          {query.final_product_status === "forbidden" && (
+            <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2 mb-3">
+              É necessário estar autenticado para registrar o produto final.
+            </p>
+          )}
+
+          <div className="mb-4 p-3 border border-gray-100 rounded-md bg-gray-50">
+            <p className="text-sm text-gray-900 font-medium">
+              Título atual: {finalProduct?.title || "Não definido"}
+            </p>
+            <p className="text-xs text-gray-600 mt-1">
+              Status: {finalProduct?.status === "finalizado" ? "Finalizado" : "Rascunho"}
+            </p>
+            {finalProduct?.description && (
+              <p className="text-xs text-gray-700 mt-1 whitespace-pre-line">{finalProduct.description}</p>
+            )}
+            {finalProduct?.final_link && (
+              <p className="text-xs text-blue-700 mt-1 break-all">Link final: {finalProduct.final_link}</p>
+            )}
+          </div>
+
+          {canManageFinalProduct && (
+            <form action={handleUpsertFinalProduct} className="space-y-3 border-t border-gray-100 pt-4">
+              <div>
+                <label htmlFor="final-product-title" className="block text-sm text-gray-700 mb-1">Título do produto final</label>
+                <input
+                  id="final-product-title"
+                  name="title"
+                  type="text"
+                  defaultValue={finalProduct?.title || ""}
+                  placeholder="Ex.: Protótipo funcional de monitoramento ambiental"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div>
+                <label htmlFor="final-product-description" className="block text-sm text-gray-700 mb-1">Descrição</label>
+                <textarea
+                  id="final-product-description"
+                  name="description"
+                  rows={3}
+                  defaultValue={finalProduct?.description || ""}
+                  placeholder="Descreva o produto final e seus principais resultados..."
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div>
+                  <label htmlFor="final-product-format" className="block text-sm text-gray-700 mb-1">Formato</label>
+                  <input
+                    id="final-product-format"
+                    name="product_format"
+                    type="text"
+                    defaultValue={finalProduct?.product_format || ""}
+                    placeholder="Ex.: App, relatório, vídeo"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="final-product-link" className="block text-sm text-gray-700 mb-1">Link final (opcional)</label>
+                  <input
+                    id="final-product-link"
+                    name="final_link"
+                    type="url"
+                    defaultValue={finalProduct?.final_link || ""}
+                    placeholder="https://..."
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="final-product-status" className="block text-sm text-gray-700 mb-1">Status</label>
+                  <select
+                    id="final-product-status"
+                    name="status"
+                    defaultValue={finalProduct?.status || "rascunho"}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="rascunho">Rascunho</option>
+                    <option value="finalizado">Finalizado</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label htmlFor="final-product-presentation-notes" className="block text-sm text-gray-700 mb-1">Observações de apresentação (opcional)</label>
+                <textarea
+                  id="final-product-presentation-notes"
+                  name="presentation_notes"
+                  rows={2}
+                  defaultValue={finalProduct?.presentation_notes || ""}
+                  placeholder="Ex.: Levar equipamento de demonstração e roteiro de apresentação."
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2 rounded-md text-sm"
+              >
+                Salvar produto final
+              </button>
+            </form>
+          )}
+        </div>
 
         <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm mb-6">
           <h2 className="text-lg font-semibold text-gray-900 mb-2">Notificações internas do sistema</h2>
