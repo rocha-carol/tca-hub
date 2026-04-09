@@ -9,11 +9,23 @@ function isStatusColumnMissing(message: string) {
 	return message.includes("status") && message.includes("schema cache");
 }
 
+function isStudentLinkColumnMissing(message: string) {
+	return (
+		(message.includes("student_1_id") ||
+			message.includes("student_2_id") ||
+			message.includes("student_3_id")) &&
+		message.includes("schema cache")
+	);
+}
+
 export interface CreateGroupData {
+	student_1_id?: string | number | null;
 	member_1_name: string;
 	member_1_series: string;
+	student_2_id?: string | number | null;
 	member_2_name?: string | null;
 	member_2_series?: string | null;
+	student_3_id?: string | number | null;
 	member_3_name?: string | null;
 	member_3_series?: string | null;
 	theme?: string | null;
@@ -65,10 +77,13 @@ export async function createGroup(data: CreateGroupData): Promise<Group> {
 
 	const payload = {
 		owner_id: user.id,
+		student_1_id: data.student_1_id ?? null,
 		member_1_name: data.member_1_name,
 		member_1_series: data.member_1_series,
+		student_2_id: data.student_2_id ?? null,
 		member_2_name: data.member_2_name ?? null,
 		member_2_series: data.member_2_series ?? null,
+		student_3_id: data.student_3_id ?? null,
 		member_3_name: data.member_3_name ?? null,
 		member_3_series: data.member_3_series ?? null,
 		theme: data.theme ?? null,
@@ -85,6 +100,12 @@ export async function createGroup(data: CreateGroupData): Promise<Group> {
 		.single();
 
 	if (error) {
+		if (isStudentLinkColumnMissing(error.message)) {
+			throw new Error(
+				"Vínculo entre groups e students ainda não existe no Supabase. Execute o arquivo local database/006_link_groups_students.sql no SQL Editor."
+			);
+		}
+
 		if (isStatusColumnMissing(error.message)) {
 			throw new Error(
 				"Coluna status ainda não existe em groups. Execute: alter table public.groups add column if not exists status text not null default 'planejamento';"

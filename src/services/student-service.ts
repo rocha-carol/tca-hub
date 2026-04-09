@@ -5,6 +5,19 @@ function isStudentsTableMissing(message: string) {
 	return message.includes("Could not find the table 'public.students'");
 }
 
+function isStudentsPermissionDenied(message: string, code?: string) {
+	const normalizedMessage = message.toLowerCase();
+	return (
+		code === "42501" ||
+		normalizedMessage.includes("permission denied") ||
+		normalizedMessage.includes("row-level security")
+	);
+}
+
+function isStudentsColumnMissing(message: string, columnName: string) {
+	return message.includes(columnName) && message.includes("schema cache");
+}
+
 function isStudentsActiveColumnMissing(message: string) {
 	return message.includes("active") && message.includes("schema cache");
 }
@@ -54,6 +67,11 @@ export async function fetchAllStudents(): Promise<Student[]> {
 				"Tabela students ainda não existe no Supabase. Estruture a tabela para o cadastro institucional antes de usar o módulo."
 			);
 		}
+		if (isStudentsPermissionDenied(error.message, error.code)) {
+			throw new Error(
+				"Leitura de students bloqueada por policy/RLS no Supabase. Garanta uma policy SELECT para usuários autenticados."
+			);
+		}
 		throw new Error(`Erro ao buscar estudantes: ${error.message}`);
 	}
 
@@ -83,6 +101,23 @@ export async function createStudent(data: CreateStudentData): Promise<Student> {
 		if (isStudentsTableMissing(error.message)) {
 			throw new Error(
 				"Tabela students ainda não existe no Supabase. Estruture a tabela para o cadastro institucional antes de usar o módulo."
+			);
+		}
+
+		if (
+			isStudentsColumnMissing(error.message, "registration_code") ||
+			isStudentsColumnMissing(error.message, "school") ||
+			isStudentsColumnMissing(error.message, "grade") ||
+			isStudentsColumnMissing(error.message, "profile_id")
+		) {
+			throw new Error(
+				"Estrutura de students incompleta no Supabase. Adicione as colunas registration_code, school, grade e profile_id antes de usar o cadastro institucional."
+			);
+		}
+
+		if (isStudentsPermissionDenied(error.message, error.code)) {
+			throw new Error(
+				"Cadastro de students bloqueado por policy/RLS no Supabase. Garanta policies INSERT para usuários autenticados."
 			);
 		}
 		throw new Error(`Erro ao cadastrar estudante: ${error.message}`);
@@ -118,6 +153,22 @@ export async function updateStudent(
 			);
 		}
 
+		if (
+			isStudentsColumnMissing(error.message, "registration_code") ||
+			isStudentsColumnMissing(error.message, "school") ||
+			isStudentsColumnMissing(error.message, "grade")
+		) {
+			throw new Error(
+				"Estrutura de students incompleta no Supabase. Adicione as colunas registration_code, school e grade antes de editar estudantes."
+			);
+		}
+
+		if (isStudentsPermissionDenied(error.message, error.code)) {
+			throw new Error(
+				"Edição de students bloqueada por policy/RLS no Supabase. Garanta policies UPDATE para usuários autenticados."
+			);
+		}
+
 		throw new Error(`Erro ao atualizar estudante: ${error.message}`);
 	}
 }
@@ -143,6 +194,12 @@ export async function deactivateStudent(studentId: string | number): Promise<voi
 		if (isStudentsTableMissing(error.message)) {
 			throw new Error(
 				"Tabela students ainda não existe no Supabase. Estruture a tabela para o cadastro institucional antes de usar o módulo."
+			);
+		}
+
+		if (isStudentsPermissionDenied(error.message, error.code)) {
+			throw new Error(
+				"Inativação de students bloqueada por policy/RLS no Supabase. Garanta policies UPDATE para usuários autenticados."
 			);
 		}
 

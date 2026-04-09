@@ -4,12 +4,42 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { fetchGroupById, updateGroupAdvisors, updateGroupStatus } from "@/services/group-service";
 import { fetchAllAdvisors } from "@/services/advisor-service";
+import { fetchAllStudents } from "@/services/student-service";
+import type { Student } from "@/types/student";
 import type { GroupStatus } from "@/types/group";
 
 function getStatusLabel(status: GroupStatus) {
   if (status === "planejamento") return "Planejamento";
   if (status === "em_andamento") return "Em andamento";
   return "Concluído";
+}
+
+function idsAreEqual(left: string | number | null | undefined, right: string | number | null | undefined) {
+  return String(left ?? "") === String(right ?? "");
+}
+
+function renderMemberCard(
+  label: string,
+  name: string,
+  series: string | null,
+  linkedStudent: Student | undefined
+) {
+  return (
+    <div className="flex items-center justify-between border border-gray-100 rounded-md px-4 py-3 bg-gray-50">
+      <div>
+        <p className="font-medium text-gray-900">{name}</p>
+        <p className="text-sm text-gray-600">{series || "Série não informada"}</p>
+        {linkedStudent && (
+          <p className="text-xs text-blue-700 mt-1">
+            Cadastro vinculado • Matrícula: {linkedStudent.registration_code || "Não informada"}
+          </p>
+        )}
+      </div>
+      <span className="text-xs text-blue-600 font-semibold bg-blue-50 px-2 py-1 rounded-full">
+        {label}
+      </span>
+    </div>
+  );
 }
 
 interface GroupDetailPageProps {
@@ -87,9 +117,19 @@ export default async function GroupDetailPage({ params }: GroupDetailPageProps) 
     // sem orientadores cadastrados — seletor ficará vazio
   }
 
+  let students: Student[] = [];
+  try {
+    students = await fetchAllStudents();
+  } catch {
+    students = [];
+  }
+
   // Resolve nome dos orientadores vinculados
   const primaryAdvisor = advisors.find((a) => a.id === group.primary_advisor_id);
   const coAdvisor = advisors.find((a) => a.id === group.co_advisor_id);
+  const linkedStudent1 = students.find((student) => idsAreEqual(student.id, group.student_1_id));
+  const linkedStudent2 = students.find((student) => idsAreEqual(student.id, group.student_2_id));
+  const linkedStudent3 = students.find((student) => idsAreEqual(student.id, group.student_3_id));
   const currentStatus: GroupStatus =
     group.status === "em_andamento" || group.status === "concluido"
       ? group.status
@@ -111,38 +151,14 @@ export default async function GroupDetailPage({ params }: GroupDetailPageProps) 
           <h2 className="text-xl font-semibold text-gray-900 mb-4">Integrantes</h2>
 
           <div className="space-y-3">
-            <div className="flex items-center justify-between border border-gray-100 rounded-md px-4 py-3 bg-gray-50">
-              <div>
-                <p className="font-medium text-gray-900">{group.member_1_name}</p>
-                <p className="text-sm text-gray-600">{group.member_1_series}</p>
-              </div>
-              <span className="text-xs text-blue-600 font-semibold bg-blue-50 px-2 py-1 rounded-full">
-                Integrante 1
-              </span>
-            </div>
+            {renderMemberCard("Integrante 1", group.member_1_name, group.member_1_series, linkedStudent1)}
 
             {group.member_2_name && (
-              <div className="flex items-center justify-between border border-gray-100 rounded-md px-4 py-3 bg-gray-50">
-                <div>
-                  <p className="font-medium text-gray-900">{group.member_2_name}</p>
-                  <p className="text-sm text-gray-600">{group.member_2_series || "Série não informada"}</p>
-                </div>
-                <span className="text-xs text-blue-600 font-semibold bg-blue-50 px-2 py-1 rounded-full">
-                  Integrante 2
-                </span>
-              </div>
+              renderMemberCard("Integrante 2", group.member_2_name, group.member_2_series, linkedStudent2)
             )}
 
             {group.member_3_name && (
-              <div className="flex items-center justify-between border border-gray-100 rounded-md px-4 py-3 bg-gray-50">
-                <div>
-                  <p className="font-medium text-gray-900">{group.member_3_name}</p>
-                  <p className="text-sm text-gray-600">{group.member_3_series || "Série não informada"}</p>
-                </div>
-                <span className="text-xs text-blue-600 font-semibold bg-blue-50 px-2 py-1 rounded-full">
-                  Integrante 3
-                </span>
-              </div>
+              renderMemberCard("Integrante 3", group.member_3_name, group.member_3_series, linkedStudent3)
             )}
           </div>
         </div>

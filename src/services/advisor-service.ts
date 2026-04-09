@@ -5,6 +5,19 @@ function isAdvisorsTableMissing(message: string) {
 	return message.includes("Could not find the table 'public.advisors'");
 }
 
+function isAdvisorsPermissionDenied(message: string, code?: string) {
+	const normalizedMessage = message.toLowerCase();
+	return (
+		code === "42501" ||
+		normalizedMessage.includes("permission denied") ||
+		normalizedMessage.includes("row-level security")
+	);
+}
+
+function isAdvisorsColumnMissing(message: string, columnName: string) {
+	return message.includes(columnName) && message.includes("schema cache");
+}
+
 function isAdvisorsActiveColumnMissing(message: string) {
 	return message.includes("active") && message.includes("schema cache");
 }
@@ -56,6 +69,11 @@ export async function fetchAllAdvisors(): Promise<Advisor[]> {
 				"Tabela advisors ainda não existe no Supabase. Execute o script database/003_create_advisors_table.sql no SQL Editor."
 			);
 		}
+		if (isAdvisorsPermissionDenied(error.message, error.code)) {
+			throw new Error(
+				"Leitura de advisors bloqueada por policy/RLS no Supabase. Garanta uma policy SELECT para usuários autenticados."
+			);
+		}
 		throw new Error(`Erro ao buscar orientadores: ${error.message}`);
 	}
 
@@ -86,6 +104,24 @@ export async function createAdvisor(data: CreateAdvisorData): Promise<Advisor> {
 		if (isAdvisorsTableMissing(error.message)) {
 			throw new Error(
 				"Tabela advisors ainda não existe no Supabase. Execute o script database/003_create_advisors_table.sql no SQL Editor."
+			);
+		}
+
+		if (
+			isAdvisorsColumnMissing(error.message, "profile_id") ||
+			isAdvisorsColumnMissing(error.message, "role_title") ||
+			isAdvisorsColumnMissing(error.message, "employee_code") ||
+			isAdvisorsColumnMissing(error.message, "school") ||
+			isAdvisorsColumnMissing(error.message, "area_of_activity")
+		) {
+			throw new Error(
+				"Estrutura de advisors incompleta no Supabase. Adicione as colunas profile_id, role_title, employee_code, school e area_of_activity antes de usar o cadastro institucional."
+			);
+		}
+
+		if (isAdvisorsPermissionDenied(error.message, error.code)) {
+			throw new Error(
+				"Cadastro de advisors bloqueado por policy/RLS no Supabase. Garanta policies INSERT para usuários autenticados."
 			);
 		}
 		throw new Error(`Erro ao cadastrar orientador: ${error.message}`);
@@ -122,6 +158,23 @@ export async function updateAdvisor(
 			);
 		}
 
+		if (
+			isAdvisorsColumnMissing(error.message, "role_title") ||
+			isAdvisorsColumnMissing(error.message, "employee_code") ||
+			isAdvisorsColumnMissing(error.message, "school") ||
+			isAdvisorsColumnMissing(error.message, "area_of_activity")
+		) {
+			throw new Error(
+				"Estrutura de advisors incompleta no Supabase. Adicione as colunas role_title, employee_code, school e area_of_activity antes de editar orientadores."
+			);
+		}
+
+		if (isAdvisorsPermissionDenied(error.message, error.code)) {
+			throw new Error(
+				"Edição de advisors bloqueada por policy/RLS no Supabase. Garanta policies UPDATE para usuários autenticados."
+			);
+		}
+
 		throw new Error(`Erro ao atualizar orientador: ${error.message}`);
 	}
 }
@@ -147,6 +200,12 @@ export async function deactivateAdvisor(advisorId: string | number): Promise<voi
 		if (isAdvisorsTableMissing(error.message)) {
 			throw new Error(
 				"Tabela advisors ainda não existe no Supabase. Execute o script database/003_create_advisors_table.sql no SQL Editor."
+			);
+		}
+
+		if (isAdvisorsPermissionDenied(error.message, error.code)) {
+			throw new Error(
+				"Inativação de advisors bloqueada por policy/RLS no Supabase. Garanta policies UPDATE para usuários autenticados."
 			);
 		}
 
