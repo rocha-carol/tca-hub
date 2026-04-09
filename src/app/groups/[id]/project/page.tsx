@@ -2,12 +2,22 @@ import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { ensureGroupProjectSectionsStructure, updateGroupProjectSection } from "@/services/project-section-service";
+import {
+  createProjectSectionComment,
+  fetchGroupProjectSectionComments,
+} from "@/services/project-section-comment-service";
 import { fetchGroupById } from "@/services/group-service";
+import { getAuthenticatedProfile } from "@/lib/auth/session-service";
 import type { ProjectSectionStatus } from "@/types/project-section";
 
 interface GroupProjectPageProps {
   params: Promise<{ id: string }>;
-  searchParams?: Promise<{ section_status?: string; section_id?: string }>;
+  searchParams?: Promise<{
+    section_status?: string;
+    section_id?: string;
+    comment_status?: string;
+    comment_section?: string;
+  }>;
 }
 
 function getStatusLabel(status: ProjectSectionStatus) {
@@ -19,6 +29,8 @@ function getStatusLabel(status: ProjectSectionStatus) {
 export default async function GroupProjectPage({ params, searchParams }: GroupProjectPageProps) {
   const { id } = await params;
   const query = searchParams ? await searchParams : {};
+  const profile = await getAuthenticatedProfile();
+  const canCommentAsAdvisor = profile?.role === "advisor" || profile?.role === "coordinator";
 
   const group = await fetchGroupById(id);
   if (!group) {
@@ -56,13 +68,61 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
     redirect(`/groups/${id}/project?section_status=success&section_id=${sectionId}`);
   }
 
+  async function handleAddSectionComment(formData: FormData) {
+    "use server";
+
+    const authenticatedProfile = await getAuthenticatedProfile();
+    if (!authenticatedProfile || (authenticatedProfile.role !== "advisor" && authenticatedProfile.role !== "coordinator")) {
+      redirect(`/groups/${id}/project?comment_status=forbidden`);
+    }
+
+    const sectionId = String(formData.get("section_id") ?? "").trim();
+    const comment = String(formData.get("comment") ?? "").trim();
+
+    if (!sectionId || comment.length < 3) {
+      redirect(`/groups/${id}/project?comment_status=invalid&comment_section=${sectionId}`);
+    }
+
+    try {
+      await createProjectSectionComment({
+        group_id: id,
+        section_id: sectionId,
+        author_profile_id: authenticatedProfile.id,
+        author_role: authenticatedProfile.role === "coordinator" ? "coordinator" : "advisor",
+        author_name: authenticatedProfile.name,
+        comment,
+      });
+    } catch {
+      redirect(`/groups/${id}/project?comment_status=error&comment_section=${sectionId}`);
+    }
+
+    revalidatePath(`/groups/${id}/project`);
+    redirect(`/groups/${id}/project?comment_status=success&comment_section=${sectionId}`);
+  }
+
   let sections = [] as Awaited<ReturnType<typeof ensureGroupProjectSectionsStructure>>;
   let sectionsError: string | null = null;
+  let comments = [] as Awaited<ReturnType<typeof fetchGroupProjectSectionComments>>;
+  let commentsError: string | null = null;
 
   try {
     sections = await ensureGroupProjectSectionsStructure(id);
   } catch (error) {
     sectionsError = error instanceof Error ? error.message : "Erro ao carregar seções do projeto.";
+  }
+
+  try {
+    comments = await fetchGroupProjectSectionComments(id);
+  } catch (error) {
+    commentsError = error instanceof Error ? error.message : "Erro ao carregar comentários das seções.";
+  }
+
+  const commentsBySection = new Map<string, typeof comments>();
+  for (const comment of comments) {
+    const key = String(comment.section_id);
+    const list = commentsBySection.get(key) ?? [];
+    list.push(comment);
+    commentsBySection.set(key, list);
   }
 
   return (
@@ -80,6 +140,13 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
           <div className="bg-amber-50 border border-amber-300 rounded-lg p-4 mb-6">
             <p className="text-amber-900 font-medium">Configuração pendente das seções do projeto</p>
             <p className="text-amber-800 text-sm mt-1">{sectionsError}</p>
+          </div>
+        )}
+
+        {commentsError && (
+          <div className="bg-amber-50 border border-amber-300 rounded-lg p-4 mb-6">
+            <p className="text-amber-900 font-medium">Configuração pendente dos comentários por seção</p>
+            <p className="text-amber-800 text-sm mt-1">{commentsError}</p>
           </div>
         )}
 
@@ -164,6 +231,73 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
                     Salvar seção
                   </button>
                 </form>
+
+                <div className="mt-6 pt-4 border-t border-gray-100">
+                  <h3 className="text-sm font-semibold text-gray-800 mb-2">Comentários do orientador</h3>
+
+                  {query.comment_status === "success" && query.comment_section === String(section.id) && (
+                    <p className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-md px-3 py-2 mb-3">
+                      Comentário registrado com sucesso.
+                    </p>
+                  )}
+                  {query.comment_status === "invalid" && query.comment_section === String(section.id) && (
+                    <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2 mb-3">
+                      Comentário inválido. Escreva ao menos 3 caracteres.
+                    </p>
+                  )}
+                  {query.comment_status === "error" && query.comment_section === String(section.id) && (
+                    <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2 mb-3">
+                      Não foi possível salvar o comentário. Tente novamente.
+                    </p>
+                  )}
+                  {query.comment_status === "forbidden" && (
+                    <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2 mb-3">
+                      Apenas orientadores (ou coordenação) podem registrar comentários nesta etapa.
+                    </p>
+                  )}
+
+                  <div className="space-y-2 mb-3">
+                    {(commentsBySection.get(String(section.id)) || []).length === 0 ? (
+                      <p className="text-sm text-gray-500">Ainda não há comentários nesta seção.</p>
+                    ) : (
+                      (commentsBySection.get(String(section.id)) || []).map((comment) => (
+                        <div key={String(comment.id)} className="border border-gray-100 rounded-md px-3 py-2 bg-gray-50">
+                          <p className="text-sm text-gray-900">{comment.comment}</p>
+                          <p className="text-xs text-gray-500 mt-1">
+                            {comment.author_name} ({comment.author_role === "advisor" ? "orientador" : "coordenação"})
+                            {comment.created_at
+                              ? ` • ${new Date(comment.created_at).toLocaleString("pt-BR", {
+                                  day: "2-digit",
+                                  month: "2-digit",
+                                  year: "numeric",
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                })}`
+                              : ""}
+                          </p>
+                        </div>
+                      ))
+                    )}
+                  </div>
+
+                  {canCommentAsAdvisor && (
+                    <form action={handleAddSectionComment} className="space-y-2">
+                      <input type="hidden" name="section_id" value={String(section.id)} />
+                      <textarea
+                        name="comment"
+                        rows={3}
+                        placeholder="Registrar comentário orientativo sobre esta seção..."
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      />
+                      <button
+                        type="submit"
+                        className="bg-indigo-600 hover:bg-indigo-700 text-white font-medium px-4 py-2 rounded-md text-sm"
+                      >
+                        Adicionar comentário
+                      </button>
+                    </form>
+                  )}
+                </div>
               </article>
             ))}
           </div>
