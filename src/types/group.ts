@@ -1,6 +1,7 @@
 // Representa um grupo de TCA.
 // Um grupo pode ter orientador principal e coorientador.
 export type GroupStatus = "planejamento" | "em_andamento" | "concluido";
+export type AdvisorIndicationStatus = "pendente" | "aceita" | "recusada";
 
 export interface Group {
   id: string;
@@ -19,5 +20,8 @@ export interface Group {
   status?: GroupStatus | null;
   primary_advisor_id: string | null;
   co_advisor_id: string | null;
+  indicated_advisor_id?: string | null;
+  indication_status?: AdvisorIndicationStatus | null;
+  indication_updated_at?: string | null;
   created_at?: string;
 }

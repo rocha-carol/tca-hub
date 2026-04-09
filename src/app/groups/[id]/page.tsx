@@ -2,7 +2,13 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { fetchGroupById, updateGroupAdvisors, updateGroupStatus } from "@/services/group-service";
+import {
+  fetchGroupById,
+  initiateAdvisorIndication,
+  respondAdvisorIndication,
+  updateGroupAdvisors,
+  updateGroupStatus,
+} from "@/services/group-service";
 import { fetchAllAdvisors } from "@/services/advisor-service";
 import { fetchAllStudents } from "@/services/student-service";
 import {
@@ -59,7 +65,12 @@ function renderMemberCard(
 
 interface GroupDetailPageProps {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ indication?: string; pref_error?: string; pref_success?: string }>;
+  searchParams: Promise<{
+    indication?: string;
+    indication_response?: string;
+    pref_error?: string;
+    pref_success?: string;
+  }>;
 }
 
 /**
@@ -70,7 +81,7 @@ interface GroupDetailPageProps {
  */
 export default async function GroupDetailPage({ params, searchParams }: GroupDetailPageProps) {
   const { id } = await params;
-  const { indication, pref_error, pref_success } = await searchParams;
+  const { indication, indication_response, pref_error, pref_success } = await searchParams;
 
   async function handleAssignAdvisors(formData: FormData) {
     "use server";
@@ -143,13 +154,29 @@ export default async function GroupDetailPage({ params, searchParams }: GroupDet
       redirect(`/groups/${id}?indication=unavailable`);
     }
 
-    const group = await fetchGroupById(id);
-    await updateGroupAdvisors(id, String(result.suggested.id), group?.co_advisor_id ?? null);
+    await initiateAdvisorIndication(id, String(result.suggested.id));
 
     revalidatePath(`/groups/${id}`);
     revalidatePath("/groups");
     revalidatePath("/dashboard");
-    redirect(`/groups/${id}?indication=success`);
+    redirect(`/groups/${id}?indication=pending`);
+  }
+
+  async function handleRespondAdvisorIndication(formData: FormData) {
+    "use server";
+
+    const decision = String(formData.get("decision") ?? "").trim();
+
+    if (decision !== "aceita" && decision !== "recusada") {
+      redirect(`/groups/${id}`);
+    }
+
+    await respondAdvisorIndication(id, decision);
+
+    revalidatePath(`/groups/${id}`);
+    revalidatePath("/groups");
+    revalidatePath("/dashboard");
+    redirect(`/groups/${id}?indication_response=${decision}`);
   }
 
   let group;
@@ -213,6 +240,7 @@ export default async function GroupDetailPage({ params, searchParams }: GroupDet
   // Resolve nome dos orientadores vinculados
   const primaryAdvisor = advisors.find((a) => a.id === group.primary_advisor_id);
   const coAdvisor = advisors.find((a) => a.id === group.co_advisor_id);
+  const indicatedAdvisor = advisors.find((a) => idsAreEqual(a.id, group.indicated_advisor_id));
   const linkedStudent1 = students.find((student) => idsAreEqual(student.id, group.student_1_id));
   const linkedStudent2 = students.find((student) => idsAreEqual(student.id, group.student_2_id));
   const linkedStudent3 = students.find((student) => idsAreEqual(student.id, group.student_3_id));
@@ -327,7 +355,53 @@ export default async function GroupDetailPage({ params, searchParams }: GroupDet
                 <span className="text-gray-400 italic">A definir</span>
               )}
             </p>
+
+            <p className="text-sm text-gray-700">
+              <span className="font-medium">Indicação:</span>{" "}
+              {group.indication_status === "pendente" ? (
+                <span className="text-amber-700 font-medium">Pendente</span>
+              ) : group.indication_status === "aceita" ? (
+                <span className="text-green-700 font-medium">Aceita</span>
+              ) : group.indication_status === "recusada" ? (
+                <span className="text-red-700 font-medium">Recusada</span>
+              ) : (
+                <span className="text-gray-400 italic">Sem indicação ativa</span>
+              )}
+            </p>
           </div>
+
+          {group.indication_status === "pendente" && indicatedAdvisor && (
+            <div className="mb-5 rounded-md border border-amber-200 bg-amber-50 p-4">
+              <p className="text-sm text-amber-900 font-medium">
+                Indicação pendente para: {indicatedAdvisor.name}
+              </p>
+              <p className="text-xs text-amber-800 mt-1">
+                Registre abaixo se a indicação foi aceita ou recusada.
+              </p>
+
+              <div className="flex gap-2 mt-3">
+                <form action={handleRespondAdvisorIndication}>
+                  <input type="hidden" name="decision" value="aceita" />
+                  <button
+                    type="submit"
+                    className="bg-green-600 hover:bg-green-700 text-white text-xs font-medium px-3 py-1.5 rounded-md"
+                  >
+                    Registrar aceite
+                  </button>
+                </form>
+
+                <form action={handleRespondAdvisorIndication}>
+                  <input type="hidden" name="decision" value="recusada" />
+                  <button
+                    type="submit"
+                    className="bg-red-600 hover:bg-red-700 text-white text-xs font-medium px-3 py-1.5 rounded-md"
+                  >
+                    Registrar recusa
+                  </button>
+                </form>
+              </div>
+            </div>
+          )}
 
           {/* Preferências ordenadas */}
           <div className="mb-5 rounded-md border border-blue-100 bg-blue-50 p-4">
@@ -379,6 +453,21 @@ export default async function GroupDetailPage({ params, searchParams }: GroupDet
                 {indication === "success" && (
                   <p className="text-xs text-green-700 mb-2 font-medium">
                     Orientador principal indicado com sucesso pela lista de preferências.
+                  </p>
+                )}
+                {indication === "pending" && (
+                  <p className="text-xs text-amber-700 mb-2 font-medium">
+                    Indicação enviada e marcada como pendente de aceite/recusa.
+                  </p>
+                )}
+                {indication_response === "aceita" && (
+                  <p className="text-xs text-green-700 mb-2 font-medium">
+                    Aceite registrado. O orientador foi definido como principal do grupo.
+                  </p>
+                )}
+                {indication_response === "recusada" && (
+                  <p className="text-xs text-red-700 mb-2 font-medium">
+                    Recusa registrada. A indicação foi removida para nova tentativa.
                   </p>
                 )}
                 <form action={handleIndicatePrimaryAdvisorByPreference}>

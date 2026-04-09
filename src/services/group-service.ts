@@ -1,5 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
-import type { Group, GroupStatus } from "@/types/group";
+import type { AdvisorIndicationStatus, Group, GroupStatus } from "@/types/group";
 
 function isGroupsTableMissing(message: string) {
 	return message.includes("Could not find the table 'public.groups'");
@@ -14,6 +14,15 @@ function isStudentLinkColumnMissing(message: string) {
 		(message.includes("student_1_id") ||
 			message.includes("student_2_id") ||
 			message.includes("student_3_id")) &&
+		message.includes("schema cache")
+	);
+}
+
+function isIndicationColumnMissing(message: string) {
+	return (
+		(message.includes("indicated_advisor_id") ||
+			message.includes("indication_status") ||
+			message.includes("indication_updated_at")) &&
 		message.includes("schema cache")
 	);
 }
@@ -171,11 +180,96 @@ export async function updateGroupAdvisors(
 		.update({
 			primary_advisor_id: primaryAdvisorId,
 			co_advisor_id: coAdvisorId,
+			indicated_advisor_id: null,
+			indication_status: null,
+			indication_updated_at: new Date().toISOString(),
 		})
 		.eq("id", groupId);
 
 	if (error) {
+		if (isIndicationColumnMissing(error.message)) {
+			throw new Error(
+				"Fluxo de indicação ainda não está preparado no Supabase. Execute o arquivo local database/009_add_advisor_indication_flow.sql no SQL Editor."
+			);
+		}
+
 		throw new Error(`Erro ao atualizar orientadores: ${error.message}`);
+	}
+}
+
+/**
+ * Inicia o fluxo de indicação de orientador principal para um grupo.
+ */
+export async function initiateAdvisorIndication(
+	groupId: string,
+	indicatedAdvisorId: string
+): Promise<void> {
+	const supabase = await createClient();
+
+	const { error } = await supabase
+		.from("groups")
+		.update({
+			indicated_advisor_id: indicatedAdvisorId,
+			indication_status: "pendente",
+			indication_updated_at: new Date().toISOString(),
+		})
+		.eq("id", groupId);
+
+	if (error) {
+		if (isIndicationColumnMissing(error.message)) {
+			throw new Error(
+				"Fluxo de indicação ainda não está preparado no Supabase. Execute o arquivo local database/009_add_advisor_indication_flow.sql no SQL Editor."
+			);
+		}
+
+		throw new Error(`Erro ao iniciar indicação de orientador: ${error.message}`);
+	}
+}
+
+/**
+ * Registra resposta da indicação de orientador principal (aceite ou recusa).
+ */
+export async function respondAdvisorIndication(
+	groupId: string,
+	decision: Exclude<AdvisorIndicationStatus, "pendente">
+): Promise<void> {
+	const supabase = await createClient();
+
+	const group = await fetchGroupById(groupId);
+	if (!group) {
+		throw new Error("Grupo não encontrado para responder indicação.");
+	}
+
+	if (!group.indicated_advisor_id) {
+		throw new Error("Não existe indicação pendente para este grupo.");
+	}
+
+	const updatePayload =
+		decision === "aceita"
+			? {
+				primary_advisor_id: group.indicated_advisor_id,
+				indication_status: "aceita",
+				indication_updated_at: new Date().toISOString(),
+			}
+			: {
+				indicated_advisor_id: null,
+				indication_status: "recusada",
+				indication_updated_at: new Date().toISOString(),
+			};
+
+	const { error } = await supabase
+		.from("groups")
+		.update(updatePayload)
+		.eq("id", groupId);
+
+	if (error) {
+		if (isIndicationColumnMissing(error.message)) {
+			throw new Error(
+				"Fluxo de indicação ainda não está preparado no Supabase. Execute o arquivo local database/009_add_advisor_indication_flow.sql no SQL Editor."
+			);
+		}
+
+		throw new Error(`Erro ao registrar resposta da indicação: ${error.message}`);
 	}
 }
 
