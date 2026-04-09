@@ -52,8 +52,13 @@ import {
   createGroupInteractiveGuide,
   fetchGroupInteractiveGuides,
 } from "@/services/group-interactive-guide-service";
+import {
+  createGroupAIFeedback,
+  fetchGroupAIFeedback,
+} from "@/services/group-ai-feedback-service";
 import { fetchGroupById } from "@/services/group-service";
 import { getAuthenticatedProfile } from "@/lib/auth/session-service";
+import { generatePedagogicalFeedbackWithAI } from "@/lib/ai/pedagogical-feedback-service";
 import type { ProjectSectionStatus } from "@/types/project-section";
 import type { ProjectDevelopmentChecklistStatus } from "@/types/project-development-checklist-item";
 import type { GroupInPersonMeetingStatus } from "@/types/group-in-person-meeting";
@@ -95,6 +100,9 @@ interface GroupProjectPageProps {
     repertory_action?: string;
     guide_status?: string;
     guide_action?: string;
+    ai_feedback_status?: string;
+    ai_feedback_action?: string;
+    ai_feedback_section?: string;
   }>;
 }
 
@@ -118,6 +126,7 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
   const canManageProcessPhotos = !!profile;
   const canManageRepertory = !!profile;
   const canManageInteractiveGuides = !!profile;
+  const canManageAIFeedback = profile?.role === "advisor" || profile?.role === "coordinator";
   const canAskAsStudent = profile?.role === "student";
 
   const group = await fetchGroupById(id);
@@ -690,6 +699,57 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
     redirect(`/groups/${id}/project?guide_status=success&guide_action=add`);
   }
 
+  async function handleGenerateAIFeedback(formData: FormData) {
+    "use server";
+
+    const authenticatedProfile = await getAuthenticatedProfile();
+    if (!authenticatedProfile || (authenticatedProfile.role !== "advisor" && authenticatedProfile.role !== "coordinator")) {
+      redirect(`/groups/${id}/project?ai_feedback_status=forbidden&ai_feedback_action=generate`);
+    }
+
+    const sectionId = String(formData.get("section_id") ?? "").trim();
+    const focusPromptRaw = String(formData.get("focus_prompt") ?? "").trim();
+    const focusPrompt = focusPromptRaw.length > 0 ? focusPromptRaw : null;
+
+    if (!sectionId) {
+      redirect(`/groups/${id}/project?ai_feedback_status=invalid&ai_feedback_action=generate`);
+    }
+
+    const currentSections = await ensureGroupProjectSectionsStructure(id);
+    const targetSection = currentSections.find((section) => String(section.id) === sectionId);
+
+    if (!targetSection || !targetSection.content || targetSection.content.trim().length < 10) {
+      redirect(`/groups/${id}/project?ai_feedback_status=invalid&ai_feedback_action=generate&ai_feedback_section=${sectionId}`);
+    }
+
+    try {
+      const result = await generatePedagogicalFeedbackWithAI({
+        sectionTitle: targetSection.section_title,
+        sectionContent: targetSection.content,
+        focusPrompt,
+      });
+
+      await createGroupAIFeedback({
+        group_id: id,
+        section_id: sectionId,
+        focus_prompt: focusPrompt,
+        feedback_text: result.feedback_text,
+        strengths: result.strengths,
+        improvements: result.improvements,
+        suggested_next_steps: result.suggested_next_steps,
+        model_name: result.model_name,
+        author_profile_id: authenticatedProfile.id,
+        author_role: authenticatedProfile.role,
+        author_name: authenticatedProfile.name,
+      });
+    } catch {
+      redirect(`/groups/${id}/project?ai_feedback_status=error&ai_feedback_action=generate&ai_feedback_section=${sectionId}`);
+    }
+
+    revalidatePath(`/groups/${id}/project`);
+    redirect(`/groups/${id}/project?ai_feedback_status=success&ai_feedback_action=generate&ai_feedback_section=${sectionId}`);
+  }
+
   let sections = [] as Awaited<ReturnType<typeof ensureGroupProjectSectionsStructure>>;
   let sectionsError: string | null = null;
   let comments = [] as Awaited<ReturnType<typeof fetchGroupProjectSectionComments>>;
@@ -716,6 +776,8 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
   let repertoryError: string | null = null;
   let interactiveGuides = [] as Awaited<ReturnType<typeof fetchGroupInteractiveGuides>>;
   let interactiveGuidesError: string | null = null;
+  let aiFeedbackItems = [] as Awaited<ReturnType<typeof fetchGroupAIFeedback>>;
+  let aiFeedbackError: string | null = null;
 
   try {
     sections = await ensureGroupProjectSectionsStructure(id);
@@ -793,6 +855,12 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
     interactiveGuides = await fetchGroupInteractiveGuides(id);
   } catch (error) {
     interactiveGuidesError = error instanceof Error ? error.message : "Erro ao carregar guias interativos.";
+  }
+
+  try {
+    aiFeedbackItems = await fetchGroupAIFeedback(id);
+  } catch (error) {
+    aiFeedbackError = error instanceof Error ? error.message : "Erro ao carregar feedback pedagógico com IA.";
   }
 
   const commentsBySection = new Map<string, typeof comments>();
@@ -936,6 +1004,13 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
           <div className="bg-amber-50 border border-amber-300 rounded-lg p-4 mb-6">
             <p className="text-amber-900 font-medium">Configuração pendente do módulo de guias interativos</p>
             <p className="text-amber-800 text-sm mt-1">{interactiveGuidesError}</p>
+          </div>
+        )}
+
+        {aiFeedbackError && (
+          <div className="bg-amber-50 border border-amber-300 rounded-lg p-4 mb-6">
+            <p className="text-amber-900 font-medium">Configuração pendente do módulo de feedback pedagógico com IA</p>
+            <p className="text-amber-800 text-sm mt-1">{aiFeedbackError}</p>
           </div>
         )}
 
@@ -1540,6 +1615,114 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
                 className="bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2 rounded-md text-sm"
               >
                 Registrar guia interativo
+              </button>
+            </form>
+          )}
+        </div>
+
+        <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm mb-6">
+          <h2 className="text-lg font-semibold text-gray-900 mb-2">Feedback pedagógico com IA</h2>
+
+          {query.ai_feedback_status === "success" && query.ai_feedback_action === "generate" && (
+            <p className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-md px-3 py-2 mb-3">
+              Feedback pedagógico gerado e registrado com sucesso.
+            </p>
+          )}
+          {query.ai_feedback_status === "invalid" && (
+            <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2 mb-3">
+              Dados inválidos. Escolha uma seção com conteúdo mínimo para gerar o feedback.
+            </p>
+          )}
+          {query.ai_feedback_status === "error" && (
+            <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2 mb-3">
+              Não foi possível gerar o feedback com IA. Verifique a configuração das variáveis de ambiente e tente novamente.
+            </p>
+          )}
+          {query.ai_feedback_status === "forbidden" && (
+            <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2 mb-3">
+              Apenas orientadores (ou coordenação) podem gerar feedback pedagógico com IA.
+            </p>
+          )}
+
+          <div className="space-y-2 mb-4">
+            {aiFeedbackItems.length === 0 ? (
+              <p className="text-sm text-gray-500">Ainda não há feedback pedagógico com IA registrado para este grupo.</p>
+            ) : (
+              aiFeedbackItems.map((item) => (
+                <div key={String(item.id)} className="border border-gray-100 rounded-md px-3 py-2 bg-gray-50">
+                  <p className="text-sm text-gray-900 whitespace-pre-line">{item.feedback_text}</p>
+
+                  {item.strengths && (
+                    <p className="text-xs text-green-700 mt-2 whitespace-pre-line">
+                      <span className="font-semibold">Pontos fortes:</span> {item.strengths}
+                    </p>
+                  )}
+
+                  {item.improvements && (
+                    <p className="text-xs text-amber-700 mt-1 whitespace-pre-line">
+                      <span className="font-semibold">Melhorias sugeridas:</span> {item.improvements}
+                    </p>
+                  )}
+
+                  {item.suggested_next_steps && (
+                    <p className="text-xs text-blue-700 mt-1 whitespace-pre-line">
+                      <span className="font-semibold">Próximos passos:</span> {item.suggested_next_steps}
+                    </p>
+                  )}
+
+                  <p className="text-xs text-gray-500 mt-2">
+                    {item.section_id ? `Seção: ${sectionTitleById.get(String(item.section_id)) || "Seção"}` : "Seção: Geral"}
+                    {item.model_name ? ` • Modelo: ${item.model_name}` : ""}
+                    {item.created_at
+                      ? ` • ${new Date(item.created_at).toLocaleString("pt-BR", {
+                          day: "2-digit",
+                          month: "2-digit",
+                          year: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}`
+                      : ""}
+                  </p>
+                </div>
+              ))
+            )}
+          </div>
+
+          {canManageAIFeedback && (
+            <form action={handleGenerateAIFeedback} className="space-y-3 border-t border-gray-100 pt-4">
+              <div>
+                <label htmlFor="ai-feedback-section" className="block text-sm text-gray-700 mb-1">Seção para análise</label>
+                <select
+                  id="ai-feedback-section"
+                  name="section_id"
+                  defaultValue=""
+                  className="w-full md:w-96 px-3 py-2 border border-gray-300 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">Selecione uma seção...</option>
+                  {sections.map((section) => (
+                    <option key={String(section.id)} value={String(section.id)}>
+                      {section.section_order}. {section.section_title}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label htmlFor="ai-feedback-focus" className="block text-sm text-gray-700 mb-1">Foco do feedback (opcional)</label>
+                <textarea
+                  id="ai-feedback-focus"
+                  name="focus_prompt"
+                  rows={2}
+                  placeholder="Ex.: avaliar clareza da justificativa e coerência dos objetivos específicos."
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2 rounded-md text-sm"
+              >
+                Gerar feedback com IA
               </button>
             </form>
           )}
