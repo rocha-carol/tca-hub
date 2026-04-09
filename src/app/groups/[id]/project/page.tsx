@@ -23,6 +23,10 @@ import {
   fetchGroupProjectDevelopmentChecklistItems,
   updateProjectDevelopmentChecklistItemStatus,
 } from "@/services/project-development-checklist-service";
+import {
+  fetchGroupProjectSectionStageSchedule,
+  upsertProjectSectionStageSchedule,
+} from "@/services/project-section-stage-schedule-service";
 import { fetchGroupById } from "@/services/group-service";
 import { getAuthenticatedProfile } from "@/lib/auth/session-service";
 import type { ProjectSectionStatus } from "@/types/project-section";
@@ -44,6 +48,8 @@ interface GroupProjectPageProps {
     checklist_status?: string;
     checklist_action?: string;
     checklist_item?: string;
+    schedule_status?: string;
+    schedule_section?: string;
   }>;
 }
 
@@ -60,6 +66,7 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
   const canCommentAsAdvisor = profile?.role === "advisor" || profile?.role === "coordinator";
   const canAnswerAsAdvisor = profile?.role === "advisor" || profile?.role === "coordinator";
   const canManageChecklist = profile?.role === "advisor" || profile?.role === "coordinator";
+  const canManageSchedule = profile?.role === "advisor" || profile?.role === "coordinator";
   const canAskAsStudent = profile?.role === "student";
 
   const group = await fetchGroupById(id);
@@ -290,6 +297,42 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
     redirect(`/groups/${id}/project?checklist_status=success&checklist_action=toggle&checklist_item=${itemId}`);
   }
 
+  async function handleUpsertSectionSchedule(formData: FormData) {
+    "use server";
+
+    const authenticatedProfile = await getAuthenticatedProfile();
+    if (!authenticatedProfile || (authenticatedProfile.role !== "advisor" && authenticatedProfile.role !== "coordinator")) {
+      redirect(`/groups/${id}/project?schedule_status=forbidden`);
+    }
+
+    const sectionId = String(formData.get("section_id") ?? "").trim();
+    const dueDate = String(formData.get("due_date") ?? "").trim();
+    const notesRaw = String(formData.get("notes") ?? "").trim();
+    const notes = notesRaw.length > 0 ? notesRaw : null;
+
+    const isDateValid = /^\d{4}-\d{2}-\d{2}$/.test(dueDate);
+    if (!sectionId || !isDateValid) {
+      redirect(`/groups/${id}/project?schedule_status=invalid&schedule_section=${sectionId}`);
+    }
+
+    try {
+      await upsertProjectSectionStageSchedule({
+        group_id: id,
+        section_id: sectionId,
+        due_date: dueDate,
+        notes,
+        author_profile_id: authenticatedProfile.id,
+        author_role: authenticatedProfile.role === "coordinator" ? "coordinator" : "advisor",
+        author_name: authenticatedProfile.name,
+      });
+    } catch {
+      redirect(`/groups/${id}/project?schedule_status=error&schedule_section=${sectionId}`);
+    }
+
+    revalidatePath(`/groups/${id}/project`);
+    redirect(`/groups/${id}/project?schedule_status=success&schedule_section=${sectionId}`);
+  }
+
   let sections = [] as Awaited<ReturnType<typeof ensureGroupProjectSectionsStructure>>;
   let sectionsError: string | null = null;
   let comments = [] as Awaited<ReturnType<typeof fetchGroupProjectSectionComments>>;
@@ -302,6 +345,8 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
   let nextStepsError: string | null = null;
   let checklistItems = [] as Awaited<ReturnType<typeof fetchGroupProjectDevelopmentChecklistItems>>;
   let checklistError: string | null = null;
+  let stageSchedule = [] as Awaited<ReturnType<typeof fetchGroupProjectSectionStageSchedule>>;
+  let stageScheduleError: string | null = null;
 
   try {
     sections = await ensureGroupProjectSectionsStructure(id);
@@ -339,6 +384,12 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
     checklistError = error instanceof Error ? error.message : "Erro ao carregar checklist de desenvolvimento.";
   }
 
+  try {
+    stageSchedule = await fetchGroupProjectSectionStageSchedule(id);
+  } catch (error) {
+    stageScheduleError = error instanceof Error ? error.message : "Erro ao carregar cronograma por etapa.";
+  }
+
   const commentsBySection = new Map<string, typeof comments>();
   for (const comment of comments) {
     const key = String(comment.section_id);
@@ -374,6 +425,11 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
   const sectionTitleById = new Map<string, string>();
   for (const section of sections) {
     sectionTitleById.set(String(section.id), `${section.section_order}. ${section.section_title}`);
+  }
+
+  const stageScheduleBySection = new Map<string, (typeof stageSchedule)[number]>();
+  for (const item of stageSchedule) {
+    stageScheduleBySection.set(String(item.section_id), item);
   }
 
   return (
@@ -426,6 +482,13 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
           <div className="bg-amber-50 border border-amber-300 rounded-lg p-4 mb-6">
             <p className="text-amber-900 font-medium">Configuração pendente do checklist de desenvolvimento</p>
             <p className="text-amber-800 text-sm mt-1">{checklistError}</p>
+          </div>
+        )}
+
+        {stageScheduleError && (
+          <div className="bg-amber-50 border border-amber-300 rounded-lg p-4 mb-6">
+            <p className="text-amber-900 font-medium">Configuração pendente do cronograma por etapa</p>
+            <p className="text-amber-800 text-sm mt-1">{stageScheduleError}</p>
           </div>
         )}
 
@@ -575,6 +638,91 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
           <div className="space-y-4">
             {sections.map((section) => (
               <article key={String(section.id)} className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm">
+                {(() => {
+                  const schedule = stageScheduleBySection.get(String(section.id));
+                  return (
+                    <div className="mb-4 p-3 rounded-md border border-blue-100 bg-blue-50">
+                      <div className="flex items-center justify-between gap-3 flex-wrap">
+                        <p className="text-sm font-semibold text-blue-900">Cronograma da etapa</p>
+                        <p className="text-xs text-blue-700">
+                          Prazo atual: {schedule?.due_date
+                            ? new Date(`${schedule.due_date}T00:00:00`).toLocaleDateString("pt-BR", {
+                                day: "2-digit",
+                                month: "2-digit",
+                                year: "numeric",
+                              })
+                            : "Não definido"}
+                        </p>
+                      </div>
+
+                      {schedule?.notes && (
+                        <p className="text-xs text-blue-800 mt-1 whitespace-pre-line">{schedule.notes}</p>
+                      )}
+
+                      {query.schedule_status === "success" && query.schedule_section === String(section.id) && (
+                        <p className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-md px-3 py-2 mt-2">
+                          Cronograma atualizado com sucesso.
+                        </p>
+                      )}
+                      {query.schedule_status === "invalid" && query.schedule_section === String(section.id) && (
+                        <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2 mt-2">
+                          Data inválida. Informe um prazo no formato correto.
+                        </p>
+                      )}
+                      {query.schedule_status === "error" && query.schedule_section === String(section.id) && (
+                        <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2 mt-2">
+                          Não foi possível salvar o cronograma desta etapa. Tente novamente.
+                        </p>
+                      )}
+                      {query.schedule_status === "forbidden" && (
+                        <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2 mt-2">
+                          Apenas orientadores (ou coordenação) podem alterar o cronograma nesta etapa.
+                        </p>
+                      )}
+
+                      {canManageSchedule && (
+                        <form action={handleUpsertSectionSchedule} className="mt-3 grid gap-2">
+                          <input type="hidden" name="section_id" value={String(section.id)} />
+
+                          <div>
+                            <label htmlFor={`due-date-${section.id}`} className="block text-xs text-blue-900 mb-1">
+                              Prazo da etapa
+                            </label>
+                            <input
+                              id={`due-date-${section.id}`}
+                              name="due_date"
+                              type="date"
+                              defaultValue={schedule?.due_date || ""}
+                              className="w-full md:w-64 px-3 py-2 border border-blue-200 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                          </div>
+
+                          <div>
+                            <label htmlFor={`schedule-notes-${section.id}`} className="block text-xs text-blue-900 mb-1">
+                              Observações do prazo (opcional)
+                            </label>
+                            <textarea
+                              id={`schedule-notes-${section.id}`}
+                              name="notes"
+                              rows={2}
+                              defaultValue={schedule?.notes || ""}
+                              placeholder="Ex.: Entregar versão preliminar para revisão até a data limite."
+                              className="w-full px-3 py-2 border border-blue-200 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                          </div>
+
+                          <button
+                            type="submit"
+                            className="w-fit bg-blue-700 hover:bg-blue-800 text-white font-medium px-3 py-2 rounded-md text-sm"
+                          >
+                            Salvar cronograma da etapa
+                          </button>
+                        </form>
+                      )}
+                    </div>
+                  );
+                })()}
+
                 <div className="flex flex-wrap items-start justify-between gap-3 mb-3">
                   <div>
                     <h2 className="text-lg font-semibold text-gray-900">
