@@ -5,6 +5,10 @@ import { redirect } from "next/navigation";
 import { fetchGroupById, updateGroupAdvisors, updateGroupStatus } from "@/services/group-service";
 import { fetchAllAdvisors } from "@/services/advisor-service";
 import { fetchAllStudents } from "@/services/student-service";
+import {
+  fetchGroupAdvisorPreferences,
+  replaceGroupAdvisorPreferences,
+} from "@/services/group-advisor-preference-service";
 import type { Student } from "@/types/student";
 import type { GroupStatus } from "@/types/group";
 
@@ -16,6 +20,16 @@ function getStatusLabel(status: GroupStatus) {
 
 function idsAreEqual(left: string | number | null | undefined, right: string | number | null | undefined) {
   return String(left ?? "") === String(right ?? "");
+}
+
+function normalizeSelectedAdvisorId(value: FormDataEntryValue | null) {
+  const rawValue = String(value ?? "").trim();
+
+  if (!rawValue) {
+    return null;
+  }
+
+  return /^\d+$/.test(rawValue) ? Number(rawValue) : rawValue;
 }
 
 function renderMemberCard(
@@ -84,6 +98,30 @@ export default async function GroupDetailPage({ params }: GroupDetailPageProps) 
     redirect(`/groups/${id}`);
   }
 
+  async function handleUpdateAdvisorPreferences(formData: FormData) {
+    "use server";
+
+    const preference1 = normalizeSelectedAdvisorId(formData.get("preference_1"));
+    const preference2 = normalizeSelectedAdvisorId(formData.get("preference_2"));
+    const preference3 = normalizeSelectedAdvisorId(formData.get("preference_3"));
+
+    const orderedPreferences = [preference1, preference2, preference3].filter(
+      (value): value is string | number => value !== null
+    );
+
+    const uniqueIds = new Set(orderedPreferences.map((value) => String(value)));
+    if (uniqueIds.size !== orderedPreferences.length) {
+      redirect(`/groups/${id}`);
+    }
+
+    await replaceGroupAdvisorPreferences(id, orderedPreferences);
+
+    revalidatePath(`/groups/${id}`);
+    revalidatePath("/groups");
+    revalidatePath("/dashboard");
+    redirect(`/groups/${id}`);
+  }
+
   let group;
   try {
     group = await fetchGroupById(id);
@@ -124,12 +162,28 @@ export default async function GroupDetailPage({ params }: GroupDetailPageProps) 
     students = [];
   }
 
+  let advisorPreferences = [] as Awaited<ReturnType<typeof fetchGroupAdvisorPreferences>>;
+  let advisorPreferencesError: string | null = null;
+  try {
+    advisorPreferences = await fetchGroupAdvisorPreferences(id);
+  } catch (error) {
+    advisorPreferencesError =
+      error instanceof Error ? error.message : "Erro desconhecido ao carregar preferências.";
+  }
+
   // Resolve nome dos orientadores vinculados
   const primaryAdvisor = advisors.find((a) => a.id === group.primary_advisor_id);
   const coAdvisor = advisors.find((a) => a.id === group.co_advisor_id);
   const linkedStudent1 = students.find((student) => idsAreEqual(student.id, group.student_1_id));
   const linkedStudent2 = students.find((student) => idsAreEqual(student.id, group.student_2_id));
   const linkedStudent3 = students.find((student) => idsAreEqual(student.id, group.student_3_id));
+  const preferenceAdvisor1 = advisorPreferences.find((p) => p.preference_order === 1);
+  const preferenceAdvisor2 = advisorPreferences.find((p) => p.preference_order === 2);
+  const preferenceAdvisor3 = advisorPreferences.find((p) => p.preference_order === 3);
+  const preferredAdvisor1 = advisors.find((a) => idsAreEqual(a.id, preferenceAdvisor1?.advisor_id));
+  const preferredAdvisor2 = advisors.find((a) => idsAreEqual(a.id, preferenceAdvisor2?.advisor_id));
+  const preferredAdvisor3 = advisors.find((a) => idsAreEqual(a.id, preferenceAdvisor3?.advisor_id));
+
   const currentStatus: GroupStatus =
     group.status === "em_andamento" || group.status === "concluido"
       ? group.status
@@ -236,56 +290,148 @@ export default async function GroupDetailPage({ params }: GroupDetailPageProps) 
             </p>
           </div>
 
+          {/* Preferências ordenadas */}
+          <div className="mb-5 rounded-md border border-blue-100 bg-blue-50 p-4">
+            <p className="text-sm font-medium text-blue-900 mb-2">Lista ordenada de preferência de orientadores</p>
+            <ul className="space-y-1 text-sm text-blue-900">
+              <li>
+                <span className="font-medium">1ª preferência:</span>{" "}
+                {preferredAdvisor1 ? preferredAdvisor1.name : "Não definida"}
+              </li>
+              <li>
+                <span className="font-medium">2ª preferência:</span>{" "}
+                {preferredAdvisor2 ? preferredAdvisor2.name : "Não definida"}
+              </li>
+              <li>
+                <span className="font-medium">3ª preferência:</span>{" "}
+                {preferredAdvisor3 ? preferredAdvisor3.name : "Não definida"}
+              </li>
+            </ul>
+            {advisorPreferencesError && (
+              <p className="text-xs text-amber-800 mt-2">{advisorPreferencesError}</p>
+            )}
+          </div>
+
           {/* Formulário de associação */}
           {advisors.length > 0 ? (
-            <form action={handleAssignAdvisors} className="space-y-4 border-t border-gray-100 pt-4">
-              <p className="text-sm font-medium text-gray-700">Atualizar orientadores:</p>
+            <>
+              <form action={handleUpdateAdvisorPreferences} className="space-y-4 border-t border-gray-100 pt-4 mb-6">
+                <p className="text-sm font-medium text-gray-700">Atualizar ordem de preferência:</p>
 
-              <div>
-                <label htmlFor="primary_advisor_id" className="block text-sm text-gray-600 mb-1">
-                  Orientador principal
-                </label>
-                <select
-                  id="primary_advisor_id"
-                  name="primary_advisor_id"
-                  defaultValue={group.primary_advisor_id ?? ""}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                <div>
+                  <label htmlFor="preference_1" className="block text-sm text-gray-600 mb-1">
+                    1ª preferência
+                  </label>
+                  <select
+                    id="preference_1"
+                    name="preference_1"
+                    defaultValue={preferenceAdvisor1 ? String(preferenceAdvisor1.advisor_id) : ""}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">— Nenhum —</option>
+                    {advisors.map((advisor) => (
+                      <option key={advisor.id} value={String(advisor.id)}>
+                        {advisor.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label htmlFor="preference_2" className="block text-sm text-gray-600 mb-1">
+                    2ª preferência
+                  </label>
+                  <select
+                    id="preference_2"
+                    name="preference_2"
+                    defaultValue={preferenceAdvisor2 ? String(preferenceAdvisor2.advisor_id) : ""}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">— Nenhum —</option>
+                    {advisors.map((advisor) => (
+                      <option key={advisor.id} value={String(advisor.id)}>
+                        {advisor.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label htmlFor="preference_3" className="block text-sm text-gray-600 mb-1">
+                    3ª preferência
+                  </label>
+                  <select
+                    id="preference_3"
+                    name="preference_3"
+                    defaultValue={preferenceAdvisor3 ? String(preferenceAdvisor3.advisor_id) : ""}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">— Nenhum —</option>
+                    {advisors.map((advisor) => (
+                      <option key={advisor.id} value={String(advisor.id)}>
+                        {advisor.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <button
+                  type="submit"
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white font-medium px-4 py-2 rounded-md text-sm"
                 >
-                  <option value="">— Nenhum —</option>
-                  {advisors.map((advisor) => (
-                    <option key={advisor.id} value={advisor.id}>
-                      {advisor.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
+                  Salvar ordem de preferência
+                </button>
+              </form>
 
-              <div>
-                <label htmlFor="co_advisor_id" className="block text-sm text-gray-600 mb-1">
-                  Coorientador
-                </label>
-                <select
-                  id="co_advisor_id"
-                  name="co_advisor_id"
-                  defaultValue={group.co_advisor_id ?? ""}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              <form action={handleAssignAdvisors} className="space-y-4 border-t border-gray-100 pt-4">
+                <p className="text-sm font-medium text-gray-700">Atualizar orientadores:</p>
+
+                <div>
+                  <label htmlFor="primary_advisor_id" className="block text-sm text-gray-600 mb-1">
+                    Orientador principal
+                  </label>
+                  <select
+                    id="primary_advisor_id"
+                    name="primary_advisor_id"
+                    defaultValue={group.primary_advisor_id ?? ""}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">— Nenhum —</option>
+                    {advisors.map((advisor) => (
+                      <option key={advisor.id} value={advisor.id}>
+                        {advisor.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label htmlFor="co_advisor_id" className="block text-sm text-gray-600 mb-1">
+                    Coorientador
+                  </label>
+                  <select
+                    id="co_advisor_id"
+                    name="co_advisor_id"
+                    defaultValue={group.co_advisor_id ?? ""}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">— Nenhum —</option>
+                    {advisors.map((advisor) => (
+                      <option key={advisor.id} value={advisor.id}>
+                        {advisor.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <button
+                  type="submit"
+                  className="bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2 rounded-md text-sm"
                 >
-                  <option value="">— Nenhum —</option>
-                  {advisors.map((advisor) => (
-                    <option key={advisor.id} value={advisor.id}>
-                      {advisor.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <button
-                type="submit"
-                className="bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2 rounded-md text-sm"
-              >
-                Salvar orientadores
-              </button>
-            </form>
+                  Salvar orientadores
+                </button>
+              </form>
+            </>
           ) : (
             <p className="text-sm text-gray-500 border-t border-gray-100 pt-4">
               Nenhum orientador cadastrado.{" "}
