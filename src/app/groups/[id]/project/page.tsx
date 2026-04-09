@@ -32,11 +32,16 @@ import {
   fetchGroupInPersonMeetings,
   updateGroupInPersonMeetingStatus,
 } from "@/services/group-in-person-meeting-service";
+import {
+  createGroupInternalNotification,
+  fetchGroupInternalNotifications,
+} from "@/services/group-internal-notification-service";
 import { fetchGroupById } from "@/services/group-service";
 import { getAuthenticatedProfile } from "@/lib/auth/session-service";
 import type { ProjectSectionStatus } from "@/types/project-section";
 import type { ProjectDevelopmentChecklistStatus } from "@/types/project-development-checklist-item";
 import type { GroupInPersonMeetingStatus } from "@/types/group-in-person-meeting";
+import type { GroupInternalNotificationType } from "@/types/group-internal-notification";
 
 interface GroupProjectPageProps {
   params: Promise<{ id: string }>;
@@ -59,6 +64,8 @@ interface GroupProjectPageProps {
     meeting_status?: string;
     meeting_action?: string;
     meeting_id?: string;
+    notification_status?: string;
+    notification_action?: string;
   }>;
 }
 
@@ -77,6 +84,7 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
   const canManageChecklist = profile?.role === "advisor" || profile?.role === "coordinator";
   const canManageSchedule = profile?.role === "advisor" || profile?.role === "coordinator";
   const canManageMeetings = profile?.role === "advisor" || profile?.role === "coordinator";
+  const canManageInternalNotifications = profile?.role === "advisor" || profile?.role === "coordinator";
   const canAskAsStudent = profile?.role === "student";
 
   const group = await fetchGroupById(id);
@@ -414,6 +422,47 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
     redirect(`/groups/${id}/project?meeting_status=success&meeting_action=status&meeting_id=${meetingId}`);
   }
 
+  async function handleAddInternalNotification(formData: FormData) {
+    "use server";
+
+    const authenticatedProfile = await getAuthenticatedProfile();
+    if (!authenticatedProfile || (authenticatedProfile.role !== "advisor" && authenticatedProfile.role !== "coordinator")) {
+      redirect(`/groups/${id}/project?notification_status=forbidden&notification_action=add`);
+    }
+
+    const title = String(formData.get("title") ?? "").trim();
+    const message = String(formData.get("message") ?? "").trim();
+    const sectionIdRaw = String(formData.get("section_id") ?? "").trim();
+    const sectionId = sectionIdRaw ? sectionIdRaw : null;
+    const rawType = String(formData.get("notification_type") ?? "aviso").trim();
+    const allowedTypes: GroupInternalNotificationType[] = ["aviso", "prazo", "encontro", "orientacao"];
+    const notificationType = allowedTypes.includes(rawType as GroupInternalNotificationType)
+      ? (rawType as GroupInternalNotificationType)
+      : "aviso";
+
+    if (title.length < 3 || message.length < 3) {
+      redirect(`/groups/${id}/project?notification_status=invalid&notification_action=add`);
+    }
+
+    try {
+      await createGroupInternalNotification({
+        group_id: id,
+        section_id: sectionId,
+        title,
+        message,
+        notification_type: notificationType,
+        author_profile_id: authenticatedProfile.id,
+        author_role: authenticatedProfile.role === "coordinator" ? "coordinator" : "advisor",
+        author_name: authenticatedProfile.name,
+      });
+    } catch {
+      redirect(`/groups/${id}/project?notification_status=error&notification_action=add`);
+    }
+
+    revalidatePath(`/groups/${id}/project`);
+    redirect(`/groups/${id}/project?notification_status=success&notification_action=add`);
+  }
+
   let sections = [] as Awaited<ReturnType<typeof ensureGroupProjectSectionsStructure>>;
   let sectionsError: string | null = null;
   let comments = [] as Awaited<ReturnType<typeof fetchGroupProjectSectionComments>>;
@@ -430,6 +479,8 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
   let stageScheduleError: string | null = null;
   let inPersonMeetings = [] as Awaited<ReturnType<typeof fetchGroupInPersonMeetings>>;
   let inPersonMeetingsError: string | null = null;
+  let internalNotifications = [] as Awaited<ReturnType<typeof fetchGroupInternalNotifications>>;
+  let internalNotificationsError: string | null = null;
 
   try {
     sections = await ensureGroupProjectSectionsStructure(id);
@@ -477,6 +528,12 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
     inPersonMeetings = await fetchGroupInPersonMeetings(id);
   } catch (error) {
     inPersonMeetingsError = error instanceof Error ? error.message : "Erro ao carregar agenda de encontros presenciais.";
+  }
+
+  try {
+    internalNotifications = await fetchGroupInternalNotifications(id);
+  } catch (error) {
+    internalNotificationsError = error instanceof Error ? error.message : "Erro ao carregar notificações internas.";
   }
 
   const commentsBySection = new Map<string, typeof comments>();
@@ -587,6 +644,157 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
             <p className="text-amber-800 text-sm mt-1">{inPersonMeetingsError}</p>
           </div>
         )}
+
+        {internalNotificationsError && (
+          <div className="bg-amber-50 border border-amber-300 rounded-lg p-4 mb-6">
+            <p className="text-amber-900 font-medium">Configuração pendente das notificações internas</p>
+            <p className="text-amber-800 text-sm mt-1">{internalNotificationsError}</p>
+          </div>
+        )}
+
+        <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm mb-6">
+          <h2 className="text-lg font-semibold text-gray-900 mb-2">Notificações internas do sistema</h2>
+
+          {query.notification_status === "success" && query.notification_action === "add" && (
+            <p className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-md px-3 py-2 mb-3">
+              Notificação interna registrada com sucesso.
+            </p>
+          )}
+          {query.notification_status === "invalid" && (
+            <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2 mb-3">
+              Dados inválidos para notificação. Revise título e mensagem.
+            </p>
+          )}
+          {query.notification_status === "error" && (
+            <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2 mb-3">
+              Não foi possível registrar a notificação interna. Tente novamente.
+            </p>
+          )}
+          {query.notification_status === "forbidden" && (
+            <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2 mb-3">
+              Apenas orientadores (ou coordenação) podem registrar notificações internas nesta etapa.
+            </p>
+          )}
+
+          <div className="space-y-2 mb-4">
+            {internalNotifications.length === 0 ? (
+              <p className="text-sm text-gray-500">Ainda não há notificações internas para este grupo.</p>
+            ) : (
+              internalNotifications.map((notification) => (
+                <div key={String(notification.id)} className="border border-gray-100 rounded-md px-3 py-2 bg-gray-50">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-medium text-gray-900">{notification.title}</p>
+                      <p className="text-sm text-gray-800 mt-1 whitespace-pre-line">{notification.message}</p>
+                      <p className="text-xs text-gray-500 mt-1">
+                        {notification.author_name} ({notification.author_role === "advisor" ? "orientador" : "coordenação"})
+                        {notification.section_id
+                          ? ` • ${sectionTitleById.get(String(notification.section_id)) || "Seção"}`
+                          : " • Geral"}
+                        {notification.created_at
+                          ? ` • ${new Date(notification.created_at).toLocaleString("pt-BR", {
+                              day: "2-digit",
+                              month: "2-digit",
+                              year: "numeric",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}`
+                          : ""}
+                      </p>
+                    </div>
+
+                    <span
+                      className={`text-xs font-semibold px-2 py-1 rounded-full ${
+                        notification.notification_type === "prazo"
+                          ? "bg-amber-100 text-amber-700"
+                          : notification.notification_type === "encontro"
+                            ? "bg-blue-100 text-blue-700"
+                            : notification.notification_type === "orientacao"
+                              ? "bg-indigo-100 text-indigo-700"
+                              : "bg-gray-200 text-gray-700"
+                      }`}
+                    >
+                      {notification.notification_type === "prazo"
+                        ? "Prazo"
+                        : notification.notification_type === "encontro"
+                          ? "Encontro"
+                          : notification.notification_type === "orientacao"
+                            ? "Orientação"
+                            : "Aviso"}
+                    </span>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          {canManageInternalNotifications && (
+            <form action={handleAddInternalNotification} className="space-y-3 border-t border-gray-100 pt-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div>
+                  <label htmlFor="notification-type" className="block text-sm text-gray-700 mb-1">Tipo</label>
+                  <select
+                    id="notification-type"
+                    name="notification_type"
+                    defaultValue="aviso"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="aviso">Aviso</option>
+                    <option value="prazo">Prazo</option>
+                    <option value="encontro">Encontro</option>
+                    <option value="orientacao">Orientação</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label htmlFor="notification-section" className="block text-sm text-gray-700 mb-1">Seção (opcional)</label>
+                  <select
+                    id="notification-section"
+                    name="section_id"
+                    defaultValue=""
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">Geral (sem seção específica)</option>
+                    {sections.map((section) => (
+                      <option key={String(section.id)} value={String(section.id)}>
+                        {section.section_order}. {section.section_title}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label htmlFor="notification-title" className="block text-sm text-gray-700 mb-1">Título</label>
+                  <input
+                    id="notification-title"
+                    name="title"
+                    type="text"
+                    placeholder="Ex.: Atualização do cronograma"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label htmlFor="notification-message" className="block text-sm text-gray-700 mb-1">Mensagem</label>
+                <textarea
+                  id="notification-message"
+                  name="message"
+                  rows={3}
+                  placeholder="Descreva a notificação para o grupo..."
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2 rounded-md text-sm"
+              >
+                Publicar notificação interna
+              </button>
+            </form>
+          )}
+        </div>
 
         <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm mb-6">
           <h2 className="text-lg font-semibold text-gray-900 mb-2">Agenda de encontros presenciais</h2>
