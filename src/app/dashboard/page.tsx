@@ -213,24 +213,33 @@ export default async function DashboardPage() {
             )}
 
             {/* Grupos sem orientador */}
-            {coordinatorSummary.groupIndicationStatuses.filter((g) => !g.hasPrimaryAdvisor).length > 0 && (
+            {coordinatorSummary.groupsWithoutAdvisorList.length > 0 && (
               <div>
                 <h3 className="text-sm font-semibold text-gray-700 mb-3">Grupos sem orientador principal</h3>
                 <div className="divide-y divide-gray-100 border border-gray-100 rounded-md">
-                  {coordinatorSummary.groupIndicationStatuses
-                    .filter((g) => !g.hasPrimaryAdvisor)
-                    .map(({ group, hasPreferences }) => (
+                  {coordinatorSummary.groupsWithoutAdvisorList.map((group) => (
                       <div key={group.id} className="flex items-center justify-between px-4 py-3 gap-3">
                         <div>
                           <p className="text-sm font-medium text-gray-900">
                             {group.theme || group.member_1_name}
                           </p>
                           <p className="text-xs text-gray-500">{group.member_1_name} — {group.member_1_series}</p>
-                          {hasPreferences ? (
+                          {group.hasPreferences ? (
                             <span className="text-xs text-blue-700 font-medium">Lista de preferências definida</span>
                           ) : (
                             <span className="text-xs text-gray-400">Sem lista de preferências</span>
                           )}
+                          <p className="text-xs mt-1">
+                            {group.indicationStatus === "pendente" ? (
+                              <span className="text-amber-700 font-medium">Indicação pendente</span>
+                            ) : group.indicationStatus === "recusada" ? (
+                              <span className="text-red-700 font-medium">Última indicação recusada</span>
+                            ) : group.indicationStatus === "aceita" ? (
+                              <span className="text-green-700 font-medium">Indicação aceita</span>
+                            ) : (
+                              <span className="text-gray-400">Sem indicação ativa</span>
+                            )}
+                          </p>
                         </div>
                         <Link
                           href={`/groups/${group.id}`}

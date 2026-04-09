@@ -18,6 +18,14 @@ export interface GroupIndicationStatus {
 export interface CoordinatorSummary {
   advisorLoads: AdvisorLoad[];
   groupIndicationStatuses: GroupIndicationStatus[];
+  groupsWithoutAdvisorList: Array<{
+    id: string;
+    theme: string | null;
+    member_1_name: string;
+    member_1_series: string;
+    hasPreferences: boolean;
+    indicationStatus: string | null;
+  }>;
   studentsWithoutGroup: Array<{
     id: string | number;
     name: string;
@@ -124,9 +132,21 @@ export async function fetchCoordinatorSummary(): Promise<CoordinatorSummary> {
       school: student.school ? String(student.school) : null,
     }));
 
+  const groupsWithoutAdvisorList = groupIndicationStatuses
+    .filter((entry) => !entry.hasPrimaryAdvisor)
+    .map(({ group, hasPreferences }) => ({
+      id: String(group.id),
+      theme: group.theme ?? null,
+      member_1_name: group.member_1_name,
+      member_1_series: group.member_1_series,
+      hasPreferences,
+      indicationStatus: group.indication_status ? String(group.indication_status) : null,
+    }));
+
   return {
     advisorLoads,
     groupIndicationStatuses,
+    groupsWithoutAdvisorList,
     studentsWithoutGroup,
     groupsWithoutAdvisor,
     groupsPendingIndication,
