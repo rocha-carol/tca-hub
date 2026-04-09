@@ -14,6 +14,10 @@ import {
   createProjectSectionQuestionAnswer,
   fetchGroupProjectSectionQuestionAnswers,
 } from "@/services/project-section-question-answer-service";
+import {
+  createProjectSectionNextStep,
+  fetchGroupProjectSectionNextSteps,
+} from "@/services/project-section-next-step-service";
 import { fetchGroupById } from "@/services/group-service";
 import { getAuthenticatedProfile } from "@/lib/auth/session-service";
 import type { ProjectSectionStatus } from "@/types/project-section";
@@ -29,6 +33,8 @@ interface GroupProjectPageProps {
     question_section?: string;
     answer_status?: string;
     answer_question?: string;
+    next_step_status?: string;
+    next_step_section?: string;
   }>;
 }
 
@@ -180,6 +186,38 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
     redirect(`/groups/${id}/project?answer_status=success&answer_question=${questionId}`);
   }
 
+  async function handleAddSectionNextStep(formData: FormData) {
+    "use server";
+
+    const authenticatedProfile = await getAuthenticatedProfile();
+    if (!authenticatedProfile || (authenticatedProfile.role !== "advisor" && authenticatedProfile.role !== "coordinator")) {
+      redirect(`/groups/${id}/project?next_step_status=forbidden`);
+    }
+
+    const sectionId = String(formData.get("section_id") ?? "").trim();
+    const nextSteps = String(formData.get("next_steps") ?? "").trim();
+
+    if (!sectionId || nextSteps.length < 3) {
+      redirect(`/groups/${id}/project?next_step_status=invalid&next_step_section=${sectionId}`);
+    }
+
+    try {
+      await createProjectSectionNextStep({
+        group_id: id,
+        section_id: sectionId,
+        author_profile_id: authenticatedProfile.id,
+        author_role: authenticatedProfile.role === "coordinator" ? "coordinator" : "advisor",
+        author_name: authenticatedProfile.name,
+        next_steps: nextSteps,
+      });
+    } catch {
+      redirect(`/groups/${id}/project?next_step_status=error&next_step_section=${sectionId}`);
+    }
+
+    revalidatePath(`/groups/${id}/project`);
+    redirect(`/groups/${id}/project?next_step_status=success&next_step_section=${sectionId}`);
+  }
+
   let sections = [] as Awaited<ReturnType<typeof ensureGroupProjectSectionsStructure>>;
   let sectionsError: string | null = null;
   let comments = [] as Awaited<ReturnType<typeof fetchGroupProjectSectionComments>>;
@@ -188,6 +226,8 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
   let questionsError: string | null = null;
   let answers = [] as Awaited<ReturnType<typeof fetchGroupProjectSectionQuestionAnswers>>;
   let answersError: string | null = null;
+  let nextSteps = [] as Awaited<ReturnType<typeof fetchGroupProjectSectionNextSteps>>;
+  let nextStepsError: string | null = null;
 
   try {
     sections = await ensureGroupProjectSectionsStructure(id);
@@ -213,6 +253,12 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
     answersError = error instanceof Error ? error.message : "Erro ao carregar respostas das dúvidas.";
   }
 
+  try {
+    nextSteps = await fetchGroupProjectSectionNextSteps(id);
+  } catch (error) {
+    nextStepsError = error instanceof Error ? error.message : "Erro ao carregar próximos passos.";
+  }
+
   const commentsBySection = new Map<string, typeof comments>();
   for (const comment of comments) {
     const key = String(comment.section_id);
@@ -235,6 +281,14 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
     const list = answersByQuestion.get(key) ?? [];
     list.push(answer);
     answersByQuestion.set(key, list);
+  }
+
+  const nextStepsBySection = new Map<string, typeof nextSteps>();
+  for (const nextStep of nextSteps) {
+    const key = String(nextStep.section_id);
+    const list = nextStepsBySection.get(key) ?? [];
+    list.push(nextStep);
+    nextStepsBySection.set(key, list);
   }
 
   return (
@@ -273,6 +327,13 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
           <div className="bg-amber-50 border border-amber-300 rounded-lg p-4 mb-6">
             <p className="text-amber-900 font-medium">Configuração pendente das respostas às dúvidas</p>
             <p className="text-amber-800 text-sm mt-1">{answersError}</p>
+          </div>
+        )}
+
+        {nextStepsError && (
+          <div className="bg-amber-50 border border-amber-300 rounded-lg p-4 mb-6">
+            <p className="text-amber-900 font-medium">Configuração pendente dos próximos passos por seção</p>
+            <p className="text-amber-800 text-sm mt-1">{nextStepsError}</p>
           </div>
         )}
 
@@ -555,6 +616,73 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
                         className="bg-indigo-600 hover:bg-indigo-700 text-white font-medium px-4 py-2 rounded-md text-sm"
                       >
                         Adicionar comentário
+                      </button>
+                    </form>
+                  )}
+                </div>
+
+                <div className="mt-6 pt-4 border-t border-gray-100">
+                  <h3 className="text-sm font-semibold text-gray-800 mb-2">Próximos passos</h3>
+
+                  {query.next_step_status === "success" && query.next_step_section === String(section.id) && (
+                    <p className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-md px-3 py-2 mb-3">
+                      Próximos passos registrados com sucesso.
+                    </p>
+                  )}
+                  {query.next_step_status === "invalid" && query.next_step_section === String(section.id) && (
+                    <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2 mb-3">
+                      Texto inválido. Escreva ao menos 3 caracteres.
+                    </p>
+                  )}
+                  {query.next_step_status === "error" && query.next_step_section === String(section.id) && (
+                    <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2 mb-3">
+                      Não foi possível salvar os próximos passos. Tente novamente.
+                    </p>
+                  )}
+                  {query.next_step_status === "forbidden" && (
+                    <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2 mb-3">
+                      Apenas orientadores (ou coordenação) podem registrar próximos passos nesta etapa.
+                    </p>
+                  )}
+
+                  <div className="space-y-2 mb-3">
+                    {(nextStepsBySection.get(String(section.id)) || []).length === 0 ? (
+                      <p className="text-sm text-gray-500">Ainda não há próximos passos registrados nesta seção.</p>
+                    ) : (
+                      (nextStepsBySection.get(String(section.id)) || []).map((nextStep) => (
+                        <div key={String(nextStep.id)} className="border border-gray-100 rounded-md px-3 py-2 bg-gray-50">
+                          <p className="text-sm text-gray-900 whitespace-pre-line">{nextStep.next_steps}</p>
+                          <p className="text-xs text-gray-500 mt-1">
+                            {nextStep.author_name} ({nextStep.author_role === "advisor" ? "orientador" : "coordenação"})
+                            {nextStep.created_at
+                              ? ` • ${new Date(nextStep.created_at).toLocaleString("pt-BR", {
+                                  day: "2-digit",
+                                  month: "2-digit",
+                                  year: "numeric",
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                })}`
+                              : ""}
+                          </p>
+                        </div>
+                      ))
+                    )}
+                  </div>
+
+                  {canAnswerAsAdvisor && (
+                    <form action={handleAddSectionNextStep} className="space-y-2">
+                      <input type="hidden" name="section_id" value={String(section.id)} />
+                      <textarea
+                        name="next_steps"
+                        rows={3}
+                        placeholder="Registrar próximos passos orientados para esta seção..."
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-violet-500"
+                      />
+                      <button
+                        type="submit"
+                        className="bg-violet-600 hover:bg-violet-700 text-white font-medium px-4 py-2 rounded-md text-sm"
+                      >
+                        Registrar próximos passos
                       </button>
                     </form>
                   )}
