@@ -53,6 +53,10 @@ import {
   fetchGroupInteractiveGuides,
 } from "@/services/group-interactive-guide-service";
 import {
+  fetchGroupInteractiveGuideProgress,
+  upsertGroupInteractiveGuideProgress,
+} from "@/services/group-interactive-guide-progress-service";
+import {
   createGroupAIFeedback,
   fetchGroupAIFeedback,
 } from "@/services/group-ai-feedback-service";
@@ -77,6 +81,7 @@ import type {
   GroupInteractiveGuideAudience,
   GroupInteractiveGuideType,
 } from "@/types/group-interactive-guide";
+import type { GroupInteractiveGuideProgressStatus } from "@/types/group-interactive-guide-progress";
 import type { ProjectSectionAuthorshipIndicator } from "@/types/project-section-authorship-indicator";
 
 interface GroupProjectPageProps {
@@ -109,6 +114,8 @@ interface GroupProjectPageProps {
     repertory_action?: string;
     guide_status?: string;
     guide_action?: string;
+    guide_seeded?: string;
+    guide_item?: string;
     ai_feedback_status?: string;
     ai_feedback_action?: string;
     ai_feedback_section?: string;
@@ -122,6 +129,125 @@ function getStatusLabel(status: ProjectSectionStatus) {
   if (status === "em_andamento") return "Em andamento";
   if (status === "concluido") return "Concluída";
   return "Não iniciada";
+}
+
+type ProjectSectionReference = {
+  id: string | number;
+  section_title: string;
+};
+
+function findSectionIdByKeywords(
+  sections: ProjectSectionReference[],
+  keywords: string[]
+): string | number | null {
+  const normalizedKeywords = keywords.map((keyword) => keyword.trim().toLowerCase()).filter(Boolean);
+  if (normalizedKeywords.length === 0) {
+    return null;
+  }
+
+  const matched = sections.find((section) => {
+    const title = section.section_title.toLowerCase();
+    return normalizedKeywords.some((keyword) => title.includes(keyword));
+  });
+
+  return matched ? matched.id : null;
+}
+
+function buildDefaultTCAInteractiveGuides(sections: ProjectSectionReference[]) {
+  const templates: Array<{
+    title: string;
+    guide_type: GroupInteractiveGuideType;
+    content: string;
+    suggested_activity: string;
+    audience: GroupInteractiveGuideAudience;
+    keywords: string[];
+  }> = [
+    {
+      title: "Microguia 1 — Definição do problema social do território",
+      guide_type: "metodologia",
+      content:
+        "Delimitem um problema real observado no território (escola, bairro ou comunidade). Registrem evidências concretas e expliquem por que esse problema é relevante para o coletivo.",
+      suggested_activity:
+        "Produzam uma síntese de 5 linhas respondendo: o que acontece, com quem acontece e por que isso importa no contexto local.",
+      audience: "students",
+      keywords: ["problema", "tema", "introdu"],
+    },
+    {
+      title: "Microguia 2 — Pergunta investigativa clara",
+      guide_type: "escrita",
+      content:
+        "Transformem o problema em uma pergunta investigativa objetiva, que possa ser respondida ao longo do TCA. Evitem perguntas muito amplas.",
+      suggested_activity:
+        "Escrevam 3 versões da pergunta e escolham a melhor com base em clareza, foco e viabilidade.",
+      audience: "students",
+      keywords: ["problema", "objetivo", "introdu"],
+    },
+    {
+      title: "Microguia 3 — Objetivo geral e objetivos específicos",
+      guide_type: "estrutura",
+      content:
+        "O objetivo geral deve indicar o resultado central do projeto. Já os objetivos específicos devem descrever etapas práticas para atingir o objetivo geral.",
+      suggested_activity:
+        "Construam 1 objetivo geral e 3 objetivos específicos iniciando com verbos de ação (investigar, analisar, propor, validar etc.).",
+      audience: "students",
+      keywords: ["objetivo", "metodologia", "desenvolvimento"],
+    },
+    {
+      title: "Microguia 4 — Critérios de fontes e repertório",
+      guide_type: "referencias",
+      content:
+        "Selecionem fontes confiáveis e variadas (materiais institucionais, artigos, dados públicos, entrevistas). Registrem por que cada fonte é útil para o problema estudado.",
+      suggested_activity:
+        "Cadastrem no mínimo 3 fontes e anotem a contribuição de cada uma para a argumentação do grupo.",
+      audience: "students",
+      keywords: ["refer", "fundament", "desenvolvimento"],
+    },
+    {
+      title: "Microguia 5 — Organização da metodologia",
+      guide_type: "metodologia",
+      content:
+        "Descrevam como a investigação será realizada: quem participa, quais instrumentos serão usados e em qual sequência as etapas acontecerão.",
+      suggested_activity:
+        "Montem um roteiro com etapas numeradas (coleta, análise, validação e proposta de intervenção).",
+      audience: "students",
+      keywords: ["metodologia", "desenvolvimento"],
+    },
+    {
+      title: "Microguia 6 — Escrita autoral e voz do grupo",
+      guide_type: "escrita",
+      content:
+        "Priorizem linguagem autoral: expliquem decisões, justificativas e aprendizados com palavras do grupo, evitando copiar trechos prontos.",
+      suggested_activity:
+        "Revisem um trecho do texto e marquem onde há voz autoral forte e onde ainda há escrita genérica.",
+      audience: "students",
+      keywords: ["desenvolvimento", "conclus", "introdu"],
+    },
+    {
+      title: "Microguia 7 — Qualidade da conclusão",
+      guide_type: "estrutura",
+      content:
+        "A conclusão deve responder à pergunta investigativa, retomar os objetivos e apontar limites, aprendizados e próximos desdobramentos.",
+      suggested_activity:
+        "Escrevam um parágrafo final com: resposta principal, evidência utilizada e proposta de continuidade.",
+      audience: "students",
+      keywords: ["conclus", "resultado"],
+    },
+    {
+      title: "Microguia 8 — Preparação para socialização/apresentação",
+      guide_type: "apresentacao",
+      content:
+        "Planejem como comunicar o TCA para diferentes públicos, destacando problema, processo, resultados e proposta de transformação.",
+      suggested_activity:
+        "Criem um roteiro de apresentação de 3 minutos com divisão de falas entre os integrantes.",
+      audience: "todos",
+      keywords: ["apresent", "socializa", "produto"],
+    },
+  ];
+
+  return templates.map((template) => ({
+    ...template,
+    section_id: findSectionIdByKeywords(sections, template.keywords),
+  }));
 }
 
 export default async function GroupProjectPage({ params, searchParams }: GroupProjectPageProps) {
@@ -138,6 +264,7 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
   const canManageProcessPhotos = !!profile;
   const canManageRepertory = !!profile;
   const canManageInteractiveGuides = !!profile;
+  const canRespondInteractiveGuides = profile?.role === "student";
   const canManageAIFeedback = profile?.role === "advisor" || profile?.role === "coordinator";
   const canManageAuthorshipIndicator = profile?.role === "advisor" || profile?.role === "coordinator";
   const canAskAsStudent = profile?.role === "student";
@@ -727,6 +854,92 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
     redirect(`/groups/${id}/project?guide_status=success&guide_action=add`);
   }
 
+  async function handleSeedDefaultInteractiveGuides() {
+    "use server";
+
+    const authenticatedProfile = await getAuthenticatedProfile();
+    if (!authenticatedProfile) {
+      redirect(`/groups/${id}/project?guide_status=forbidden&guide_action=seed`);
+    }
+
+    try {
+      const currentSections = await ensureGroupProjectSectionsStructure(id);
+      const existingGuides = await fetchGroupInteractiveGuides(id);
+      const existingTitles = new Set(existingGuides.map((guide) => guide.title.trim().toLowerCase()));
+
+      const defaults = buildDefaultTCAInteractiveGuides(
+        currentSections.map((section) => ({
+          id: section.id,
+          section_title: section.section_title,
+        }))
+      );
+
+      const guidesToCreate = defaults.filter((guide) => !existingTitles.has(guide.title.trim().toLowerCase()));
+
+      if (guidesToCreate.length === 0) {
+        redirect(`/groups/${id}/project?guide_status=noop&guide_action=seed`);
+      }
+
+      for (const guide of guidesToCreate) {
+        await createGroupInteractiveGuide({
+          group_id: id,
+          section_id: guide.section_id,
+          title: guide.title,
+          guide_type: guide.guide_type,
+          content: guide.content,
+          suggested_activity: guide.suggested_activity,
+          audience: guide.audience,
+          author_profile_id: authenticatedProfile.id,
+          author_role: authenticatedProfile.role,
+          author_name: authenticatedProfile.name,
+        });
+      }
+
+      revalidatePath(`/groups/${id}/project`);
+      redirect(`/groups/${id}/project?guide_status=success&guide_action=seed&guide_seeded=${guidesToCreate.length}`);
+    } catch {
+      redirect(`/groups/${id}/project?guide_status=error&guide_action=seed`);
+    }
+  }
+
+  async function handleUpsertInteractiveGuideProgress(formData: FormData) {
+    "use server";
+
+    const authenticatedProfile = await getAuthenticatedProfile();
+    if (!authenticatedProfile || authenticatedProfile.role !== "student") {
+      redirect(`/groups/${id}/project?guide_status=forbidden&guide_action=progress`);
+    }
+
+    const guideId = String(formData.get("guide_id") ?? "").trim();
+    const responseTextRaw = String(formData.get("response_text") ?? "").trim();
+    const responseText = responseTextRaw.length > 0 ? responseTextRaw : null;
+    const rawStatus = String(formData.get("status") ?? "pendente").trim();
+    const allowedStatus: GroupInteractiveGuideProgressStatus[] = ["pendente", "concluido"];
+    const status = allowedStatus.includes(rawStatus as GroupInteractiveGuideProgressStatus)
+      ? (rawStatus as GroupInteractiveGuideProgressStatus)
+      : null;
+
+    if (!guideId || !status || (status === "concluido" && (!responseText || responseText.length < 3))) {
+      redirect(`/groups/${id}/project?guide_status=invalid&guide_action=progress&guide_item=${guideId}`);
+    }
+
+    try {
+      await upsertGroupInteractiveGuideProgress({
+        group_id: id,
+        guide_id: guideId,
+        student_profile_id: authenticatedProfile.id,
+        student_name: authenticatedProfile.name,
+        response_text: responseText,
+        status,
+      });
+    } catch {
+      redirect(`/groups/${id}/project?guide_status=error&guide_action=progress&guide_item=${guideId}`);
+    }
+
+    revalidatePath(`/groups/${id}/project`);
+    redirect(`/groups/${id}/project?guide_status=success&guide_action=progress&guide_item=${guideId}`);
+  }
+
   async function handleGenerateAIFeedback(formData: FormData) {
     "use server";
 
@@ -850,6 +1063,8 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
   let repertoryError: string | null = null;
   let interactiveGuides = [] as Awaited<ReturnType<typeof fetchGroupInteractiveGuides>>;
   let interactiveGuidesError: string | null = null;
+  let interactiveGuidesProgress = [] as Awaited<ReturnType<typeof fetchGroupInteractiveGuideProgress>>;
+  let interactiveGuidesProgressError: string | null = null;
   let aiFeedbackItems = [] as Awaited<ReturnType<typeof fetchGroupAIFeedback>>;
   let aiFeedbackError: string | null = null;
   let sectionVersions = [] as Awaited<ReturnType<typeof fetchGroupProjectSectionVersions>>;
@@ -933,6 +1148,13 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
     interactiveGuides = await fetchGroupInteractiveGuides(id);
   } catch (error) {
     interactiveGuidesError = error instanceof Error ? error.message : "Erro ao carregar guias interativos.";
+  }
+
+  try {
+    interactiveGuidesProgress = await fetchGroupInteractiveGuideProgress(id);
+  } catch (error) {
+    interactiveGuidesProgressError =
+      error instanceof Error ? error.message : "Erro ao carregar progresso dos guias interativos.";
   }
 
   try {
@@ -1044,18 +1266,20 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
   }
 
   return (
-    <main className="min-h-screen bg-gray-50">
+    <main className="min-h-screen bg-transparent">
       <section className="max-w-4xl mx-auto px-6 py-10">
+        <div className="tca-stripes h-1.5 w-full rounded-md mb-6" />
         <header className="mb-8">
-          <Link href={`/groups/${id}`} className="text-blue-600 hover:underline text-sm">
+          <Link href={`/groups/${id}`} className="text-lime-700 hover:underline text-sm">
             ← Voltar para detalhe do grupo
           </Link>
-          <h1 className="text-3xl font-bold text-gray-900 mt-3">Projeto por seções</h1>
+          <h1 className="text-3xl font-bold tca-title-guide mt-3">Projeto por seções</h1>
           <p className="text-gray-600 mt-1">Grupo: {group.theme || group.member_1_name}</p>
         </header>
 
-        <div className="bg-white border border-blue-100 rounded-lg p-6 shadow-sm mb-6">
-          <h2 className="text-lg font-semibold text-blue-900 mb-2">Sobre o TCA (Ciclo Autoral)</h2>
+        <div className="tca-soft-surface rounded-lg p-6 shadow-sm mb-6 relative overflow-hidden">
+          <div className="absolute left-0 top-0 h-full w-2 tca-stripes" aria-hidden="true" />
+          <h2 className="text-lg font-semibold text-lime-900 mb-2">Sobre o TCA (Ciclo Autoral)</h2>
 
           <p className="text-sm text-gray-700 leading-relaxed">
             O Ciclo Autoral compreende os anos finais do Ensino Fundamental e fortalece a capacidade dos estudantes
@@ -1069,7 +1293,7 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
           </p>
 
           <details className="mt-3">
-            <summary className="cursor-pointer text-sm font-medium text-blue-800 hover:text-blue-900">
+            <summary className="cursor-pointer text-sm font-medium text-lime-800 hover:text-lime-900">
               Objetivos pedagógicos do TCA
             </summary>
             <ul className="list-disc pl-5 mt-2 space-y-1 text-sm text-gray-700">
@@ -1090,7 +1314,7 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
               href="https://educacao.sme.prefeitura.sp.gov.br/ensino-fundamental/trabalho-colaborativo-de-autoria/"
               target="_blank"
               rel="noreferrer"
-              className="text-blue-700 hover:underline"
+              className="text-lime-700 hover:underline"
             >
               Secretaria Municipal de Educação de São Paulo — Trabalho Colaborativo de Autoria (TCA)
             </a>
@@ -1098,7 +1322,7 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
 
           <div className="mt-2">
             <p className="text-xs text-gray-500">Materiais prioritários para análise da IA:</p>
-            <ul className="list-disc pl-5 mt-1 space-y-1 text-xs text-blue-700">
+            <ul className="list-disc pl-5 mt-1 space-y-1 text-xs text-lime-700">
               <li>
                 <a
                   href="https://drive.google.com/file/d/1mnQPWEKlz8y1ZwCX1atY-9B-nM4JyHgm/view?pli=1"
@@ -1214,6 +1438,13 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
           </div>
         )}
 
+        {interactiveGuidesProgressError && (
+          <div className="bg-amber-50 border border-amber-300 rounded-lg p-4 mb-6">
+            <p className="text-amber-900 font-medium">Configuração pendente do progresso dos guias interativos</p>
+            <p className="text-amber-800 text-sm mt-1">{interactiveGuidesProgressError}</p>
+          </div>
+        )}
+
         {aiFeedbackError && (
           <div className="bg-amber-50 border border-amber-300 rounded-lg p-4 mb-6">
             <p className="text-amber-900 font-medium">Configuração pendente do módulo de feedback pedagógico com IA</p>
@@ -1235,7 +1466,7 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
           </div>
         )}
 
-        <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm mb-6">
+        <div className="tca-soft-surface rounded-lg p-6 shadow-sm mb-6">
           <h2 className="text-lg font-semibold text-gray-900 mb-2">Módulo de produto final</h2>
 
           {query.final_product_status === "success" && (
@@ -1353,7 +1584,7 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
 
               <button
                 type="submit"
-                className="bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2 rounded-md text-sm"
+                className="bg-lime-700 hover:bg-lime-800 text-white font-medium px-4 py-2 rounded-md text-sm"
               >
                 Salvar produto final
               </button>
@@ -1361,7 +1592,7 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
           )}
         </div>
 
-        <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm mb-6">
+        <div className="tca-soft-surface rounded-lg p-6 shadow-sm mb-6">
           <h2 className="text-lg font-semibold text-gray-900 mb-2">Fotos do processo</h2>
 
           {query.photo_status === "success" && query.photo_action === "add" && (
@@ -1482,7 +1713,7 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
 
               <button
                 type="submit"
-                className="bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2 rounded-md text-sm"
+                className="bg-lime-700 hover:bg-lime-800 text-white font-medium px-4 py-2 rounded-md text-sm"
               >
                 Registrar foto do processo
               </button>
@@ -1490,7 +1721,7 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
           )}
         </div>
 
-        <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm mb-6">
+        <div className="tca-soft-surface rounded-lg p-6 shadow-sm mb-6">
           <h2 className="text-lg font-semibold text-gray-900 mb-2">Exploração de repertório</h2>
 
           {query.repertory_status === "success" && query.repertory_action === "add" && (
@@ -1660,7 +1891,7 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
 
               <button
                 type="submit"
-                className="bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2 rounded-md text-sm"
+                className="bg-lime-700 hover:bg-lime-800 text-white font-medium px-4 py-2 rounded-md text-sm"
               >
                 Registrar item de repertório
               </button>
@@ -1676,7 +1907,27 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
               Guia interativo registrado com sucesso.
             </p>
           )}
-          {query.guide_status === "invalid" && (
+          {query.guide_status === "success" && query.guide_action === "seed" && (
+            <p className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-md px-3 py-2 mb-3">
+              Microguias iniciais criados com sucesso ({query.guide_seeded || "0"} novo(s)).
+            </p>
+          )}
+          {query.guide_status === "success" && query.guide_action === "progress" && (
+            <p className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-md px-3 py-2 mb-3">
+              Progresso do guia salvo com sucesso.
+            </p>
+          )}
+          {query.guide_status === "noop" && query.guide_action === "seed" && (
+            <p className="text-sm text-blue-700 bg-blue-50 border border-blue-200 rounded-md px-3 py-2 mb-3">
+              Os microguias sugeridos já foram cadastrados para este grupo.
+            </p>
+          )}
+          {query.guide_status === "invalid" && query.guide_action === "progress" && (
+            <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2 mb-3">
+              Para marcar como concluído, informe uma resposta com pelo menos 3 caracteres.
+            </p>
+          )}
+          {query.guide_status === "invalid" && query.guide_action === "add" && (
             <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2 mb-3">
               Dados inválidos. Título e conteúdo devem ter pelo menos 3 caracteres.
             </p>
@@ -1692,54 +1943,168 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
             </p>
           )}
 
+          {canManageInteractiveGuides && (
+            <form action={handleSeedDefaultInteractiveGuides} className="mb-4">
+              <button
+                type="submit"
+                className="bg-indigo-600 hover:bg-indigo-700 text-white font-medium px-4 py-2 rounded-md text-sm"
+              >
+                Popular microguias sugeridos (Fase 1)
+              </button>
+              <p className="text-xs text-gray-500 mt-1">
+                Cria automaticamente um conjunto inicial de microguias alinhados ao TCA sem duplicar títulos já existentes.
+              </p>
+            </form>
+          )}
+
           <div className="space-y-2 mb-4">
             {interactiveGuides.length === 0 ? (
               <p className="text-sm text-gray-500">Ainda não há guias interativos registrados para este grupo.</p>
             ) : (
               interactiveGuides.map((guide) => (
-                <div key={String(guide.id)} className="border border-gray-100 rounded-md px-3 py-2 bg-gray-50">
-                  <div className="flex items-start justify-between gap-2 flex-wrap">
-                    <p className="text-sm font-medium text-gray-900">{guide.title}</p>
-                    <span className="text-xs font-semibold px-2 py-1 rounded-full bg-indigo-100 text-indigo-700">
-                      {guide.guide_type === "escrita"
-                        ? "Escrita"
-                        : guide.guide_type === "metodologia"
-                          ? "Metodologia"
-                          : guide.guide_type === "estrutura"
-                            ? "Estrutura"
-                            : guide.guide_type === "referencias"
-                              ? "Referências"
-                              : guide.guide_type === "apresentacao"
-                                ? "Apresentação"
-                                : "Outro"}
-                    </span>
-                  </div>
+                (() => {
+                  const guideProgress = interactiveGuidesProgress.filter(
+                    (progress) => String(progress.guide_id) === String(guide.id)
+                  );
+                  const completedCount = guideProgress.filter((progress) => progress.status === "concluido").length;
+                  const studentsWithResponse = guideProgress.filter((progress) => !!progress.response_text).length;
+                  const currentStudentProgress = profile
+                    ? guideProgress.find(
+                        (progress) =>
+                          progress.student_profile_id === profile.id && profile.role === "student"
+                      )
+                    : null;
 
-                  <p className="text-sm text-gray-800 mt-1 whitespace-pre-line">{guide.content}</p>
+                  return (
+                    <div key={String(guide.id)} className="border border-gray-100 rounded-md px-3 py-2 bg-gray-50">
+                      <div className="flex items-start justify-between gap-2 flex-wrap">
+                        <p className="text-sm font-medium text-gray-900">{guide.title}</p>
+                        <span className="text-xs font-semibold px-2 py-1 rounded-full bg-indigo-100 text-indigo-700">
+                          {guide.guide_type === "escrita"
+                            ? "Escrita"
+                            : guide.guide_type === "metodologia"
+                              ? "Metodologia"
+                              : guide.guide_type === "estrutura"
+                                ? "Estrutura"
+                                : guide.guide_type === "referencias"
+                                  ? "Referências"
+                                  : guide.guide_type === "apresentacao"
+                                    ? "Apresentação"
+                                    : "Outro"}
+                        </span>
+                      </div>
 
-                  {guide.suggested_activity && (
-                    <p className="text-xs text-gray-700 mt-1 whitespace-pre-line">
-                      Atividade sugerida: {guide.suggested_activity}
-                    </p>
-                  )}
+                      <p className="text-sm text-gray-800 mt-1 whitespace-pre-line">{guide.content}</p>
 
-                  <p className="text-xs text-gray-500 mt-1">
-                    Público: {guide.audience === "students" ? "Estudantes" : guide.audience === "advisors" ? "Orientadores" : "Todos"}
-                    {guide.section_id ? ` • ${sectionTitleById.get(String(guide.section_id)) || "Seção"}` : " • Geral"}
-                    {guide.author_name
-                      ? ` • ${guide.author_name} (${guide.author_role === "advisor" ? "orientador" : guide.author_role === "coordinator" ? "coordenação" : "estudante"})`
-                      : ""}
-                    {guide.created_at
-                      ? ` • ${new Date(guide.created_at).toLocaleString("pt-BR", {
-                          day: "2-digit",
-                          month: "2-digit",
-                          year: "numeric",
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}`
-                      : ""}
-                  </p>
-                </div>
+                      {guide.suggested_activity && (
+                        <p className="text-xs text-gray-700 mt-1 whitespace-pre-line">
+                          Atividade sugerida: {guide.suggested_activity}
+                        </p>
+                      )}
+
+                      <div className="mt-2 text-xs text-gray-700 bg-indigo-50 border border-indigo-100 rounded-md px-2 py-1">
+                        Progresso do guia: {completedCount} conclusão(ões) • {studentsWithResponse} resposta(s) registrada(s)
+                      </div>
+
+                      <p className="text-xs text-gray-500 mt-1">
+                        Público: {guide.audience === "students" ? "Estudantes" : guide.audience === "advisors" ? "Orientadores" : "Todos"}
+                        {guide.section_id ? ` • ${sectionTitleById.get(String(guide.section_id)) || "Seção"}` : " • Geral"}
+                        {guide.author_name
+                          ? ` • ${guide.author_name} (${guide.author_role === "advisor" ? "orientador" : guide.author_role === "coordinator" ? "coordenação" : "estudante"})`
+                          : ""}
+                        {guide.created_at
+                          ? ` • ${new Date(guide.created_at).toLocaleString("pt-BR", {
+                              day: "2-digit",
+                              month: "2-digit",
+                              year: "numeric",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}`
+                          : ""}
+                      </p>
+
+                      {canRespondInteractiveGuides && (
+                        <form action={handleUpsertInteractiveGuideProgress} className="mt-3 border-t border-gray-200 pt-3 space-y-2">
+                          <input type="hidden" name="guide_id" value={String(guide.id)} />
+
+                          <div>
+                            <label
+                              htmlFor={`guide-progress-status-${String(guide.id)}`}
+                              className="block text-xs text-gray-700 mb-1"
+                            >
+                              Seu status neste guia
+                            </label>
+                            <select
+                              id={`guide-progress-status-${String(guide.id)}`}
+                              name="status"
+                              defaultValue={currentStudentProgress?.status || "pendente"}
+                              className="w-full md:w-60 px-3 py-2 border border-gray-300 rounded-md text-black bg-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            >
+                              <option value="pendente">Pendente</option>
+                              <option value="concluido">Concluído</option>
+                            </select>
+                          </div>
+
+                          <div>
+                            <label
+                              htmlFor={`guide-progress-response-${String(guide.id)}`}
+                              className="block text-xs text-gray-700 mb-1"
+                            >
+                              Sua resposta/produção (obrigatória ao concluir)
+                            </label>
+                            <textarea
+                              id={`guide-progress-response-${String(guide.id)}`}
+                              name="response_text"
+                              rows={2}
+                              defaultValue={currentStudentProgress?.response_text || ""}
+                              placeholder="Ex.: Escrevemos a pergunta investigativa final e validamos com o grupo."
+                              className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                          </div>
+
+                          <button
+                            type="submit"
+                            className="bg-emerald-600 hover:bg-emerald-700 text-white font-medium px-3 py-2 rounded-md text-xs"
+                          >
+                            Salvar progresso deste guia
+                          </button>
+                        </form>
+                      )}
+
+                      {guideProgress.length > 0 && (
+                        <details className="mt-2">
+                          <summary className="cursor-pointer text-xs text-gray-700 hover:text-gray-900">
+                            Ver registros de progresso ({guideProgress.length})
+                          </summary>
+                          <div className="mt-2 space-y-1">
+                            {guideProgress.map((progress) => (
+                              <div
+                                key={`${String(guide.id)}-${String(progress.student_profile_id)}`}
+                                className="text-xs text-gray-700 border border-gray-200 rounded px-2 py-1 bg-white"
+                              >
+                                <p>
+                                  <span className="font-medium">{progress.student_name}</span> — {progress.status === "concluido" ? "Concluído" : "Pendente"}
+                                  {progress.completed_at
+                                    ? ` • ${new Date(progress.completed_at).toLocaleString("pt-BR", {
+                                        day: "2-digit",
+                                        month: "2-digit",
+                                        year: "numeric",
+                                        hour: "2-digit",
+                                        minute: "2-digit",
+                                      })}`
+                                    : ""}
+                                </p>
+                                {progress.response_text && (
+                                  <p className="text-gray-600 whitespace-pre-line mt-1">{progress.response_text}</p>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </details>
+                      )}
+                    </div>
+                  );
+                })()
               ))
             )}
           </div>

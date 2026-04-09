@@ -143,10 +143,11 @@ export default async function StudentsPage({ searchParams }: StudentsPageProps) 
   const inactiveStudentsCount = students.length - activeStudentsCount;
 
   return (
-    <main className="min-h-screen bg-gray-50">
+    <main className="min-h-screen bg-transparent">
       <section className="max-w-4xl mx-auto px-6 py-10">
+        <div className="tca-stripes h-1.5 w-full rounded-md mb-6" />
         <header className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Estudantes</h1>
+          <h1 className="text-3xl font-bold tca-title-guide">Estudantes</h1>
           <p className="text-gray-600 mt-2">Cadastro institucional de estudantes do TCA.</p>
         </header>
 
@@ -186,7 +187,7 @@ export default async function StudentsPage({ searchParams }: StudentsPageProps) 
           </div>
         )}
 
-        <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm mb-8">
+        <div className="tca-soft-surface rounded-lg p-6 shadow-sm mb-8">
           <h2 className="text-xl font-semibold text-gray-900 mb-2">Importar estudantes por arquivo</h2>
           <p className="text-sm text-gray-600 mb-4">
             Envie um CSV com colunas como: <code>name,email,registration_code,school,grade</code>
@@ -209,14 +210,14 @@ export default async function StudentsPage({ searchParams }: StudentsPageProps) 
 
             <button
               type="submit"
-              className="bg-indigo-600 hover:bg-indigo-700 text-white font-medium px-4 py-2 rounded-md"
+              className="bg-lime-700 hover:bg-lime-800 text-white font-medium px-4 py-2 rounded-md"
             >
               Importar CSV
             </button>
           </form>
         </div>
 
-        <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm mb-8">
+        <div className="tca-soft-surface rounded-lg p-6 shadow-sm mb-8">
           <h2 className="text-xl font-semibold text-gray-900 mb-4">Cadastrar estudante</h2>
 
           <form action={handleCreateStudent} className="space-y-4">
@@ -227,7 +228,7 @@ export default async function StudentsPage({ searchParams }: StudentsPageProps) 
                 name="name"
                 type="text"
                 placeholder="Ex.: Maria da Silva"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-lime-500"
               />
             </div>
 
@@ -238,7 +239,7 @@ export default async function StudentsPage({ searchParams }: StudentsPageProps) 
                 name="email"
                 type="email"
                 placeholder="Ex.: maria.silva@escola.edu.br"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-lime-500"
               />
             </div>
 
@@ -250,7 +251,7 @@ export default async function StudentsPage({ searchParams }: StudentsPageProps) 
                   name="registration_code"
                   type="text"
                   placeholder="Ex.: 202600123"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-lime-500"
                 />
               </div>
 
@@ -261,7 +262,7 @@ export default async function StudentsPage({ searchParams }: StudentsPageProps) 
                   name="grade"
                   type="text"
                   placeholder="Ex.: 9º ano"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-lime-500"
                 />
               </div>
             </div>
@@ -273,14 +274,14 @@ export default async function StudentsPage({ searchParams }: StudentsPageProps) 
                 name="school"
                 type="text"
                 placeholder="Ex.: EMEF Exemplo"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-lime-500"
               />
             </div>
 
             <div className="flex flex-wrap gap-3">
               <button
                 type="submit"
-                className="bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2 rounded-md"
+                className="bg-lime-700 hover:bg-lime-800 text-white font-medium px-4 py-2 rounded-md"
               >
                 Cadastrar estudante
               </button>
@@ -295,7 +296,7 @@ export default async function StudentsPage({ searchParams }: StudentsPageProps) 
           </form>
         </div>
 
-        <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm">
+        <div className="tca-soft-surface rounded-lg p-6 shadow-sm">
           <h2 className="text-xl font-semibold text-gray-900 mb-4">Estudantes cadastrados</h2>
           <p className="text-sm text-gray-600">
             Total de estudantes cadastrados: <strong>{students.length}</strong>
@@ -354,7 +355,7 @@ export default async function StudentsPage({ searchParams }: StudentsPageProps) 
                           name="name"
                           type="text"
                           defaultValue={student.name}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-lime-500"
                         />
                       </div>
 
@@ -367,7 +368,7 @@ export default async function StudentsPage({ searchParams }: StudentsPageProps) 
                           name="email"
                           type="email"
                           defaultValue={student.email}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-lime-500"
                         />
                       </div>
 
@@ -380,7 +381,7 @@ export default async function StudentsPage({ searchParams }: StudentsPageProps) 
                           name="registration_code"
                           type="text"
                           defaultValue={student.registration_code ?? ""}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-lime-500"
                         />
                       </div>
 
@@ -393,7 +394,7 @@ export default async function StudentsPage({ searchParams }: StudentsPageProps) 
                           name="grade"
                           type="text"
                           defaultValue={student.grade ?? ""}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-lime-500"
                         />
                       </div>
                     </div>
@@ -407,14 +408,14 @@ export default async function StudentsPage({ searchParams }: StudentsPageProps) 
                         name="school"
                         type="text"
                         defaultValue={student.school ?? ""}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-lime-500"
                       />
                     </div>
 
                     <div className="flex flex-wrap gap-3">
                       <button
                         type="submit"
-                        className="bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2 rounded-md text-sm"
+                        className="bg-lime-700 hover:bg-lime-800 text-white font-medium px-4 py-2 rounded-md text-sm"
                       >
                         Salvar alterações
                       </button>

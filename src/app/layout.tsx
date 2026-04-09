@@ -6,7 +6,7 @@ import "./globals.css";
 // Esses dados aparecem em abas do navegador e ajudam na identificação do sistema.
 export const metadata: Metadata = {
   title: "TCA Hub",
-  description: "Plataforma para apoio ao Trabalho de Conclusão Autoral",
+  description: "Plataforma para apoio ao Trabalho Colaborativo de Autoria",
 };
 
 // Estrutura principal da aplicação.
@@ -18,7 +18,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="pt-BR">
-      <body>
+      <body className="min-h-screen text-slate-800 antialiased">
         <AppNavbar />
         {children}
       </body>

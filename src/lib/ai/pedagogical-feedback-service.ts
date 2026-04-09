@@ -28,6 +28,17 @@ function getRequiredEnvironmentVariable(name: string): string {
   return value;
 }
 
+function getRequiredReferenceContext(): string {
+  const value = process.env.AI_FEEDBACK_REFERENCE_CONTEXT;
+  if (!value || value.trim().length === 0) {
+    throw new Error(
+      "Variável obrigatória AI_FEEDBACK_REFERENCE_CONTEXT ausente. Inclua um resumo dos documentos prioritários do TCA no .env.local para gerar feedback com IA."
+    );
+  }
+
+  return value.trim();
+}
+
 function safeString(value: unknown): string | null {
   if (typeof value !== "string") {
     return null;
@@ -56,7 +67,7 @@ export async function generatePedagogicalFeedbackWithAI(
   const apiKey = getRequiredEnvironmentVariable("AI_FEEDBACK_API_KEY");
   const apiUrl = process.env.AI_FEEDBACK_API_URL?.trim() || "https://api.openai.com/v1/chat/completions";
   const modelName = process.env.AI_FEEDBACK_MODEL?.trim() || "gpt-4o-mini";
-  const referenceContext = process.env.AI_FEEDBACK_REFERENCE_CONTEXT?.trim() || null;
+  const referenceContext = getRequiredReferenceContext();
 
   const referenceLinks = TCA_PRIORITY_REFERENCE_DOCS
     .map((doc, index) => `${index + 1}. ${doc.title}: ${doc.url}`)
@@ -67,9 +78,7 @@ export async function generatePedagogicalFeedbackWithAI(
     "Considere que se trata de um projeto da prefeitura de São Paulo intitulado Trabalho Colaborativo de Autoria (TCA), desenvolvido por um grupo de estudantes do ensino fundamental II, com ênfase no 9º ano.",
     "Use prioritariamente os seguintes documentos de referência institucional do TCA:",
     referenceLinks,
-    referenceContext
-      ? `Trechos de referência (usar como base prioritária):\n${referenceContext}`
-      : "Caso os trechos completos dos documentos não estejam disponíveis no contexto, preserve a aderência aos princípios do TCA (autoria estudantil, investigação do território, transformação social, colaboração e intervenção comunitária).",
+    `Trechos de referência (usar como base prioritária):\n${referenceContext}`,
     "Analise o conteúdo da seção e devolva APENAS um JSON com as chaves:",
     "feedback_text, strengths, improvements, suggested_next_steps.",
     "Todos os campos devem ser texto em português do Brasil.",

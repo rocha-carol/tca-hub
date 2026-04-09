@@ -148,8 +148,8 @@ export default function SignUpForm() {
   };
 
   return (
-    <div role="form" aria-label="Formulário de cadastro" className="w-full max-w-md mx-auto p-6 bg-white rounded-lg shadow-md">
-      <h2 className="text-2xl font-bold mb-6 text-gray-800">Criar Conta</h2>
+    <div role="form" aria-label="Formulário de cadastro" className="w-full max-w-md mx-auto p-6 bg-white border border-lime-200 rounded-xl shadow-md">
+      <h2 className="text-2xl font-bold mb-6 text-lime-800">Criar Conta</h2>
 
       {/* Mensagem de erro */}
       {error && (
@@ -178,7 +178,7 @@ export default function SignUpForm() {
           onChange={handleChange}
           disabled={loading || success}
           placeholder="Seu nome completo"
-          className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
+          className="w-full px-3 py-2 border border-slate-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-lime-500 disabled:bg-gray-100"
         />
       </div>
 
@@ -195,7 +195,7 @@ export default function SignUpForm() {
           onChange={handleChange}
           disabled={loading || success}
           placeholder="seu.email@exemplo.com"
-          className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
+          className="w-full px-3 py-2 border border-slate-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-lime-500 disabled:bg-gray-100"
         />
       </div>
 
@@ -212,7 +212,7 @@ export default function SignUpForm() {
           onChange={handleChange}
           disabled={loading || success}
           placeholder="••••••••"
-          className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
+          className="w-full px-3 py-2 border border-slate-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-lime-500 disabled:bg-gray-100"
         />
       </div>
 
@@ -229,7 +229,7 @@ export default function SignUpForm() {
           onChange={handleChange}
           disabled={loading || success}
           placeholder="••••••••"
-          className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
+          className="w-full px-3 py-2 border border-slate-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-lime-500 disabled:bg-gray-100"
         />
       </div>
 
@@ -240,7 +240,7 @@ export default function SignUpForm() {
           void handleSubmit();
         }}
         disabled={loading || success}
-        className="w-full bg-blue-500 hover:bg-blue-600 disabled:bg-gray-400 text-white font-medium py-2 px-4 rounded-md transition"
+        className="w-full bg-lime-700 hover:bg-lime-800 disabled:bg-gray-400 text-white font-medium py-2 px-4 rounded-md transition"
       >
         {loading ? "Criando conta..." : success ? "✓ Conta criada!" : "Criar Conta"}
       </button>
@@ -248,7 +248,7 @@ export default function SignUpForm() {
       {/* Link para login */}
       <p className="text-center mt-4 text-sm text-gray-600">
         Já tem conta?{" "}
-        <a href="/auth/login" className="text-blue-500 hover:text-blue-700 font-medium">
+        <a href="/auth/login" className="text-lime-700 hover:text-lime-800 font-medium">
           Faça login
         </a>
       </p>

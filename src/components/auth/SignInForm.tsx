@@ -109,8 +109,8 @@ export default function SignInForm() {
   };
 
   return (
-    <div role="form" aria-label="Formulário de login" className="w-full max-w-md mx-auto p-6 bg-white rounded-lg shadow-md">
-      <h2 className="text-2xl font-bold mb-6 text-gray-800">Fazer Login</h2>
+    <div role="form" aria-label="Formulário de login" className="w-full max-w-md mx-auto p-6 bg-white border border-lime-200 rounded-xl shadow-md">
+      <h2 className="text-2xl font-bold mb-6 text-lime-800">Fazer Login</h2>
 
       {/* Mensagem de erro */}
       {error && (
@@ -139,7 +139,7 @@ export default function SignInForm() {
           onChange={handleChange}
           disabled={loading || success}
           placeholder="seu.email@exemplo.com"
-          className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
+          className="w-full px-3 py-2 border border-slate-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-lime-500 disabled:bg-gray-100"
         />
       </div>
 
@@ -157,7 +157,7 @@ export default function SignInForm() {
             onChange={handleChange}
             disabled={loading || success}
             placeholder="••••••••"
-            className="w-full px-3 py-2 pr-12 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100"
+            className="w-full px-3 py-2 pr-12 border border-slate-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-lime-500 disabled:bg-gray-100"
           />
           <button
             type="button"
@@ -206,7 +206,7 @@ export default function SignInForm() {
           void handleSubmit();
         }}
         disabled={loading || success}
-        className="w-full bg-blue-500 hover:bg-blue-600 disabled:bg-gray-400 text-white font-medium py-2 px-4 rounded-md transition"
+        className="w-full bg-lime-700 hover:bg-lime-800 disabled:bg-gray-400 text-white font-medium py-2 px-4 rounded-md transition"
       >
         {loading ? "Fazendo login..." : success ? "✓ Login realizado!" : "Fazer Login"}
       </button>
@@ -214,7 +214,7 @@ export default function SignInForm() {
       {/* Link para cadastro */}
       <p className="text-center mt-4 text-sm text-gray-600">
         Não tem conta?{" "}
-        <a href="/auth/signup" className="text-blue-500 hover:text-blue-700 font-medium">
+        <a href="/auth/signup" className="text-lime-700 hover:text-lime-800 font-medium">
           Crie uma agora
         </a>
       </p>

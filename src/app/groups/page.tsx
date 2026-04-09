@@ -134,19 +134,20 @@ export default async function GroupsPage({ searchParams }: GroupsPageProps) {
       : groups.filter((group) => (group.status || "planejamento") === currentFilter);
 
   return (
-    <main className="min-h-screen bg-gray-50">
+    <main className="min-h-screen bg-transparent">
       <section className="max-w-4xl mx-auto px-6 py-10">
+        <div className="tca-stripes h-1.5 w-full rounded-md mb-6" />
         <header className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Grupos</h1>
+          <h1 className="text-3xl font-bold tca-title-guide">Grupos</h1>
           <p className="text-gray-600 mt-2">
             Organize os membros e acompanhe os grupos de TCA.
           </p>
         </header>
 
         {fromCoordinator && (
-          <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-4 mb-6">
-            <p className="text-indigo-900 font-medium">Modo coordenador: criação manual de grupos</p>
-            <p className="text-indigo-800 text-sm mt-1">
+          <div className="bg-lime-50 border border-lime-200 rounded-lg p-4 mb-6">
+            <p className="text-lime-900 font-medium">Modo coordenador: criação manual de grupos</p>
+            <p className="text-lime-800 text-sm mt-1">
               Selecione estudantes cadastrados ou preencha manualmente os integrantes para criar um grupo.
             </p>
           </div>
@@ -160,16 +161,16 @@ export default async function GroupsPage({ searchParams }: GroupsPageProps) {
         )}
 
         {studentsError && (
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-            <p className="text-blue-900 font-medium mb-1">Vinculação com estudantes ainda indisponível</p>
-            <p className="text-blue-800 text-sm">{studentsError}</p>
-            <p className="text-blue-700 text-sm mt-2">
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
+            <p className="text-yellow-900 font-medium mb-1">Vinculação com estudantes ainda indisponível</p>
+            <p className="text-yellow-800 text-sm">{studentsError}</p>
+            <p className="text-yellow-700 text-sm mt-2">
               Enquanto isso, a criação manual de grupos continua disponível.
             </p>
           </div>
         )}
 
-        <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm mb-8">
+        <div className="tca-soft-surface rounded-lg p-6 shadow-sm mb-8">
           <h2 className="text-xl font-semibold text-gray-900 mb-4">Integrantes do grupo e série</h2>
 
           <form action={handleCreateGroup} className="space-y-3">
@@ -185,7 +186,7 @@ export default async function GroupsPage({ searchParams }: GroupsPageProps) {
                   id="student_1_id"
                   name="student_1_id"
                   defaultValue=""
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-lime-500"
                 >
                   <option value="">— Selecionar estudante cadastrado —</option>
                   {activeStudents.map((student) => (
@@ -201,14 +202,14 @@ export default async function GroupsPage({ searchParams }: GroupsPageProps) {
                   name="member_1_name"
                   type="text"
                   placeholder="Nome do integrante 1 (ou preenchimento manual)"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-lime-500"
                 />
                 <input
                   id="member_1_series"
                   name="member_1_series"
                   type="text"
                   placeholder="Série do integrante 1 (ou preenchimento manual)"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-lime-500"
                 />
               </div>
             </div>
@@ -225,7 +226,7 @@ export default async function GroupsPage({ searchParams }: GroupsPageProps) {
                   id="student_2_id"
                   name="student_2_id"
                   defaultValue=""
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-lime-500"
                 >
                   <option value="">— Opcional —</option>
                   {activeStudents.map((student) => (
@@ -241,14 +242,14 @@ export default async function GroupsPage({ searchParams }: GroupsPageProps) {
                   name="member_2_name"
                   type="text"
                   placeholder="Nome do integrante 2 (ou preenchimento manual)"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-lime-500"
                 />
                 <input
                   id="member_2_series"
                   name="member_2_series"
                   type="text"
                   placeholder="Série do integrante 2 (ou preenchimento manual)"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-lime-500"
                 />
               </div>
             </div>
@@ -265,7 +266,7 @@ export default async function GroupsPage({ searchParams }: GroupsPageProps) {
                   id="student_3_id"
                   name="student_3_id"
                   defaultValue=""
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-lime-500"
                 >
                   <option value="">— Opcional —</option>
                   {activeStudents.map((student) => (
@@ -281,14 +282,14 @@ export default async function GroupsPage({ searchParams }: GroupsPageProps) {
                   name="member_3_name"
                   type="text"
                   placeholder="Nome do integrante 3 (ou preenchimento manual)"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-lime-500"
                 />
                 <input
                   id="member_3_series"
                   name="member_3_series"
                   type="text"
                   placeholder="Série do integrante 3 (ou preenchimento manual)"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-lime-500"
                 />
               </div>
             </div>
@@ -302,7 +303,7 @@ export default async function GroupsPage({ searchParams }: GroupsPageProps) {
                 name="theme"
                 type="text"
                 placeholder="Ex.: Sustentabilidade na escola"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-lime-500"
               />
             </div>
 
@@ -315,14 +316,14 @@ export default async function GroupsPage({ searchParams }: GroupsPageProps) {
                 name="description"
                 rows={3}
                 placeholder="Descreva brevemente o projeto do grupo"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-lime-500"
               />
             </div>
 
             <div className="flex flex-wrap gap-3">
               <button
                 type="submit"
-                className="bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2 rounded-md"
+                className="bg-lime-700 hover:bg-lime-800 text-white font-medium px-4 py-2 rounded-md"
               >
                 Criar grupo
               </button>
@@ -337,7 +338,7 @@ export default async function GroupsPage({ searchParams }: GroupsPageProps) {
           </form>
         </div>
 
-        <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm">
+        <div className="tca-soft-surface rounded-lg p-6 shadow-sm">
           <h2 className="text-xl font-semibold text-gray-900 mb-4">Grupos cadastrados</h2>
 
           <div className="flex flex-wrap gap-2 mb-4">
@@ -345,7 +346,7 @@ export default async function GroupsPage({ searchParams }: GroupsPageProps) {
               href="/groups"
               className={`px-3 py-1.5 rounded-md text-sm font-medium ${
                 currentFilter === "all"
-                  ? "bg-blue-600 text-white"
+                  ? "bg-lime-700 text-white"
                   : "bg-gray-100 hover:bg-gray-200 text-gray-700"
               }`}
             >
@@ -355,7 +356,7 @@ export default async function GroupsPage({ searchParams }: GroupsPageProps) {
               href="/groups?status=planejamento"
               className={`px-3 py-1.5 rounded-md text-sm font-medium ${
                 currentFilter === "planejamento"
-                  ? "bg-blue-600 text-white"
+                  ? "bg-lime-700 text-white"
                   : "bg-gray-100 hover:bg-gray-200 text-gray-700"
               }`}
             >
@@ -365,7 +366,7 @@ export default async function GroupsPage({ searchParams }: GroupsPageProps) {
               href="/groups?status=em_andamento"
               className={`px-3 py-1.5 rounded-md text-sm font-medium ${
                 currentFilter === "em_andamento"
-                  ? "bg-blue-600 text-white"
+                  ? "bg-lime-700 text-white"
                   : "bg-gray-100 hover:bg-gray-200 text-gray-700"
               }`}
             >
@@ -375,7 +376,7 @@ export default async function GroupsPage({ searchParams }: GroupsPageProps) {
               href="/groups?status=concluido"
               className={`px-3 py-1.5 rounded-md text-sm font-medium ${
                 currentFilter === "concluido"
-                  ? "bg-blue-600 text-white"
+                  ? "bg-lime-700 text-white"
                   : "bg-gray-100 hover:bg-gray-200 text-gray-700"
               }`}
             >
@@ -393,7 +394,7 @@ export default async function GroupsPage({ searchParams }: GroupsPageProps) {
                   <p className="text-xs text-gray-500 mb-2">
                     Status: {getStatusLabel((group.status as GroupStatus) || "planejamento")}
                   </p>
-                  <p className="text-xs text-blue-700 mb-2">
+                  <p className="text-xs text-lime-700 mb-2">
                     Estudantes vinculados: {[group.student_1_id, group.student_2_id, group.student_3_id].filter(Boolean).length}
                   </p>
                   <ul className="text-sm text-gray-800 space-y-0.5">
@@ -411,7 +412,7 @@ export default async function GroupsPage({ searchParams }: GroupsPageProps) {
                   <div className="mt-3">
                     <Link
                       href={`/groups/${group.id}`}
-                      className="text-blue-600 hover:underline text-sm font-medium"
+                      className="text-lime-700 hover:underline text-sm font-medium"
                     >
                       Ver detalhes →
                     </Link>

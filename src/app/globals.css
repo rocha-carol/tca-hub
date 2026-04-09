@@ -1,8 +1,15 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #f6f5f0;
+  --foreground: #2c3a3a;
+  --tca-primary: #5a9a45;
+  --tca-primary-strong: #477b36;
+  --tca-secondary: #0ea5a0;
+  --tca-accent: #f0c44f;
+  --tca-highlight: #e6546a;
+  --tca-surface: #ffffff;
+  --tca-border: #dfe4d2;
 }
 
 @theme inline {
@@ -14,13 +21,59 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --background: #1f2828;
+    --foreground: #ecf2ea;
+    --tca-primary: #8dcf6f;
+    --tca-primary-strong: #79b95e;
+    --tca-secondary: #54c5bc;
+    --tca-accent: #f4d678;
+    --tca-highlight: #ff8ba0;
+    --tca-surface: #2b3535;
+    --tca-border: #4a5a54;
   }
 }
 
 body {
-  background: var(--background);
+  background: radial-gradient(circle at top left, #fffdf4 0%, var(--background) 42%, #f3f7e9 100%);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: "Inter", Arial, Helvetica, sans-serif;
+}
+
+a {
+  color: var(--tca-primary);
+}
+
+a:hover {
+  color: var(--tca-primary-strong);
+}
+
+::selection {
+  background: color-mix(in srgb, var(--tca-primary) 24%, white);
+  color: var(--foreground);
+}
+
+.tca-stripes {
+  background: repeating-linear-gradient(
+    90deg,
+    #cb2f4f 0 6px,
+    #f4cc52 6px 12px,
+    #93b93f 12px 18px,
+    #f08e3d 18px 24px,
+    #2aa9c8 24px 30px,
+    #e6546a 30px 36px,
+    #c8d85b 36px 42px,
+    #f0c44f 42px 48px,
+    #7aa653 48px 54px,
+    #e5485e 54px 60px
+  );
+}
+
+.tca-soft-surface {
+  background: linear-gradient(180deg, #fffffb 0%, #f8f8f2 100%);
+  border: 1px solid var(--tca-border);
+}
+
+.tca-title-guide {
+  color: var(--tca-primary);
+  text-shadow: 1px 1px 0 #ffffff, 2px 2px 0 color-mix(in srgb, var(--tca-primary) 35%, #5d6b4f);
 }

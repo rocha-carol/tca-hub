@@ -98,10 +98,10 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 
   if (!user) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-        <div className="bg-white rounded-lg shadow-md p-6 text-center">
+      <div className="min-h-screen bg-transparent flex items-center justify-center p-4">
+        <div className="tca-soft-surface rounded-lg shadow-md p-6 text-center">
           <p className="text-gray-600 mb-4">Você precisa estar logado para acessar o dashboard.</p>
-          <Link href="/auth/login" className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-6 rounded-md">
+          <Link href="/auth/login" className="bg-lime-700 hover:bg-lime-800 text-white font-medium py-2 px-6 rounded-md">
             Ir para Login
           </Link>
         </div>
@@ -147,10 +147,11 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   };
 
   return (
-    <main className="min-h-screen bg-gray-50">
+    <main className="min-h-screen bg-transparent">
       <section className="max-w-5xl mx-auto px-6 py-10">
+        <div className="tca-stripes h-1.5 w-full rounded-md mb-6" />
         <header className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
+          <h1 className="text-3xl font-bold tca-title-guide">Dashboard</h1>
           <p className="text-gray-600 mt-1">
             Olá, {profile?.name || user.email}
           </p>
@@ -158,7 +159,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
             <div className="mt-4">
               <Link
                 href="/groups?from=coordinator"
-                className="inline-flex items-center bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-4 py-2 rounded-md"
+                className="inline-flex items-center bg-lime-700 hover:bg-lime-800 text-white text-sm font-medium px-4 py-2 rounded-md"
               >
                 Criar grupo manualmente
               </Link>
@@ -168,15 +169,15 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 
         {/* Contadores */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
-          <div className="bg-white border border-gray-200 rounded-lg p-5 shadow-sm">
+          <div className="tca-soft-surface rounded-lg p-5 shadow-sm">
             <p className="text-sm font-medium text-gray-500">Total de grupos</p>
-            <p className="text-4xl font-bold text-blue-600 mt-1">{groups.length}</p>
-            <Link href="/groups" className="text-sm text-blue-600 hover:underline mt-2 inline-block">
+            <p className="text-4xl font-bold text-lime-700 mt-1">{groups.length}</p>
+            <Link href="/groups" className="text-sm text-lime-700 hover:underline mt-2 inline-block">
               Ver todos os grupos →
             </Link>
           </div>
 
-          <div className="bg-white border border-gray-200 rounded-lg p-5 shadow-sm">
+          <div className="tca-soft-surface rounded-lg p-5 shadow-sm">
             <p className="text-sm font-medium text-gray-500">Orientadores cadastrados</p>
             <p className="text-4xl font-bold text-green-600 mt-1">{advisorCount}</p>
             <Link href="/advisors" className="text-sm text-green-600 hover:underline mt-2 inline-block">
@@ -185,7 +186,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           </div>
         </div>
 
-        <div className="bg-white border border-gray-200 rounded-lg p-5 shadow-sm mb-8">
+        <div className="tca-soft-surface rounded-lg p-5 shadow-sm mb-8">
           <h2 className="text-lg font-semibold text-gray-900 mb-3">Progresso dos grupos</h2>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
             <p className="text-gray-700">Planejamento: <strong>{statusCount.planejamento}</strong></p>
@@ -196,17 +197,17 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 
         {/* Painel do coordenador */}
         {isCoordinator && coordinatorSummary && (
-          <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm mb-8">
+          <div className="tca-soft-surface rounded-lg p-6 shadow-sm mb-8">
             <h2 className="text-xl font-semibold text-gray-900 mb-5">Painel do coordenador</h2>
 
-            <div className="mb-5 rounded-md border border-indigo-200 bg-indigo-50 px-4 py-3">
-              <p className="text-sm font-medium text-indigo-900">Ação rápida do coordenador</p>
-              <p className="text-xs text-indigo-800 mt-1">
+            <div className="mb-5 rounded-md border border-lime-200 bg-lime-50 px-4 py-3">
+              <p className="text-sm font-medium text-lime-900">Ação rápida do coordenador</p>
+              <p className="text-xs text-lime-800 mt-1">
                 Criação manual de grupos para organizar estudantes sem vínculo ou ajustar composições.
               </p>
               <Link
                 href="/groups?from=coordinator"
-                className="inline-block mt-2 text-xs font-semibold text-indigo-700 hover:underline"
+                className="inline-block mt-2 text-xs font-semibold text-lime-700 hover:underline"
               >
                 Criar grupo manualmente →
               </Link>
@@ -341,7 +342,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                                   id={`manual-primary-${group.id}`}
                                   name="primary_advisor_id"
                                   defaultValue=""
-                                  className="w-full px-2.5 py-1.5 border border-gray-300 rounded-md text-black bg-white text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                  className="w-full px-2.5 py-1.5 border border-gray-300 rounded-md text-black bg-white text-xs focus:outline-none focus:ring-2 focus:ring-lime-500"
                                 >
                                   <option value="">— Selecionar —</option>
                                   {activeAdvisors.map((advisor) => (
@@ -360,7 +361,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                                   id={`manual-co-${group.id}`}
                                   name="co_advisor_id"
                                   defaultValue=""
-                                  className="w-full px-2.5 py-1.5 border border-gray-300 rounded-md text-black bg-white text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                  className="w-full px-2.5 py-1.5 border border-gray-300 rounded-md text-black bg-white text-xs focus:outline-none focus:ring-2 focus:ring-lime-500"
                                 >
                                   <option value="">— Nenhum —</option>
                                   {activeAdvisors.map((advisor) => (
@@ -374,14 +375,14 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                               <div className="flex items-center justify-between gap-2">
                                 <button
                                   type="submit"
-                                  className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium px-3 py-1.5 rounded-md"
+                                  className="bg-lime-700 hover:bg-lime-800 text-white text-xs font-medium px-3 py-1.5 rounded-md"
                                 >
                                   Vincular manualmente
                                 </button>
 
                                 <Link
                                   href={`/groups/${group.id}`}
-                                  className="text-xs text-blue-600 hover:underline font-medium"
+                                  className="text-xs text-lime-700 hover:underline font-medium"
                                 >
                                   Detalhes →
                                 </Link>
@@ -390,7 +391,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                           ) : (
                             <div className="text-right">
                               <p className="text-xs text-gray-500 mb-1">Sem orientadores ativos para vincular.</p>
-                              <Link href="/advisors" className="text-xs text-blue-600 hover:underline font-medium">
+                              <Link href="/advisors" className="text-xs text-lime-700 hover:underline font-medium">
                                 Cadastrar orientador →
                               </Link>
                             </div>
@@ -419,7 +420,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                           {student.school || "Escola não informada"}
                         </p>
                       </div>
-                      <Link href="/groups" className="shrink-0 text-xs text-blue-600 hover:underline font-medium">
+                      <Link href="/groups" className="shrink-0 text-xs text-lime-700 hover:underline font-medium">
                         Vincular em grupo →
                       </Link>
                     </div>
@@ -431,10 +432,10 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         )}
 
         {/* Grupos recentes */}
-        <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm mb-8">
+        <div className="tca-soft-surface rounded-lg p-6 shadow-sm mb-8">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-semibold text-gray-900">Grupos recentes</h2>
-            <Link href="/groups" className="text-sm text-blue-600 hover:underline">
+            <Link href="/groups" className="text-sm text-lime-700 hover:underline">
               Ver todos
             </Link>
           </div>
@@ -442,7 +443,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           {recentGroups.length === 0 ? (
             <p className="text-gray-500 text-sm">
               Nenhum grupo cadastrado.{" "}
-              <Link href="/groups" className="text-blue-600 hover:underline">
+              <Link href="/groups" className="text-lime-700 hover:underline">
                 Criar primeiro grupo
               </Link>
             </p>
@@ -464,7 +465,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
                   </div>
                   <Link
                     href={`/groups/${group.id}`}
-                    className="text-sm text-blue-600 hover:underline"
+                    className="text-sm text-lime-700 hover:underline"
                   >
                     Ver detalhes →
                   </Link>
@@ -475,7 +476,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         </div>
 
         {/* Perfil */}
-        <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm">
+        <div className="tca-soft-surface rounded-lg p-6 shadow-sm">
           <h2 className="text-xl font-semibold text-gray-900 mb-4">Meu perfil</h2>
 
           <ul className="space-y-1 text-sm text-gray-700 mb-5">
@@ -490,11 +491,11 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
               name="name"
               defaultValue={profile?.name || user.user_metadata?.name || ""}
               placeholder="Editar nome"
-              className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-lime-500"
             />
             <button
               type="submit"
-              className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-md"
+              className="bg-lime-700 hover:bg-lime-800 text-white font-medium py-2 px-4 rounded-md"
             >
               Salvar nome
             </button>

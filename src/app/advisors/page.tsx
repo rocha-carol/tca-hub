@@ -166,10 +166,11 @@ export default async function AdvisorsPage({ searchParams }: AdvisorsPageProps) 
   const inactiveAdvisorsCount = advisors.length - activeAdvisorsCount;
 
   return (
-    <main className="min-h-screen bg-gray-50">
+    <main className="min-h-screen bg-transparent">
       <section className="max-w-4xl mx-auto px-6 py-10">
+        <div className="tca-stripes h-1.5 w-full rounded-md mb-6" />
         <header className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Orientadores</h1>
+          <h1 className="text-3xl font-bold tca-title-guide">Orientadores</h1>
           <p className="text-gray-600 mt-2">
             Cadastre e gerencie os orientadores dos grupos de TCA.
           </p>
@@ -211,7 +212,7 @@ export default async function AdvisorsPage({ searchParams }: AdvisorsPageProps) 
           </div>
         )}
 
-        <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm mb-8">
+        <div className="tca-soft-surface rounded-lg p-6 shadow-sm mb-8">
           <h2 className="text-xl font-semibold text-gray-900 mb-2">Importar orientadores por arquivo</h2>
           <p className="text-sm text-gray-600 mb-4">
             Envie um CSV com colunas como: <code>name,email,role_title,employee_code,school,area_of_activity,max_orientacoes</code>
@@ -234,7 +235,7 @@ export default async function AdvisorsPage({ searchParams }: AdvisorsPageProps) 
 
             <button
               type="submit"
-              className="bg-indigo-600 hover:bg-indigo-700 text-white font-medium px-4 py-2 rounded-md"
+              className="bg-lime-700 hover:bg-lime-800 text-white font-medium px-4 py-2 rounded-md"
             >
               Importar CSV
             </button>
@@ -242,7 +243,7 @@ export default async function AdvisorsPage({ searchParams }: AdvisorsPageProps) 
         </div>
 
         {/* Formulário de cadastro */}
-        <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm mb-8">
+        <div className="tca-soft-surface rounded-lg p-6 shadow-sm mb-8">
           <h2 className="text-xl font-semibold text-gray-900 mb-4">Cadastrar orientador</h2>
 
           <form action={handleCreateAdvisor} className="space-y-4">
@@ -255,7 +256,7 @@ export default async function AdvisorsPage({ searchParams }: AdvisorsPageProps) 
                 name="name"
                 type="text"
                 placeholder="Ex.: Prof. João da Silva"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-lime-500"
               />
             </div>
 
@@ -268,7 +269,7 @@ export default async function AdvisorsPage({ searchParams }: AdvisorsPageProps) 
                 name="email"
                 type="email"
                 placeholder="Ex.: joao.silva@escola.edu.br"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-lime-500"
               />
             </div>
 
@@ -282,7 +283,7 @@ export default async function AdvisorsPage({ searchParams }: AdvisorsPageProps) 
                   name="role_title"
                   type="text"
                   placeholder="Ex.: Professor de Ciências"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-lime-500"
                 />
               </div>
 
@@ -295,7 +296,7 @@ export default async function AdvisorsPage({ searchParams }: AdvisorsPageProps) 
                   name="employee_code"
                   type="text"
                   placeholder="Ex.: 123456"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-lime-500"
                 />
               </div>
             </div>
@@ -310,7 +311,7 @@ export default async function AdvisorsPage({ searchParams }: AdvisorsPageProps) 
                   name="school"
                   type="text"
                   placeholder="Ex.: EMEF Exemplo"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-lime-500"
                 />
               </div>
 
@@ -323,7 +324,7 @@ export default async function AdvisorsPage({ searchParams }: AdvisorsPageProps) 
                   name="area_of_activity"
                   type="text"
                   placeholder="Ex.: Ciências da Natureza"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-lime-500"
                 />
               </div>
             </div>
@@ -339,7 +340,7 @@ export default async function AdvisorsPage({ searchParams }: AdvisorsPageProps) 
                 min="1"
                 max="99"
                 placeholder="5"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-lime-500"
               />
               <p className="text-xs text-gray-500 mt-1">Padrão: 5. Define quantos grupos este orientador pode assumir como orientador principal ao mesmo tempo.</p>
             </div>
@@ -347,7 +348,7 @@ export default async function AdvisorsPage({ searchParams }: AdvisorsPageProps) 
             <div className="flex flex-wrap gap-3">
               <button
                 type="submit"
-                className="bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2 rounded-md"
+                className="bg-lime-700 hover:bg-lime-800 text-white font-medium px-4 py-2 rounded-md"
               >
                 Cadastrar orientador
               </button>
@@ -363,7 +364,7 @@ export default async function AdvisorsPage({ searchParams }: AdvisorsPageProps) 
         </div>
 
         {/* Listagem */}
-        <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm">
+        <div className="tca-soft-surface rounded-lg p-6 shadow-sm">
           <h2 className="text-xl font-semibold text-gray-900 mb-4">Orientadores cadastrados</h2>
           <p className="text-sm text-gray-600">
             Total de orientadores cadastrados: <strong>{advisors.length}</strong>
@@ -428,7 +429,7 @@ export default async function AdvisorsPage({ searchParams }: AdvisorsPageProps) 
                           name="name"
                           type="text"
                           defaultValue={advisor.name}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-lime-500"
                         />
                       </div>
 
@@ -441,7 +442,7 @@ export default async function AdvisorsPage({ searchParams }: AdvisorsPageProps) 
                           name="email"
                           type="email"
                           defaultValue={advisor.email}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-lime-500"
                         />
                       </div>
 
@@ -454,7 +455,7 @@ export default async function AdvisorsPage({ searchParams }: AdvisorsPageProps) 
                           name="role_title"
                           type="text"
                           defaultValue={advisor.role_title ?? ""}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-lime-500"
                         />
                       </div>
 
@@ -467,7 +468,7 @@ export default async function AdvisorsPage({ searchParams }: AdvisorsPageProps) 
                           name="employee_code"
                           type="text"
                           defaultValue={advisor.employee_code ?? ""}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-lime-500"
                         />
                       </div>
 
@@ -480,7 +481,7 @@ export default async function AdvisorsPage({ searchParams }: AdvisorsPageProps) 
                           name="school"
                           type="text"
                           defaultValue={advisor.school ?? ""}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-lime-500"
                         />
                       </div>
 
@@ -493,7 +494,7 @@ export default async function AdvisorsPage({ searchParams }: AdvisorsPageProps) 
                           name="area_of_activity"
                           type="text"
                           defaultValue={advisor.area_of_activity ?? ""}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-lime-500"
                         />
                       </div>
 
@@ -508,7 +509,7 @@ export default async function AdvisorsPage({ searchParams }: AdvisorsPageProps) 
                           min="1"
                           max="99"
                           defaultValue={advisor.max_orientacoes ?? 5}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-lime-500"
                         />
                       </div>
                     </div>
@@ -516,7 +517,7 @@ export default async function AdvisorsPage({ searchParams }: AdvisorsPageProps) 
                     <div className="flex flex-wrap gap-3">
                       <button
                         type="submit"
-                        className="bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2 rounded-md text-sm"
+                        className="bg-lime-700 hover:bg-lime-800 text-white font-medium px-4 py-2 rounded-md text-sm"
                       >
                         Salvar alterações
                       </button>

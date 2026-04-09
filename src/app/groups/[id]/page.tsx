@@ -53,17 +53,17 @@ function renderMemberCard(
   linkedStudent: Student | undefined
 ) {
   return (
-    <div className="flex items-center justify-between border border-gray-100 rounded-md px-4 py-3 bg-gray-50">
+    <div className="flex items-center justify-between border border-lime-100 rounded-md px-4 py-3 bg-lime-50/40">
       <div>
         <p className="font-medium text-gray-900">{name}</p>
         <p className="text-sm text-gray-600">{series || "Série não informada"}</p>
         {linkedStudent && (
-          <p className="text-xs text-blue-700 mt-1">
+          <p className="text-xs text-lime-700 mt-1">
             Cadastro vinculado • Matrícula: {linkedStudent.registration_code || "Não informada"}
           </p>
         )}
       </div>
-      <span className="text-xs text-blue-600 font-semibold bg-blue-50 px-2 py-1 rounded-full">
+      <span className="text-xs text-lime-700 font-semibold bg-lime-100 px-2 py-1 rounded-full">
         {label}
       </span>
     </div>
@@ -212,7 +212,7 @@ export default async function GroupDetailPage({ params, searchParams }: GroupDet
     group = await fetchGroupById(id);
   } catch {
     return (
-      <main className="min-h-screen bg-gray-50">
+      <main className="min-h-screen bg-transparent">
         <section className="max-w-2xl mx-auto px-6 py-10">
           <div className="bg-amber-50 border border-amber-300 rounded-lg p-4 mb-6">
             <p className="text-amber-900 font-medium">Erro ao carregar o grupo.</p>
@@ -220,7 +220,7 @@ export default async function GroupDetailPage({ params, searchParams }: GroupDet
               Verifique se a tabela de grupos foi criada no Supabase.
             </p>
           </div>
-          <Link href="/groups" className="text-blue-600 hover:underline text-sm">
+          <Link href="/groups" className="text-lime-700 hover:underline text-sm">
             ← Voltar para grupos
           </Link>
         </section>
@@ -294,18 +294,19 @@ export default async function GroupDetailPage({ params, searchParams }: GroupDet
       : "planejamento";
 
   return (
-    <main className="min-h-screen bg-gray-50">
+    <main className="min-h-screen bg-transparent">
       <section className="max-w-2xl mx-auto px-6 py-10">
+        <div className="tca-stripes h-1.5 w-full rounded-md mb-6" />
         <header className="mb-8">
-          <Link href="/groups" className="text-blue-600 hover:underline text-sm">
+          <Link href="/groups" className="text-lime-700 hover:underline text-sm">
             ← Voltar para grupos
           </Link>
-          <h1 className="text-3xl font-bold text-gray-900 mt-3">Detalhe do grupo</h1>
+          <h1 className="text-3xl font-bold tca-title-guide mt-3">Detalhe do grupo</h1>
           <p className="text-gray-500 text-sm mt-1">ID: {group.id}</p>
         </header>
 
         {/* Integrantes */}
-        <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm mb-6">
+        <div className="tca-soft-surface rounded-lg p-6 shadow-sm mb-6">
           <h2 className="text-xl font-semibold text-gray-900 mb-4">Integrantes</h2>
 
           <div className="space-y-3">
@@ -322,7 +323,7 @@ export default async function GroupDetailPage({ params, searchParams }: GroupDet
         </div>
 
         {/* Projeto */}
-        <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm mb-6">
+        <div className="tca-soft-surface rounded-lg p-6 shadow-sm mb-6">
           <h2 className="text-xl font-semibold text-gray-900 mb-4">Projeto</h2>
 
           <dl className="space-y-3">
@@ -352,7 +353,7 @@ export default async function GroupDetailPage({ params, searchParams }: GroupDet
                   id="status"
                   name="status"
                   defaultValue={currentStatus}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-lime-500"
                 >
                   <option value="planejamento">Planejamento</option>
                   <option value="em_andamento">Em andamento</option>
@@ -362,7 +363,7 @@ export default async function GroupDetailPage({ params, searchParams }: GroupDet
 
               <button
                 type="submit"
-                className="bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2 rounded-md text-sm"
+                className="bg-lime-700 hover:bg-lime-800 text-white font-medium px-4 py-2 rounded-md text-sm"
               >
                 Salvar status
               </button>
@@ -375,7 +376,7 @@ export default async function GroupDetailPage({ params, searchParams }: GroupDet
             <div className="mb-3">
               <Link
                 href={`/groups/${id}/project`}
-                className="text-sm text-blue-600 hover:underline font-medium"
+                className="text-sm text-lime-700 hover:underline font-medium"
               >
                 Editar projeto por seções →
               </Link>
@@ -421,7 +422,7 @@ export default async function GroupDetailPage({ params, searchParams }: GroupDet
         </div>
 
         {/* Orientação */}
-        <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm mb-6">
+        <div className="tca-soft-surface rounded-lg p-6 shadow-sm mb-6">
           <h2 className="text-xl font-semibold text-gray-900 mb-2">Orientação</h2>
 
           {/* Resumo atual */}
@@ -519,9 +520,9 @@ export default async function GroupDetailPage({ params, searchParams }: GroupDet
           )}
 
           {/* Preferências ordenadas */}
-          <div className="mb-5 rounded-md border border-blue-100 bg-blue-50 p-4">
-            <p className="text-sm font-medium text-blue-900 mb-2">Lista ordenada de preferência de orientadores</p>
-            <ul className="space-y-1 text-sm text-blue-900">
+          <div className="mb-5 rounded-md border border-lime-100 bg-lime-50 p-4">
+            <p className="text-sm font-medium text-lime-900 mb-2">Lista ordenada de preferência de orientadores</p>
+            <ul className="space-y-1 text-sm text-lime-900">
               {[
                 { label: "1ª preferência", advisor: preferredAdvisor1 },
                 { label: "2ª preferência", advisor: preferredAdvisor2 },
@@ -598,7 +599,7 @@ export default async function GroupDetailPage({ params, searchParams }: GroupDet
                 <form action={handleIndicatePrimaryAdvisorByPreference}>
                   <button
                     type="submit"
-                    className="bg-blue-700 hover:bg-blue-800 text-white text-xs font-medium px-3 py-1.5 rounded-md"
+                    className="bg-lime-700 hover:bg-lime-800 text-white text-xs font-medium px-3 py-1.5 rounded-md"
                   >
                     Indicar orientador por preferência
                   </button>
@@ -637,7 +638,7 @@ export default async function GroupDetailPage({ params, searchParams }: GroupDet
                     id="preference_1"
                     name="preference_1"
                     defaultValue={preferenceAdvisor1 ? String(preferenceAdvisor1.advisor_id) : ""}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-lime-500"
                   >
                     <option value="">— Nenhum —</option>
                     {advisors.map((advisor) => (
@@ -656,7 +657,7 @@ export default async function GroupDetailPage({ params, searchParams }: GroupDet
                     id="preference_2"
                     name="preference_2"
                     defaultValue={preferenceAdvisor2 ? String(preferenceAdvisor2.advisor_id) : ""}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-lime-500"
                   >
                     <option value="">— Nenhum —</option>
                     {advisors.map((advisor) => (
@@ -688,7 +689,7 @@ export default async function GroupDetailPage({ params, searchParams }: GroupDet
 
                 <button
                   type="submit"
-                  className="bg-indigo-600 hover:bg-indigo-700 text-white font-medium px-4 py-2 rounded-md text-sm"
+                  className="bg-lime-700 hover:bg-lime-800 text-white font-medium px-4 py-2 rounded-md text-sm"
                 >
                   Salvar ordem de preferência
                 </button>
@@ -716,7 +717,7 @@ export default async function GroupDetailPage({ params, searchParams }: GroupDet
                     id="primary_advisor_id"
                     name="primary_advisor_id"
                     defaultValue={group.primary_advisor_id ?? ""}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-lime-500"
                   >
                     <option value="">— Nenhum —</option>
                     {advisors.map((advisor) => (
@@ -735,7 +736,7 @@ export default async function GroupDetailPage({ params, searchParams }: GroupDet
                     id="co_advisor_id"
                     name="co_advisor_id"
                     defaultValue={group.co_advisor_id ?? ""}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-lime-500"
                   >
                     <option value="">— Nenhum —</option>
                     {advisors.map((advisor) => (
@@ -748,7 +749,7 @@ export default async function GroupDetailPage({ params, searchParams }: GroupDet
 
                 <button
                   type="submit"
-                  className="bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2 rounded-md text-sm"
+                  className="bg-lime-700 hover:bg-lime-800 text-white font-medium px-4 py-2 rounded-md text-sm"
                 >
                   Salvar orientadores
                 </button>
@@ -757,7 +758,7 @@ export default async function GroupDetailPage({ params, searchParams }: GroupDet
           ) : (
             <p className="text-sm text-gray-500 border-t border-gray-100 pt-4">
               Nenhum orientador cadastrado.{" "}
-              <Link href="/advisors" className="text-blue-600 hover:underline">
+              <Link href="/advisors" className="text-lime-700 hover:underline">
                 Cadastre um orientador
               </Link>{" "}
               para associar ao grupo.

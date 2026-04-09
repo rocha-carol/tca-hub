@@ -35,13 +35,14 @@ export default async function Home() {
   }
 
   return (
-    <main className="min-h-screen bg-gray-50">
+    <main className="min-h-screen bg-transparent">
       {/* Cabeçalho da página */}
-      <header className="bg-white shadow">
+      <header className="bg-[#f8f8f2] backdrop-blur border-b border-lime-200 shadow-sm">
+        <div className="tca-stripes h-1 w-full" />
         <div className="max-w-4xl mx-auto px-6 py-6">
-          <h1 className="text-3xl font-bold text-gray-900">TCA Hub</h1>
-          <p className="text-gray-600 mt-2">
-            Plataforma de apoio ao Trabalho de Conclusão Autoral
+          <h1 className="text-3xl font-extrabold tca-title-guide">TCA Hub</h1>
+          <p className="text-slate-700 mt-2">
+            Plataforma de apoio ao Trabalho Colaborativo de Autoria
           </p>
         </div>
       </header>
@@ -50,34 +51,35 @@ export default async function Home() {
       <div className="max-w-4xl mx-auto px-6 py-12">
         {/* Bloco de sessão (MVP) */}
         <section className="mb-10">
-          <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm">
+          <div className="tca-soft-surface rounded-lg p-6 shadow-sm relative overflow-hidden">
+            <div className="absolute left-0 top-0 h-full w-2 tca-stripes" aria-hidden="true" />
             {user ? (
               <>
-                <h2 className="text-2xl font-semibold text-gray-900 mb-2">Bem-vinda de volta</h2>
-                <p className="text-gray-700 mb-4">
+                <h2 className="text-2xl font-semibold text-lime-800 mb-2">Bem-vinda de volta</h2>
+                <p className="text-slate-700 mb-4">
                   Você está autenticada como <strong>{user.email}</strong>.
                 </p>
                 <Link
                   href="/dashboard"
-                  className="inline-block bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2 rounded-md"
+                  className="inline-block bg-lime-700 hover:bg-lime-800 text-white font-medium px-4 py-2 rounded-md"
                 >
                   Ir para o Dashboard
                 </Link>
               </>
             ) : (
               <>
-                <h2 className="text-2xl font-semibold text-gray-900 mb-2">Comece seu acesso</h2>
-                <p className="text-gray-700 mb-4">Faça login ou crie sua conta para acessar o dashboard.</p>
+                <h2 className="text-2xl font-semibold text-lime-800 mb-2">Comece seu acesso</h2>
+                <p className="text-slate-700 mb-4">Faça login ou crie sua conta para acessar o dashboard.</p>
                 <div className="flex gap-3">
                   <Link
                     href="/auth/login"
-                    className="inline-block bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2 rounded-md"
+                    className="inline-block bg-lime-700 hover:bg-lime-800 text-white font-medium px-4 py-2 rounded-md"
                   >
                     Fazer login
                   </Link>
                   <Link
                     href="/auth/signup"
-                    className="inline-block bg-gray-100 hover:bg-gray-200 text-gray-900 font-medium px-4 py-2 rounded-md"
+                    className="inline-block bg-yellow-200 hover:bg-yellow-300 text-lime-900 font-medium px-4 py-2 rounded-md"
                   >
                     Criar conta
                   </Link>
@@ -108,7 +110,7 @@ export default async function Home() {
               {profiles.map((profile) => (
                 <div
                   key={profile.id}
-                  className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm hover:shadow-md transition"
+                  className="bg-white border border-sky-100 rounded-lg p-4 shadow-sm hover:shadow-md transition"
                 >
                   {/* Nome do usuário */}
                   <h3 className="font-semibold text-lg text-gray-900">
@@ -120,7 +122,7 @@ export default async function Home() {
 
                   {/* Papel (role) com badge */}
                   <div className="mt-3 flex gap-2">
-                    <span className="inline-block bg-blue-100 text-blue-800 text-xs font-semibold px-2 py-1 rounded">
+                    <span className="inline-block bg-lime-100 text-lime-800 text-xs font-semibold px-2 py-1 rounded">
                       {/* Exibe o papel em português */}
                       {profile.role === "student"
                         ? "Estudante"
@@ -162,9 +164,9 @@ export default async function Home() {
         </section>
 
         {/* Resumo de dados */}
-        <div className="mt-12 bg-gray-100 border border-gray-300 rounded-lg p-4">
-          <h3 className="font-semibold text-gray-900 mb-2">Resumo</h3>
-          <p className="text-gray-700">
+        <div className="mt-12 bg-gradient-to-r from-lime-50 to-yellow-50 border border-lime-200 rounded-lg p-4">
+          <h3 className="font-semibold text-lime-900 mb-2">Resumo</h3>
+          <p className="text-slate-700">
             Total de usuários: <strong>{profiles.length}</strong>
           </p>
         </div>
