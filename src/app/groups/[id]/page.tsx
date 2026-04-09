@@ -59,7 +59,7 @@ function renderMemberCard(
 
 interface GroupDetailPageProps {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ indication?: string }>;
+  searchParams: Promise<{ indication?: string; pref_error?: string; pref_success?: string }>;
 }
 
 /**
@@ -70,7 +70,7 @@ interface GroupDetailPageProps {
  */
 export default async function GroupDetailPage({ params, searchParams }: GroupDetailPageProps) {
   const { id } = await params;
-  const { indication } = await searchParams;
+  const { indication, pref_error, pref_success } = await searchParams;
 
   async function handleAssignAdvisors(formData: FormData) {
     "use server";
@@ -114,15 +114,24 @@ export default async function GroupDetailPage({ params, searchParams }: GroupDet
 
     const uniqueIds = new Set(orderedPreferences.map((value) => String(value)));
     if (uniqueIds.size !== orderedPreferences.length) {
-      redirect(`/groups/${id}`);
+      redirect(`/groups/${id}?pref_error=duplicate`);
     }
 
-    await replaceGroupAdvisorPreferences(id, orderedPreferences);
+    let saveFailed = false;
+    try {
+      await replaceGroupAdvisorPreferences(id, orderedPreferences);
+    } catch {
+      saveFailed = true;
+    }
+
+    if (saveFailed) {
+      redirect(`/groups/${id}?pref_error=save`);
+    }
 
     revalidatePath(`/groups/${id}`);
     revalidatePath("/groups");
     revalidatePath("/dashboard");
-    redirect(`/groups/${id}`);
+    redirect(`/groups/${id}?pref_success=1`);
   }
 
   async function handleIndicatePrimaryAdvisorByPreference() {
@@ -389,6 +398,22 @@ export default async function GroupDetailPage({ params, searchParams }: GroupDet
             <>
               <form action={handleUpdateAdvisorPreferences} className="space-y-4 border-t border-gray-100 pt-4 mb-6">
                 <p className="text-sm font-medium text-gray-700">Atualizar ordem de preferência:</p>
+
+                {pref_error === "duplicate" && (
+                  <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2">
+                    O mesmo orientador foi selecionado em mais de uma posição. Escolha orientadores distintos.
+                  </p>
+                )}
+                {pref_error === "save" && (
+                  <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2">
+                    Não foi possível salvar as preferências. Verifique se o banco de dados está configurado e tente novamente.
+                  </p>
+                )}
+                {pref_success === "1" && (
+                  <p className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-md px-3 py-2">
+                    Ordem de preferência salva com sucesso.
+                  </p>
+                )}
 
                 <div>
                   <label htmlFor="preference_1" className="block text-sm text-gray-600 mb-1">

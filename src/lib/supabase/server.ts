@@ -14,8 +14,16 @@ export async function createClient() {
         getAll() {
           return cookieStore.getAll();
         },
-        setAll() {
-          // Implementação adiada para uma etapa posterior.
+        setAll(cookiesToSet) {
+          try {
+            cookiesToSet.forEach(({ name, value, options }) =>
+              cookieStore.set(name, value, options)
+            );
+          } catch {
+            // Chamado a partir de um Server Component — cookies não podem ser
+            // modificados neste contexto. Em Server Actions, o set funciona
+            // normalmente. O Middleware é responsável por manter a sessão ativa.
+          }
         },
       },
     }
