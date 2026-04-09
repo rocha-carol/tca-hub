@@ -243,6 +243,32 @@ export default async function DashboardPage() {
                 </div>
               </div>
             )}
+
+            <div className="mt-6">
+              <h3 className="text-sm font-semibold text-gray-700 mb-3">Estudantes sem grupo</h3>
+
+              {coordinatorSummary.studentsWithoutGroup.length === 0 ? (
+                <p className="text-sm text-gray-500">Todos os estudantes ativos já estão vinculados em grupos.</p>
+              ) : (
+                <div className="divide-y divide-gray-100 border border-gray-100 rounded-md">
+                  {coordinatorSummary.studentsWithoutGroup.map((student) => (
+                    <div key={String(student.id)} className="flex items-center justify-between px-4 py-3 gap-3">
+                      <div>
+                        <p className="text-sm font-medium text-gray-900">{student.name}</p>
+                        <p className="text-xs text-gray-500">
+                          {student.grade || "Série não informada"}
+                          {" • "}
+                          {student.school || "Escola não informada"}
+                        </p>
+                      </div>
+                      <Link href="/groups" className="shrink-0 text-xs text-blue-600 hover:underline font-medium">
+                        Vincular em grupo →
+                      </Link>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         )}
 

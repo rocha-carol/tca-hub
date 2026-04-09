@@ -18,6 +18,12 @@ export interface GroupIndicationStatus {
 export interface CoordinatorSummary {
   advisorLoads: AdvisorLoad[];
   groupIndicationStatuses: GroupIndicationStatus[];
+  studentsWithoutGroup: Array<{
+    id: string | number;
+    name: string;
+    grade: string | null;
+    school: string | null;
+  }>;
   /** Grupos sem orientador principal */
   groupsWithoutAdvisor: number;
   /** Grupos que possuem lista de preferências mas sem orientador ainda */
@@ -38,6 +44,13 @@ export async function fetchCoordinatorSummary(): Promise<CoordinatorSummary> {
     .order("created_at", { ascending: false });
 
   const groups = (groupsData || []) as Group[];
+
+  // Busca estudantes ativos
+  const { data: studentsData } = await supabase
+    .from("students")
+    .select("id, name, grade, school, active")
+    .eq("active", true)
+    .order("name", { ascending: true });
 
   // Busca todos os orientadores ativos
   const { data: advisorsData } = await supabase
@@ -95,9 +108,26 @@ export async function fetchCoordinatorSummary(): Promise<CoordinatorSummary> {
   const advisorsAvailableCount = advisorLoads.filter((a) => a.available).length;
   const advisorsFullCount = advisorLoads.filter((a) => !a.available).length;
 
+  const linkedStudentIds = new Set<string>();
+  for (const group of groups) {
+    if (group.student_1_id != null) linkedStudentIds.add(String(group.student_1_id));
+    if (group.student_2_id != null) linkedStudentIds.add(String(group.student_2_id));
+    if (group.student_3_id != null) linkedStudentIds.add(String(group.student_3_id));
+  }
+
+  const studentsWithoutGroup = (studentsData || [])
+    .filter((student) => !linkedStudentIds.has(String(student.id)))
+    .map((student) => ({
+      id: student.id,
+      name: String(student.name),
+      grade: student.grade ? String(student.grade) : null,
+      school: student.school ? String(student.school) : null,
+    }));
+
   return {
     advisorLoads,
     groupIndicationStatuses,
+    studentsWithoutGroup,
     groupsWithoutAdvisor,
     groupsPendingIndication,
     advisorsAvailableCount,
