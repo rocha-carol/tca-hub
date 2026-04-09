@@ -108,6 +108,14 @@ export default async function DashboardPage() {
           <p className="text-gray-600 mt-1">
             Olá, {profile?.name || user.email}
           </p>
+          <div className="mt-4">
+            <Link
+              href="/groups?from=coordinator"
+              className="inline-flex items-center bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-4 py-2 rounded-md"
+            >
+              Criar grupo manualmente
+            </Link>
+          </div>
         </header>
 
         {/* Contadores */}
