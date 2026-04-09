@@ -6,6 +6,10 @@ import {
   createProjectSectionComment,
   fetchGroupProjectSectionComments,
 } from "@/services/project-section-comment-service";
+import {
+  createProjectSectionQuestion,
+  fetchGroupProjectSectionQuestions,
+} from "@/services/project-section-question-service";
 import { fetchGroupById } from "@/services/group-service";
 import { getAuthenticatedProfile } from "@/lib/auth/session-service";
 import type { ProjectSectionStatus } from "@/types/project-section";
@@ -17,6 +21,8 @@ interface GroupProjectPageProps {
     section_id?: string;
     comment_status?: string;
     comment_section?: string;
+    question_status?: string;
+    question_section?: string;
   }>;
 }
 
@@ -31,6 +37,7 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
   const query = searchParams ? await searchParams : {};
   const profile = await getAuthenticatedProfile();
   const canCommentAsAdvisor = profile?.role === "advisor" || profile?.role === "coordinator";
+  const canAskAsStudent = profile?.role === "student";
 
   const group = await fetchGroupById(id);
   if (!group) {
@@ -100,10 +107,44 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
     redirect(`/groups/${id}/project?comment_status=success&comment_section=${sectionId}`);
   }
 
+  async function handleAddSectionQuestion(formData: FormData) {
+    "use server";
+
+    const authenticatedProfile = await getAuthenticatedProfile();
+    if (!authenticatedProfile || authenticatedProfile.role !== "student") {
+      redirect(`/groups/${id}/project?question_status=forbidden`);
+    }
+
+    const sectionId = String(formData.get("section_id") ?? "").trim();
+    const question = String(formData.get("question") ?? "").trim();
+
+    if (!sectionId || question.length < 3) {
+      redirect(`/groups/${id}/project?question_status=invalid&question_section=${sectionId}`);
+    }
+
+    try {
+      await createProjectSectionQuestion({
+        group_id: id,
+        section_id: sectionId,
+        author_profile_id: authenticatedProfile.id,
+        author_role: "student",
+        author_name: authenticatedProfile.name,
+        question,
+      });
+    } catch {
+      redirect(`/groups/${id}/project?question_status=error&question_section=${sectionId}`);
+    }
+
+    revalidatePath(`/groups/${id}/project`);
+    redirect(`/groups/${id}/project?question_status=success&question_section=${sectionId}`);
+  }
+
   let sections = [] as Awaited<ReturnType<typeof ensureGroupProjectSectionsStructure>>;
   let sectionsError: string | null = null;
   let comments = [] as Awaited<ReturnType<typeof fetchGroupProjectSectionComments>>;
   let commentsError: string | null = null;
+  let questions = [] as Awaited<ReturnType<typeof fetchGroupProjectSectionQuestions>>;
+  let questionsError: string | null = null;
 
   try {
     sections = await ensureGroupProjectSectionsStructure(id);
@@ -117,12 +158,26 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
     commentsError = error instanceof Error ? error.message : "Erro ao carregar comentários das seções.";
   }
 
+  try {
+    questions = await fetchGroupProjectSectionQuestions(id);
+  } catch (error) {
+    questionsError = error instanceof Error ? error.message : "Erro ao carregar dúvidas das seções.";
+  }
+
   const commentsBySection = new Map<string, typeof comments>();
   for (const comment of comments) {
     const key = String(comment.section_id);
     const list = commentsBySection.get(key) ?? [];
     list.push(comment);
     commentsBySection.set(key, list);
+  }
+
+  const questionsBySection = new Map<string, typeof questions>();
+  for (const question of questions) {
+    const key = String(question.section_id);
+    const list = questionsBySection.get(key) ?? [];
+    list.push(question);
+    questionsBySection.set(key, list);
   }
 
   return (
@@ -147,6 +202,13 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
           <div className="bg-amber-50 border border-amber-300 rounded-lg p-4 mb-6">
             <p className="text-amber-900 font-medium">Configuração pendente dos comentários por seção</p>
             <p className="text-amber-800 text-sm mt-1">{commentsError}</p>
+          </div>
+        )}
+
+        {questionsError && (
+          <div className="bg-amber-50 border border-amber-300 rounded-lg p-4 mb-6">
+            <p className="text-amber-900 font-medium">Configuração pendente das dúvidas por seção</p>
+            <p className="text-amber-800 text-sm mt-1">{questionsError}</p>
           </div>
         )}
 
@@ -231,6 +293,73 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
                     Salvar seção
                   </button>
                 </form>
+
+                <div className="mt-6 pt-4 border-t border-gray-100">
+                  <h3 className="text-sm font-semibold text-gray-800 mb-2">Dúvidas dos estudantes</h3>
+
+                  {query.question_status === "success" && query.question_section === String(section.id) && (
+                    <p className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-md px-3 py-2 mb-3">
+                      Dúvida registrada com sucesso.
+                    </p>
+                  )}
+                  {query.question_status === "invalid" && query.question_section === String(section.id) && (
+                    <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2 mb-3">
+                      Dúvida inválida. Escreva ao menos 3 caracteres.
+                    </p>
+                  )}
+                  {query.question_status === "error" && query.question_section === String(section.id) && (
+                    <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2 mb-3">
+                      Não foi possível salvar a dúvida. Tente novamente.
+                    </p>
+                  )}
+                  {query.question_status === "forbidden" && (
+                    <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2 mb-3">
+                      Apenas estudantes podem registrar dúvidas nesta etapa.
+                    </p>
+                  )}
+
+                  <div className="space-y-2 mb-3">
+                    {(questionsBySection.get(String(section.id)) || []).length === 0 ? (
+                      <p className="text-sm text-gray-500">Ainda não há dúvidas registradas nesta seção.</p>
+                    ) : (
+                      (questionsBySection.get(String(section.id)) || []).map((question) => (
+                        <div key={String(question.id)} className="border border-gray-100 rounded-md px-3 py-2 bg-gray-50">
+                          <p className="text-sm text-gray-900">{question.question}</p>
+                          <p className="text-xs text-gray-500 mt-1">
+                            {question.author_name} (estudante)
+                            {question.created_at
+                              ? ` • ${new Date(question.created_at).toLocaleString("pt-BR", {
+                                  day: "2-digit",
+                                  month: "2-digit",
+                                  year: "numeric",
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                })}`
+                              : ""}
+                          </p>
+                        </div>
+                      ))
+                    )}
+                  </div>
+
+                  {canAskAsStudent && (
+                    <form action={handleAddSectionQuestion} className="space-y-2">
+                      <input type="hidden" name="section_id" value={String(section.id)} />
+                      <textarea
+                        name="question"
+                        rows={3}
+                        placeholder="Descreva sua dúvida sobre esta seção..."
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-sky-500"
+                      />
+                      <button
+                        type="submit"
+                        className="bg-sky-600 hover:bg-sky-700 text-white font-medium px-4 py-2 rounded-md text-sm"
+                      >
+                        Enviar dúvida
+                      </button>
+                    </form>
+                  )}
+                </div>
 
                 <div className="mt-6 pt-4 border-t border-gray-100">
                   <h3 className="text-sm font-semibold text-gray-800 mb-2">Comentários do orientador</h3>
