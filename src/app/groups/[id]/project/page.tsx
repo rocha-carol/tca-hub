@@ -1095,6 +1095,32 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
               Secretaria Municipal de Educação de São Paulo — Trabalho Colaborativo de Autoria (TCA)
             </a>
           </p>
+
+          <div className="mt-2">
+            <p className="text-xs text-gray-500">Materiais prioritários para análise da IA:</p>
+            <ul className="list-disc pl-5 mt-1 space-y-1 text-xs text-blue-700">
+              <li>
+                <a
+                  href="https://drive.google.com/file/d/1mnQPWEKlz8y1ZwCX1atY-9B-nM4JyHgm/view?pli=1"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="hover:underline"
+                >
+                  Documento TCA (Google Drive)
+                </a>
+              </li>
+              <li>
+                <a
+                  href="https://drive.google.com/file/d/1S0uXh23jD7BWgZinsrnzMVaFRHubzzUs/view"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="hover:underline"
+                >
+                  Plano de Navegação do Autor (Google Drive)
+                </a>
+              </li>
+            </ul>
+          </div>
         </div>
 
         {sectionsError && (

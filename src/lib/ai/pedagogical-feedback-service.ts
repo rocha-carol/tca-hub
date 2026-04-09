@@ -6,6 +6,17 @@ interface GeneratePedagogicalFeedbackInput {
   focusPrompt?: string | null;
 }
 
+const TCA_PRIORITY_REFERENCE_DOCS = [
+  {
+    title: "Trabalho Colaborativo de Autoria (TCA)",
+    url: "https://drive.google.com/file/d/1mnQPWEKlz8y1ZwCX1atY-9B-nM4JyHgm/view?pli=1",
+  },
+  {
+    title: "Plano de Navegação do Autor",
+    url: "https://drive.google.com/file/d/1S0uXh23jD7BWgZinsrnzMVaFRHubzzUs/view",
+  },
+] as const;
+
 function getRequiredEnvironmentVariable(name: string): string {
   const value = process.env[name];
   if (!value || value.trim().length === 0) {
@@ -45,9 +56,20 @@ export async function generatePedagogicalFeedbackWithAI(
   const apiKey = getRequiredEnvironmentVariable("AI_FEEDBACK_API_KEY");
   const apiUrl = process.env.AI_FEEDBACK_API_URL?.trim() || "https://api.openai.com/v1/chat/completions";
   const modelName = process.env.AI_FEEDBACK_MODEL?.trim() || "gpt-4o-mini";
+  const referenceContext = process.env.AI_FEEDBACK_REFERENCE_CONTEXT?.trim() || null;
+
+  const referenceLinks = TCA_PRIORITY_REFERENCE_DOCS
+    .map((doc, index) => `${index + 1}. ${doc.title}: ${doc.url}`)
+    .join("\n");
 
   const prompt = [
     "Atue como especialista em orientação pedagógica de projetos de estudantes do ensino básico no Brasil.",
+    "Considere que se trata de um projeto da prefeitura de São Paulo intitulado Trabalho Colaborativo de Autoria (TCA), desenvolvido por um grupo de estudantes do ensino fundamental II, com ênfase no 9º ano.",
+    "Use prioritariamente os seguintes documentos de referência institucional do TCA:",
+    referenceLinks,
+    referenceContext
+      ? `Trechos de referência (usar como base prioritária):\n${referenceContext}`
+      : "Caso os trechos completos dos documentos não estejam disponíveis no contexto, preserve a aderência aos princípios do TCA (autoria estudantil, investigação do território, transformação social, colaboração e intervenção comunitária).",
     "Analise o conteúdo da seção e devolva APENAS um JSON com as chaves:",
     "feedback_text, strengths, improvements, suggested_next_steps.",
     "Todos os campos devem ser texto em português do Brasil.",
