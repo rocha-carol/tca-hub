@@ -56,6 +56,10 @@ import {
   createGroupAIFeedback,
   fetchGroupAIFeedback,
 } from "@/services/group-ai-feedback-service";
+import {
+  createProjectSectionVersion,
+  fetchGroupProjectSectionVersions,
+} from "@/services/project-section-version-service";
 import { fetchGroupById } from "@/services/group-service";
 import { getAuthenticatedProfile } from "@/lib/auth/session-service";
 import { generatePedagogicalFeedbackWithAI } from "@/lib/ai/pedagogical-feedback-service";
@@ -137,6 +141,11 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
   async function handleUpdateSection(formData: FormData) {
     "use server";
 
+    const authenticatedProfile = await getAuthenticatedProfile();
+    if (!authenticatedProfile) {
+      redirect(`/groups/${id}/project?section_status=forbidden`);
+    }
+
     const sectionId = String(formData.get("section_id") ?? "").trim();
     const content = String(formData.get("content") ?? "").trim();
     const rawStatus = String(formData.get("status") ?? "nao_iniciado").trim();
@@ -154,6 +163,16 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
       await updateGroupProjectSection(sectionId, {
         content: content || null,
         status,
+      });
+
+      await createProjectSectionVersion({
+        group_id: id,
+        section_id: sectionId,
+        content: content || null,
+        status,
+        author_profile_id: authenticatedProfile.id,
+        author_role: authenticatedProfile.role,
+        author_name: authenticatedProfile.name,
       });
     } catch {
       redirect(`/groups/${id}/project?section_status=error&section_id=${sectionId}`);
@@ -778,6 +797,8 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
   let interactiveGuidesError: string | null = null;
   let aiFeedbackItems = [] as Awaited<ReturnType<typeof fetchGroupAIFeedback>>;
   let aiFeedbackError: string | null = null;
+  let sectionVersions = [] as Awaited<ReturnType<typeof fetchGroupProjectSectionVersions>>;
+  let sectionVersionsError: string | null = null;
 
   try {
     sections = await ensureGroupProjectSectionsStructure(id);
@@ -863,6 +884,12 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
     aiFeedbackError = error instanceof Error ? error.message : "Erro ao carregar feedback pedagógico com IA.";
   }
 
+  try {
+    sectionVersions = await fetchGroupProjectSectionVersions(id);
+  } catch (error) {
+    sectionVersionsError = error instanceof Error ? error.message : "Erro ao carregar histórico de versões.";
+  }
+
   const commentsBySection = new Map<string, typeof comments>();
   for (const comment of comments) {
     const key = String(comment.section_id);
@@ -903,6 +930,14 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
   const stageScheduleBySection = new Map<string, (typeof stageSchedule)[number]>();
   for (const item of stageSchedule) {
     stageScheduleBySection.set(String(item.section_id), item);
+  }
+
+  const versionsBySection = new Map<string, typeof sectionVersions>();
+  for (const version of sectionVersions) {
+    const key = String(version.section_id);
+    const list = versionsBySection.get(key) ?? [];
+    list.push(version);
+    versionsBySection.set(key, list);
   }
 
   return (
@@ -1011,6 +1046,13 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
           <div className="bg-amber-50 border border-amber-300 rounded-lg p-4 mb-6">
             <p className="text-amber-900 font-medium">Configuração pendente do módulo de feedback pedagógico com IA</p>
             <p className="text-amber-800 text-sm mt-1">{aiFeedbackError}</p>
+          </div>
+        )}
+
+        {sectionVersionsError && (
+          <div className="bg-amber-50 border border-amber-300 rounded-lg p-4 mb-6">
+            <p className="text-amber-900 font-medium">Configuração pendente do histórico de versões das seções</p>
+            <p className="text-amber-800 text-sm mt-1">{sectionVersionsError}</p>
           </div>
         )}
 
@@ -2301,6 +2343,11 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
                     Não foi possível atualizar esta seção. Tente novamente.
                   </p>
                 )}
+                {query.section_status === "forbidden" && (
+                  <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2 mb-3">
+                    É necessário estar autenticado para salvar alterações na seção.
+                  </p>
+                )}
 
                 <form action={handleUpdateSection} className="space-y-3">
                   <input type="hidden" name="section_id" value={String(section.id)} />
@@ -2342,6 +2389,41 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
                     Salvar seção
                   </button>
                 </form>
+
+                <div className="mt-4 p-3 border border-gray-100 rounded-md bg-gray-50">
+                  <p className="text-sm font-semibold text-gray-800 mb-2">Histórico de versões da seção</p>
+
+                  {(versionsBySection.get(String(section.id)) || []).length === 0 ? (
+                    <p className="text-xs text-gray-500">Nenhuma versão registrada ainda para esta seção.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {(versionsBySection.get(String(section.id)) || []).slice(0, 5).map((version) => (
+                        <div key={String(version.id)} className="border border-gray-200 rounded-md px-3 py-2 bg-white">
+                          <p className="text-xs text-gray-700 font-medium">
+                            Versão {version.version_number}
+                            {version.created_at
+                              ? ` • ${new Date(version.created_at).toLocaleString("pt-BR", {
+                                  day: "2-digit",
+                                  month: "2-digit",
+                                  year: "numeric",
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                })}`
+                              : ""}
+                          </p>
+                          <p className="text-xs text-gray-600 mt-1">
+                            {version.author_name} ({version.author_role === "advisor" ? "orientador" : version.author_role === "coordinator" ? "coordenação" : "estudante"})
+                            {` • Status: ${getStatusLabel(version.status)}`}
+                          </p>
+                          <p className="text-xs text-gray-700 mt-1 whitespace-pre-line">
+                            {(version.content || "Sem conteúdo.").slice(0, 220)}
+                            {version.content && version.content.length > 220 ? "..." : ""}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
 
                 <div className="mt-6 pt-4 border-t border-gray-100">
                   <h3 className="text-sm font-semibold text-gray-800 mb-2">Dúvidas dos estudantes</h3>
