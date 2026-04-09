@@ -40,6 +40,10 @@ import {
   fetchGroupFinalProduct,
   upsertGroupFinalProduct,
 } from "@/services/group-final-product-service";
+import {
+  createGroupProcessPhoto,
+  fetchGroupProcessPhotos,
+} from "@/services/group-process-photo-service";
 import { fetchGroupById } from "@/services/group-service";
 import { getAuthenticatedProfile } from "@/lib/auth/session-service";
 import type { ProjectSectionStatus } from "@/types/project-section";
@@ -72,6 +76,8 @@ interface GroupProjectPageProps {
     notification_status?: string;
     notification_action?: string;
     final_product_status?: string;
+    photo_status?: string;
+    photo_action?: string;
   }>;
 }
 
@@ -92,6 +98,7 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
   const canManageMeetings = profile?.role === "advisor" || profile?.role === "coordinator";
   const canManageInternalNotifications = profile?.role === "advisor" || profile?.role === "coordinator";
   const canManageFinalProduct = !!profile;
+  const canManageProcessPhotos = !!profile;
   const canAskAsStudent = profile?.role === "student";
 
   const group = await fetchGroupById(id);
@@ -517,6 +524,46 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
     redirect(`/groups/${id}/project?final_product_status=success`);
   }
 
+  async function handleAddProcessPhoto(formData: FormData) {
+    "use server";
+
+    const authenticatedProfile = await getAuthenticatedProfile();
+    if (!authenticatedProfile) {
+      redirect(`/groups/${id}/project?photo_status=forbidden&photo_action=add`);
+    }
+
+    const photoUrl = String(formData.get("photo_url") ?? "").trim();
+    const captionRaw = String(formData.get("caption") ?? "").trim();
+    const caption = captionRaw.length > 0 ? captionRaw : null;
+    const takenAtRaw = String(formData.get("taken_at") ?? "").trim();
+    const takenAt = takenAtRaw.length > 0 ? takenAtRaw : null;
+    const sectionIdRaw = String(formData.get("section_id") ?? "").trim();
+    const sectionId = sectionIdRaw ? sectionIdRaw : null;
+
+    const isDateValid = !takenAt || /^\d{4}-\d{2}-\d{2}$/.test(takenAt);
+    if (!photoUrl || !isDateValid) {
+      redirect(`/groups/${id}/project?photo_status=invalid&photo_action=add`);
+    }
+
+    try {
+      await createGroupProcessPhoto({
+        group_id: id,
+        section_id: sectionId,
+        photo_url: photoUrl,
+        caption,
+        taken_at: takenAt,
+        author_profile_id: authenticatedProfile.id,
+        author_role: authenticatedProfile.role,
+        author_name: authenticatedProfile.name,
+      });
+    } catch {
+      redirect(`/groups/${id}/project?photo_status=error&photo_action=add`);
+    }
+
+    revalidatePath(`/groups/${id}/project`);
+    redirect(`/groups/${id}/project?photo_status=success&photo_action=add`);
+  }
+
   let sections = [] as Awaited<ReturnType<typeof ensureGroupProjectSectionsStructure>>;
   let sectionsError: string | null = null;
   let comments = [] as Awaited<ReturnType<typeof fetchGroupProjectSectionComments>>;
@@ -537,6 +584,8 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
   let internalNotificationsError: string | null = null;
   let finalProduct = null as Awaited<ReturnType<typeof fetchGroupFinalProduct>>;
   let finalProductError: string | null = null;
+  let processPhotos = [] as Awaited<ReturnType<typeof fetchGroupProcessPhotos>>;
+  let processPhotosError: string | null = null;
 
   try {
     sections = await ensureGroupProjectSectionsStructure(id);
@@ -596,6 +645,12 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
     finalProduct = await fetchGroupFinalProduct(id);
   } catch (error) {
     finalProductError = error instanceof Error ? error.message : "Erro ao carregar módulo de produto final.";
+  }
+
+  try {
+    processPhotos = await fetchGroupProcessPhotos(id);
+  } catch (error) {
+    processPhotosError = error instanceof Error ? error.message : "Erro ao carregar fotos do processo.";
   }
 
   const commentsBySection = new Map<string, typeof comments>();
@@ -721,6 +776,13 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
           </div>
         )}
 
+        {processPhotosError && (
+          <div className="bg-amber-50 border border-amber-300 rounded-lg p-4 mb-6">
+            <p className="text-amber-900 font-medium">Configuração pendente do módulo de fotos do processo</p>
+            <p className="text-amber-800 text-sm mt-1">{processPhotosError}</p>
+          </div>
+        )}
+
         <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm mb-6">
           <h2 className="text-lg font-semibold text-gray-900 mb-2">Módulo de produto final</h2>
 
@@ -842,6 +904,135 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
                 className="bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2 rounded-md text-sm"
               >
                 Salvar produto final
+              </button>
+            </form>
+          )}
+        </div>
+
+        <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm mb-6">
+          <h2 className="text-lg font-semibold text-gray-900 mb-2">Fotos do processo</h2>
+
+          {query.photo_status === "success" && query.photo_action === "add" && (
+            <p className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-md px-3 py-2 mb-3">
+              Foto do processo registrada com sucesso.
+            </p>
+          )}
+          {query.photo_status === "invalid" && (
+            <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2 mb-3">
+              Dados inválidos para foto do processo. Informe uma URL e, se houver data, use formato válido.
+            </p>
+          )}
+          {query.photo_status === "error" && (
+            <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2 mb-3">
+              Não foi possível registrar a foto do processo. Tente novamente.
+            </p>
+          )}
+          {query.photo_status === "forbidden" && (
+            <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2 mb-3">
+              É necessário estar autenticado para registrar fotos do processo.
+            </p>
+          )}
+
+          <div className="space-y-2 mb-4">
+            {processPhotos.length === 0 ? (
+              <p className="text-sm text-gray-500">Ainda não há fotos do processo registradas para este grupo.</p>
+            ) : (
+              processPhotos.map((photo) => (
+                <div key={String(photo.id)} className="border border-gray-100 rounded-md px-3 py-2 bg-gray-50">
+                  <a
+                    href={photo.photo_url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-sm text-blue-700 hover:underline break-all"
+                  >
+                    {photo.photo_url}
+                  </a>
+                  {photo.caption && (
+                    <p className="text-sm text-gray-800 mt-1 whitespace-pre-line">{photo.caption}</p>
+                  )}
+                  <p className="text-xs text-gray-500 mt-1">
+                    {photo.author_name} ({photo.author_role === "advisor" ? "orientador" : photo.author_role === "coordinator" ? "coordenação" : "estudante"})
+                    {photo.section_id ? ` • ${sectionTitleById.get(String(photo.section_id)) || "Seção"}` : " • Geral"}
+                    {photo.taken_at
+                      ? ` • Registro da foto: ${new Date(`${photo.taken_at}T00:00:00`).toLocaleDateString("pt-BR", {
+                          day: "2-digit",
+                          month: "2-digit",
+                          year: "numeric",
+                        })}`
+                      : ""}
+                    {photo.created_at
+                      ? ` • Publicada em ${new Date(photo.created_at).toLocaleString("pt-BR", {
+                          day: "2-digit",
+                          month: "2-digit",
+                          year: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}`
+                      : ""}
+                  </p>
+                </div>
+              ))
+            )}
+          </div>
+
+          {canManageProcessPhotos && (
+            <form action={handleAddProcessPhoto} className="space-y-3 border-t border-gray-100 pt-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="md:col-span-2">
+                  <label htmlFor="process-photo-url" className="block text-sm text-gray-700 mb-1">URL da foto</label>
+                  <input
+                    id="process-photo-url"
+                    name="photo_url"
+                    type="url"
+                    placeholder="https://..."
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="process-photo-date" className="block text-sm text-gray-700 mb-1">Data da foto (opcional)</label>
+                  <input
+                    id="process-photo-date"
+                    name="taken_at"
+                    type="date"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label htmlFor="process-photo-section" className="block text-sm text-gray-700 mb-1">Seção relacionada (opcional)</label>
+                <select
+                  id="process-photo-section"
+                  name="section_id"
+                  defaultValue=""
+                  className="w-full md:w-80 px-3 py-2 border border-gray-300 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="">Geral (sem seção específica)</option>
+                  {sections.map((section) => (
+                    <option key={String(section.id)} value={String(section.id)}>
+                      {section.section_order}. {section.section_title}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label htmlFor="process-photo-caption" className="block text-sm text-gray-700 mb-1">Legenda/observações (opcional)</label>
+                <textarea
+                  id="process-photo-caption"
+                  name="caption"
+                  rows={2}
+                  placeholder="Ex.: Registro do experimento em bancada durante validação da seção 4."
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2 rounded-md text-sm"
+              >
+                Registrar foto do processo
               </button>
             </form>
           )}
