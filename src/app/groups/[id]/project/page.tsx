@@ -44,6 +44,10 @@ import {
   createGroupProcessPhoto,
   fetchGroupProcessPhotos,
 } from "@/services/group-process-photo-service";
+import {
+  createGroupRepertoryItem,
+  fetchGroupRepertoryItems,
+} from "@/services/group-repertory-item-service";
 import { fetchGroupById } from "@/services/group-service";
 import { getAuthenticatedProfile } from "@/lib/auth/session-service";
 import type { ProjectSectionStatus } from "@/types/project-section";
@@ -51,6 +55,7 @@ import type { ProjectDevelopmentChecklistStatus } from "@/types/project-developm
 import type { GroupInPersonMeetingStatus } from "@/types/group-in-person-meeting";
 import type { GroupInternalNotificationType } from "@/types/group-internal-notification";
 import type { GroupFinalProductStatus } from "@/types/group-final-product";
+import type { GroupRepertoryResourceType } from "@/types/group-repertory-item";
 
 interface GroupProjectPageProps {
   params: Promise<{ id: string }>;
@@ -78,6 +83,8 @@ interface GroupProjectPageProps {
     final_product_status?: string;
     photo_status?: string;
     photo_action?: string;
+    repertory_status?: string;
+    repertory_action?: string;
   }>;
 }
 
@@ -99,6 +106,7 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
   const canManageInternalNotifications = profile?.role === "advisor" || profile?.role === "coordinator";
   const canManageFinalProduct = !!profile;
   const canManageProcessPhotos = !!profile;
+  const canManageRepertory = !!profile;
   const canAskAsStudent = profile?.role === "student";
 
   const group = await fetchGroupById(id);
@@ -564,6 +572,54 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
     redirect(`/groups/${id}/project?photo_status=success&photo_action=add`);
   }
 
+  async function handleAddRepertoryItem(formData: FormData) {
+    "use server";
+
+    const authenticatedProfile = await getAuthenticatedProfile();
+    if (!authenticatedProfile) {
+      redirect(`/groups/${id}/project?repertory_status=forbidden&repertory_action=add`);
+    }
+
+    const title = String(formData.get("title") ?? "").trim();
+    const descriptionRaw = String(formData.get("description") ?? "").trim();
+    const description = descriptionRaw.length > 0 ? descriptionRaw : null;
+    const notesRaw = String(formData.get("notes") ?? "").trim();
+    const notes = notesRaw.length > 0 ? notesRaw : null;
+    const sectionIdRaw = String(formData.get("section_id") ?? "").trim();
+    const sectionId = sectionIdRaw ? sectionIdRaw : null;
+    const resourceLinkRaw = String(formData.get("resource_link") ?? "").trim();
+    const resourceLink = resourceLinkRaw.length > 0 ? resourceLinkRaw : null;
+    const rawType = String(formData.get("resource_type") ?? "outro").trim();
+    const allowedTypes: GroupRepertoryResourceType[] = ["artigo", "livro", "site", "video", "podcast", "outro"];
+    const resourceType = allowedTypes.includes(rawType as GroupRepertoryResourceType)
+      ? (rawType as GroupRepertoryResourceType)
+      : "outro";
+
+    if (title.length < 3) {
+      redirect(`/groups/${id}/project?repertory_status=invalid&repertory_action=add`);
+    }
+
+    try {
+      await createGroupRepertoryItem({
+        group_id: id,
+        section_id: sectionId,
+        title,
+        description,
+        resource_type: resourceType,
+        resource_link: resourceLink,
+        notes,
+        author_profile_id: authenticatedProfile.id,
+        author_role: authenticatedProfile.role,
+        author_name: authenticatedProfile.name,
+      });
+    } catch {
+      redirect(`/groups/${id}/project?repertory_status=error&repertory_action=add`);
+    }
+
+    revalidatePath(`/groups/${id}/project`);
+    redirect(`/groups/${id}/project?repertory_status=success&repertory_action=add`);
+  }
+
   let sections = [] as Awaited<ReturnType<typeof ensureGroupProjectSectionsStructure>>;
   let sectionsError: string | null = null;
   let comments = [] as Awaited<ReturnType<typeof fetchGroupProjectSectionComments>>;
@@ -586,6 +642,8 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
   let finalProductError: string | null = null;
   let processPhotos = [] as Awaited<ReturnType<typeof fetchGroupProcessPhotos>>;
   let processPhotosError: string | null = null;
+  let repertoryItems = [] as Awaited<ReturnType<typeof fetchGroupRepertoryItems>>;
+  let repertoryError: string | null = null;
 
   try {
     sections = await ensureGroupProjectSectionsStructure(id);
@@ -651,6 +709,12 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
     processPhotos = await fetchGroupProcessPhotos(id);
   } catch (error) {
     processPhotosError = error instanceof Error ? error.message : "Erro ao carregar fotos do processo.";
+  }
+
+  try {
+    repertoryItems = await fetchGroupRepertoryItems(id);
+  } catch (error) {
+    repertoryError = error instanceof Error ? error.message : "Erro ao carregar exploração de repertório.";
   }
 
   const commentsBySection = new Map<string, typeof comments>();
@@ -780,6 +844,13 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
           <div className="bg-amber-50 border border-amber-300 rounded-lg p-4 mb-6">
             <p className="text-amber-900 font-medium">Configuração pendente do módulo de fotos do processo</p>
             <p className="text-amber-800 text-sm mt-1">{processPhotosError}</p>
+          </div>
+        )}
+
+        {repertoryError && (
+          <div className="bg-amber-50 border border-amber-300 rounded-lg p-4 mb-6">
+            <p className="text-amber-900 font-medium">Configuração pendente do módulo de exploração de repertório</p>
+            <p className="text-amber-800 text-sm mt-1">{repertoryError}</p>
           </div>
         )}
 
@@ -1033,6 +1104,184 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
                 className="bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2 rounded-md text-sm"
               >
                 Registrar foto do processo
+              </button>
+            </form>
+          )}
+        </div>
+
+        <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm mb-6">
+          <h2 className="text-lg font-semibold text-gray-900 mb-2">Exploração de repertório</h2>
+
+          {query.repertory_status === "success" && query.repertory_action === "add" && (
+            <p className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-md px-3 py-2 mb-3">
+              Item de repertório registrado com sucesso.
+            </p>
+          )}
+          {query.repertory_status === "invalid" && (
+            <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2 mb-3">
+              Dados inválidos. Informe um título com pelo menos 3 caracteres.
+            </p>
+          )}
+          {query.repertory_status === "error" && (
+            <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2 mb-3">
+              Não foi possível registrar o item de repertório. Tente novamente.
+            </p>
+          )}
+          {query.repertory_status === "forbidden" && (
+            <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2 mb-3">
+              É necessário estar autenticado para registrar repertório.
+            </p>
+          )}
+
+          <div className="space-y-2 mb-4">
+            {repertoryItems.length === 0 ? (
+              <p className="text-sm text-gray-500">Ainda não há itens de repertório registrados para este grupo.</p>
+            ) : (
+              repertoryItems.map((item) => (
+                <div key={String(item.id)} className="border border-gray-100 rounded-md px-3 py-2 bg-gray-50">
+                  <div className="flex items-start justify-between gap-2 flex-wrap">
+                    <p className="text-sm font-medium text-gray-900">{item.title}</p>
+                    <span className="text-xs font-semibold px-2 py-1 rounded-full bg-gray-200 text-gray-700">
+                      {item.resource_type === "artigo"
+                        ? "Artigo"
+                        : item.resource_type === "livro"
+                          ? "Livro"
+                          : item.resource_type === "site"
+                            ? "Site"
+                            : item.resource_type === "video"
+                              ? "Vídeo"
+                              : item.resource_type === "podcast"
+                                ? "Podcast"
+                                : "Outro"}
+                    </span>
+                  </div>
+
+                  {item.description && (
+                    <p className="text-sm text-gray-800 mt-1 whitespace-pre-line">{item.description}</p>
+                  )}
+
+                  {item.resource_link && (
+                    <a
+                      href={item.resource_link}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-sm text-blue-700 hover:underline break-all mt-1 inline-block"
+                    >
+                      {item.resource_link}
+                    </a>
+                  )}
+
+                  {item.notes && (
+                    <p className="text-xs text-gray-700 mt-1 whitespace-pre-line">Observações: {item.notes}</p>
+                  )}
+
+                  <p className="text-xs text-gray-500 mt-1">
+                    {item.author_name} ({item.author_role === "advisor" ? "orientador" : item.author_role === "coordinator" ? "coordenação" : "estudante"})
+                    {item.section_id ? ` • ${sectionTitleById.get(String(item.section_id)) || "Seção"}` : " • Geral"}
+                    {item.created_at
+                      ? ` • ${new Date(item.created_at).toLocaleString("pt-BR", {
+                          day: "2-digit",
+                          month: "2-digit",
+                          year: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}`
+                      : ""}
+                  </p>
+                </div>
+              ))
+            )}
+          </div>
+
+          {canManageRepertory && (
+            <form action={handleAddRepertoryItem} className="space-y-3 border-t border-gray-100 pt-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="md:col-span-2">
+                  <label htmlFor="repertory-title" className="block text-sm text-gray-700 mb-1">Título da referência</label>
+                  <input
+                    id="repertory-title"
+                    name="title"
+                    type="text"
+                    placeholder="Ex.: Artigo sobre metodologia científica no ensino médio"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="repertory-type" className="block text-sm text-gray-700 mb-1">Tipo</label>
+                  <select
+                    id="repertory-type"
+                    name="resource_type"
+                    defaultValue="outro"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="artigo">Artigo</option>
+                    <option value="livro">Livro</option>
+                    <option value="site">Site</option>
+                    <option value="video">Vídeo</option>
+                    <option value="podcast">Podcast</option>
+                    <option value="outro">Outro</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <label htmlFor="repertory-link" className="block text-sm text-gray-700 mb-1">Link da referência (opcional)</label>
+                  <input
+                    id="repertory-link"
+                    name="resource_link"
+                    type="url"
+                    placeholder="https://..."
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="repertory-section" className="block text-sm text-gray-700 mb-1">Seção relacionada (opcional)</label>
+                  <select
+                    id="repertory-section"
+                    name="section_id"
+                    defaultValue=""
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">Geral (sem seção específica)</option>
+                    {sections.map((section) => (
+                      <option key={String(section.id)} value={String(section.id)}>
+                        {section.section_order}. {section.section_title}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label htmlFor="repertory-description" className="block text-sm text-gray-700 mb-1">Descrição/síntese (opcional)</label>
+                <textarea
+                  id="repertory-description"
+                  name="description"
+                  rows={2}
+                  placeholder="Resumo da contribuição da referência para o projeto..."
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div>
+                <label htmlFor="repertory-notes" className="block text-sm text-gray-700 mb-1">Observações pedagógicas (opcional)</label>
+                <textarea
+                  id="repertory-notes"
+                  name="notes"
+                  rows={2}
+                  placeholder="Ex.: usar este material como base para fundamentação teórica da seção 2."
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2 rounded-md text-sm"
+              >
+                Registrar item de repertório
               </button>
             </form>
           )}
