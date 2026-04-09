@@ -48,6 +48,10 @@ import {
   createGroupRepertoryItem,
   fetchGroupRepertoryItems,
 } from "@/services/group-repertory-item-service";
+import {
+  createGroupInteractiveGuide,
+  fetchGroupInteractiveGuides,
+} from "@/services/group-interactive-guide-service";
 import { fetchGroupById } from "@/services/group-service";
 import { getAuthenticatedProfile } from "@/lib/auth/session-service";
 import type { ProjectSectionStatus } from "@/types/project-section";
@@ -56,6 +60,10 @@ import type { GroupInPersonMeetingStatus } from "@/types/group-in-person-meeting
 import type { GroupInternalNotificationType } from "@/types/group-internal-notification";
 import type { GroupFinalProductStatus } from "@/types/group-final-product";
 import type { GroupRepertoryResourceType } from "@/types/group-repertory-item";
+import type {
+  GroupInteractiveGuideAudience,
+  GroupInteractiveGuideType,
+} from "@/types/group-interactive-guide";
 
 interface GroupProjectPageProps {
   params: Promise<{ id: string }>;
@@ -85,6 +93,8 @@ interface GroupProjectPageProps {
     photo_action?: string;
     repertory_status?: string;
     repertory_action?: string;
+    guide_status?: string;
+    guide_action?: string;
   }>;
 }
 
@@ -107,6 +117,7 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
   const canManageFinalProduct = !!profile;
   const canManageProcessPhotos = !!profile;
   const canManageRepertory = !!profile;
+  const canManageInteractiveGuides = !!profile;
   const canAskAsStudent = profile?.role === "student";
 
   const group = await fetchGroupById(id);
@@ -620,6 +631,65 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
     redirect(`/groups/${id}/project?repertory_status=success&repertory_action=add`);
   }
 
+  async function handleAddInteractiveGuide(formData: FormData) {
+    "use server";
+
+    const authenticatedProfile = await getAuthenticatedProfile();
+    if (!authenticatedProfile) {
+      redirect(`/groups/${id}/project?guide_status=forbidden&guide_action=add`);
+    }
+
+    const title = String(formData.get("title") ?? "").trim();
+    const content = String(formData.get("content") ?? "").trim();
+    const suggestedActivityRaw = String(formData.get("suggested_activity") ?? "").trim();
+    const suggestedActivity = suggestedActivityRaw.length > 0 ? suggestedActivityRaw : null;
+    const sectionIdRaw = String(formData.get("section_id") ?? "").trim();
+    const sectionId = sectionIdRaw ? sectionIdRaw : null;
+
+    const rawGuideType = String(formData.get("guide_type") ?? "outro").trim();
+    const allowedGuideTypes: GroupInteractiveGuideType[] = [
+      "escrita",
+      "metodologia",
+      "estrutura",
+      "referencias",
+      "apresentacao",
+      "outro",
+    ];
+    const guideType = allowedGuideTypes.includes(rawGuideType as GroupInteractiveGuideType)
+      ? (rawGuideType as GroupInteractiveGuideType)
+      : "outro";
+
+    const rawAudience = String(formData.get("audience") ?? "todos").trim();
+    const allowedAudience: GroupInteractiveGuideAudience[] = ["students", "advisors", "todos"];
+    const audience = allowedAudience.includes(rawAudience as GroupInteractiveGuideAudience)
+      ? (rawAudience as GroupInteractiveGuideAudience)
+      : "todos";
+
+    if (title.length < 3 || content.length < 3) {
+      redirect(`/groups/${id}/project?guide_status=invalid&guide_action=add`);
+    }
+
+    try {
+      await createGroupInteractiveGuide({
+        group_id: id,
+        section_id: sectionId,
+        title,
+        guide_type: guideType,
+        content,
+        suggested_activity: suggestedActivity,
+        audience,
+        author_profile_id: authenticatedProfile.id,
+        author_role: authenticatedProfile.role,
+        author_name: authenticatedProfile.name,
+      });
+    } catch {
+      redirect(`/groups/${id}/project?guide_status=error&guide_action=add`);
+    }
+
+    revalidatePath(`/groups/${id}/project`);
+    redirect(`/groups/${id}/project?guide_status=success&guide_action=add`);
+  }
+
   let sections = [] as Awaited<ReturnType<typeof ensureGroupProjectSectionsStructure>>;
   let sectionsError: string | null = null;
   let comments = [] as Awaited<ReturnType<typeof fetchGroupProjectSectionComments>>;
@@ -644,6 +714,8 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
   let processPhotosError: string | null = null;
   let repertoryItems = [] as Awaited<ReturnType<typeof fetchGroupRepertoryItems>>;
   let repertoryError: string | null = null;
+  let interactiveGuides = [] as Awaited<ReturnType<typeof fetchGroupInteractiveGuides>>;
+  let interactiveGuidesError: string | null = null;
 
   try {
     sections = await ensureGroupProjectSectionsStructure(id);
@@ -715,6 +787,12 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
     repertoryItems = await fetchGroupRepertoryItems(id);
   } catch (error) {
     repertoryError = error instanceof Error ? error.message : "Erro ao carregar exploração de repertório.";
+  }
+
+  try {
+    interactiveGuides = await fetchGroupInteractiveGuides(id);
+  } catch (error) {
+    interactiveGuidesError = error instanceof Error ? error.message : "Erro ao carregar guias interativos.";
   }
 
   const commentsBySection = new Map<string, typeof comments>();
@@ -851,6 +929,13 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
           <div className="bg-amber-50 border border-amber-300 rounded-lg p-4 mb-6">
             <p className="text-amber-900 font-medium">Configuração pendente do módulo de exploração de repertório</p>
             <p className="text-amber-800 text-sm mt-1">{repertoryError}</p>
+          </div>
+        )}
+
+        {interactiveGuidesError && (
+          <div className="bg-amber-50 border border-amber-300 rounded-lg p-4 mb-6">
+            <p className="text-amber-900 font-medium">Configuração pendente do módulo de guias interativos</p>
+            <p className="text-amber-800 text-sm mt-1">{interactiveGuidesError}</p>
           </div>
         )}
 
@@ -1282,6 +1367,179 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
                 className="bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2 rounded-md text-sm"
               >
                 Registrar item de repertório
+              </button>
+            </form>
+          )}
+        </div>
+
+        <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm mb-6">
+          <h2 className="text-lg font-semibold text-gray-900 mb-2">Guias interativos</h2>
+
+          {query.guide_status === "success" && query.guide_action === "add" && (
+            <p className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-md px-3 py-2 mb-3">
+              Guia interativo registrado com sucesso.
+            </p>
+          )}
+          {query.guide_status === "invalid" && (
+            <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2 mb-3">
+              Dados inválidos. Título e conteúdo devem ter pelo menos 3 caracteres.
+            </p>
+          )}
+          {query.guide_status === "error" && (
+            <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2 mb-3">
+              Não foi possível registrar o guia interativo. Tente novamente.
+            </p>
+          )}
+          {query.guide_status === "forbidden" && (
+            <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2 mb-3">
+              É necessário estar autenticado para registrar guias interativos.
+            </p>
+          )}
+
+          <div className="space-y-2 mb-4">
+            {interactiveGuides.length === 0 ? (
+              <p className="text-sm text-gray-500">Ainda não há guias interativos registrados para este grupo.</p>
+            ) : (
+              interactiveGuides.map((guide) => (
+                <div key={String(guide.id)} className="border border-gray-100 rounded-md px-3 py-2 bg-gray-50">
+                  <div className="flex items-start justify-between gap-2 flex-wrap">
+                    <p className="text-sm font-medium text-gray-900">{guide.title}</p>
+                    <span className="text-xs font-semibold px-2 py-1 rounded-full bg-indigo-100 text-indigo-700">
+                      {guide.guide_type === "escrita"
+                        ? "Escrita"
+                        : guide.guide_type === "metodologia"
+                          ? "Metodologia"
+                          : guide.guide_type === "estrutura"
+                            ? "Estrutura"
+                            : guide.guide_type === "referencias"
+                              ? "Referências"
+                              : guide.guide_type === "apresentacao"
+                                ? "Apresentação"
+                                : "Outro"}
+                    </span>
+                  </div>
+
+                  <p className="text-sm text-gray-800 mt-1 whitespace-pre-line">{guide.content}</p>
+
+                  {guide.suggested_activity && (
+                    <p className="text-xs text-gray-700 mt-1 whitespace-pre-line">
+                      Atividade sugerida: {guide.suggested_activity}
+                    </p>
+                  )}
+
+                  <p className="text-xs text-gray-500 mt-1">
+                    Público: {guide.audience === "students" ? "Estudantes" : guide.audience === "advisors" ? "Orientadores" : "Todos"}
+                    {guide.section_id ? ` • ${sectionTitleById.get(String(guide.section_id)) || "Seção"}` : " • Geral"}
+                    {guide.author_name
+                      ? ` • ${guide.author_name} (${guide.author_role === "advisor" ? "orientador" : guide.author_role === "coordinator" ? "coordenação" : "estudante"})`
+                      : ""}
+                    {guide.created_at
+                      ? ` • ${new Date(guide.created_at).toLocaleString("pt-BR", {
+                          day: "2-digit",
+                          month: "2-digit",
+                          year: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}`
+                      : ""}
+                  </p>
+                </div>
+              ))
+            )}
+          </div>
+
+          {canManageInteractiveGuides && (
+            <form action={handleAddInteractiveGuide} className="space-y-3 border-t border-gray-100 pt-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="md:col-span-2">
+                  <label htmlFor="interactive-guide-title" className="block text-sm text-gray-700 mb-1">Título do guia</label>
+                  <input
+                    id="interactive-guide-title"
+                    name="title"
+                    type="text"
+                    placeholder="Ex.: Como estruturar a introdução com problema, objetivo e justificativa"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="interactive-guide-type" className="block text-sm text-gray-700 mb-1">Tipo</label>
+                  <select
+                    id="interactive-guide-type"
+                    name="guide_type"
+                    defaultValue="outro"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="escrita">Escrita</option>
+                    <option value="metodologia">Metodologia</option>
+                    <option value="estrutura">Estrutura</option>
+                    <option value="referencias">Referências</option>
+                    <option value="apresentacao">Apresentação</option>
+                    <option value="outro">Outro</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <label htmlFor="interactive-guide-audience" className="block text-sm text-gray-700 mb-1">Público</label>
+                  <select
+                    id="interactive-guide-audience"
+                    name="audience"
+                    defaultValue="todos"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="students">Estudantes</option>
+                    <option value="advisors">Orientadores</option>
+                    <option value="todos">Todos</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label htmlFor="interactive-guide-section" className="block text-sm text-gray-700 mb-1">Seção relacionada (opcional)</label>
+                  <select
+                    id="interactive-guide-section"
+                    name="section_id"
+                    defaultValue=""
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">Geral (sem seção específica)</option>
+                    {sections.map((section) => (
+                      <option key={String(section.id)} value={String(section.id)}>
+                        {section.section_order}. {section.section_title}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label htmlFor="interactive-guide-content" className="block text-sm text-gray-700 mb-1">Conteúdo do guia</label>
+                <textarea
+                  id="interactive-guide-content"
+                  name="content"
+                  rows={3}
+                  placeholder="Escreva orientações práticas que possam ser usadas diretamente pelo grupo..."
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div>
+                <label htmlFor="interactive-guide-activity" className="block text-sm text-gray-700 mb-1">Atividade sugerida (opcional)</label>
+                <textarea
+                  id="interactive-guide-activity"
+                  name="suggested_activity"
+                  rows={2}
+                  placeholder="Ex.: Produzir um parágrafo de justificativa e revisar em dupla seguindo os critérios do guia."
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2 rounded-md text-sm"
+              >
+                Registrar guia interativo
               </button>
             </form>
           )}
