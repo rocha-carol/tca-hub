@@ -16,6 +16,7 @@ import {
   replaceGroupAdvisorPreferences,
 } from "@/services/group-advisor-preference-service";
 import { suggestPrimaryAdvisorByPreference } from "@/services/advisor-indication-service";
+import { ensureGroupProjectSectionsStructure } from "@/services/project-section-service";
 import type { Student } from "@/types/student";
 import type { GroupStatus } from "@/types/group";
 
@@ -37,6 +38,12 @@ function normalizeSelectedAdvisorId(value: FormDataEntryValue | null) {
   }
 
   return /^\d+$/.test(rawValue) ? Number(rawValue) : rawValue;
+}
+
+function getProjectSectionStatusLabel(status: string) {
+  if (status === "em_andamento") return "Em andamento";
+  if (status === "concluido") return "Concluída";
+  return "Não iniciada";
 }
 
 function renderMemberCard(
@@ -249,6 +256,15 @@ export default async function GroupDetailPage({ params, searchParams }: GroupDet
       error instanceof Error ? error.message : "Erro desconhecido ao carregar preferências.";
   }
 
+  let projectSections = [] as Awaited<ReturnType<typeof ensureGroupProjectSectionsStructure>>;
+  let projectSectionsError: string | null = null;
+  try {
+    projectSections = await ensureGroupProjectSectionsStructure(id);
+  } catch (error) {
+    projectSectionsError =
+      error instanceof Error ? error.message : "Erro desconhecido ao carregar estrutura de seções do projeto.";
+  }
+
   // Verificação de disponibilidade por preferência (para exibição informativa)
   let indicationChecked: Awaited<ReturnType<typeof suggestPrimaryAdvisorByPreference>>["checked"] = [];
   try {
@@ -351,6 +367,47 @@ export default async function GroupDetailPage({ params, searchParams }: GroupDet
                 Salvar status
               </button>
             </form>
+          </div>
+
+          <div className="mt-5 pt-4 border-t border-gray-100">
+            <h3 className="text-sm font-semibold text-gray-800 mb-2">Estrutura das seções do projeto TCA</h3>
+
+            {projectSectionsError && (
+              <p className="text-xs text-amber-800 mb-2">{projectSectionsError}</p>
+            )}
+
+            {projectSections.length === 0 ? (
+              <p className="text-sm text-gray-500">Estrutura ainda não disponível para este grupo.</p>
+            ) : (
+              <ul className="space-y-2">
+                {projectSections.map((section) => (
+                  <li
+                    key={String(section.id)}
+                    className="flex items-start justify-between gap-3 border border-gray-100 rounded-md px-3 py-2 bg-gray-50"
+                  >
+                    <div>
+                      <p className="text-sm font-medium text-gray-900">
+                        {section.section_order}. {section.section_title}
+                      </p>
+                      <p className="text-xs text-gray-600 mt-0.5">
+                        {section.section_description || "Sem descrição"}
+                      </p>
+                    </div>
+                    <span
+                      className={`text-xs font-semibold px-2 py-1 rounded-full ${
+                        section.status === "concluido"
+                          ? "bg-green-100 text-green-700"
+                          : section.status === "em_andamento"
+                            ? "bg-amber-100 text-amber-700"
+                            : "bg-gray-200 text-gray-700"
+                      }`}
+                    >
+                      {getProjectSectionStatusLabel(section.status)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
         </div>
 
