@@ -27,10 +27,16 @@ import {
   fetchGroupProjectSectionStageSchedule,
   upsertProjectSectionStageSchedule,
 } from "@/services/project-section-stage-schedule-service";
+import {
+  createGroupInPersonMeeting,
+  fetchGroupInPersonMeetings,
+  updateGroupInPersonMeetingStatus,
+} from "@/services/group-in-person-meeting-service";
 import { fetchGroupById } from "@/services/group-service";
 import { getAuthenticatedProfile } from "@/lib/auth/session-service";
 import type { ProjectSectionStatus } from "@/types/project-section";
 import type { ProjectDevelopmentChecklistStatus } from "@/types/project-development-checklist-item";
+import type { GroupInPersonMeetingStatus } from "@/types/group-in-person-meeting";
 
 interface GroupProjectPageProps {
   params: Promise<{ id: string }>;
@@ -50,6 +56,9 @@ interface GroupProjectPageProps {
     checklist_item?: string;
     schedule_status?: string;
     schedule_section?: string;
+    meeting_status?: string;
+    meeting_action?: string;
+    meeting_id?: string;
   }>;
 }
 
@@ -67,6 +76,7 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
   const canAnswerAsAdvisor = profile?.role === "advisor" || profile?.role === "coordinator";
   const canManageChecklist = profile?.role === "advisor" || profile?.role === "coordinator";
   const canManageSchedule = profile?.role === "advisor" || profile?.role === "coordinator";
+  const canManageMeetings = profile?.role === "advisor" || profile?.role === "coordinator";
   const canAskAsStudent = profile?.role === "student";
 
   const group = await fetchGroupById(id);
@@ -333,6 +343,77 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
     redirect(`/groups/${id}/project?schedule_status=success&schedule_section=${sectionId}`);
   }
 
+  async function handleAddInPersonMeeting(formData: FormData) {
+    "use server";
+
+    const authenticatedProfile = await getAuthenticatedProfile();
+    if (!authenticatedProfile || (authenticatedProfile.role !== "advisor" && authenticatedProfile.role !== "coordinator")) {
+      redirect(`/groups/${id}/project?meeting_status=forbidden&meeting_action=add`);
+    }
+
+    const meetingDate = String(formData.get("meeting_date") ?? "").trim();
+    const meetingTimeRaw = String(formData.get("meeting_time") ?? "").trim();
+    const meetingTime = meetingTimeRaw.length > 0 ? meetingTimeRaw : null;
+    const locationRaw = String(formData.get("location") ?? "").trim();
+    const location = locationRaw.length > 0 ? locationRaw : null;
+    const agenda = String(formData.get("agenda") ?? "").trim();
+    const notesRaw = String(formData.get("notes") ?? "").trim();
+    const notes = notesRaw.length > 0 ? notesRaw : null;
+
+    const isDateValid = /^\d{4}-\d{2}-\d{2}$/.test(meetingDate);
+    if (!isDateValid || agenda.length < 3) {
+      redirect(`/groups/${id}/project?meeting_status=invalid&meeting_action=add`);
+    }
+
+    try {
+      await createGroupInPersonMeeting({
+        group_id: id,
+        meeting_date: meetingDate,
+        meeting_time: meetingTime,
+        location,
+        agenda,
+        notes,
+        author_profile_id: authenticatedProfile.id,
+        author_role: authenticatedProfile.role === "coordinator" ? "coordinator" : "advisor",
+        author_name: authenticatedProfile.name,
+      });
+    } catch {
+      redirect(`/groups/${id}/project?meeting_status=error&meeting_action=add`);
+    }
+
+    revalidatePath(`/groups/${id}/project`);
+    redirect(`/groups/${id}/project?meeting_status=success&meeting_action=add`);
+  }
+
+  async function handleUpdateMeetingStatus(formData: FormData) {
+    "use server";
+
+    const authenticatedProfile = await getAuthenticatedProfile();
+    if (!authenticatedProfile || (authenticatedProfile.role !== "advisor" && authenticatedProfile.role !== "coordinator")) {
+      redirect(`/groups/${id}/project?meeting_status=forbidden&meeting_action=status`);
+    }
+
+    const meetingId = String(formData.get("meeting_id") ?? "").trim();
+    const rawStatus = String(formData.get("next_status") ?? "").trim();
+    const allowed: GroupInPersonMeetingStatus[] = ["agendado", "realizado", "cancelado"];
+    const nextStatus = allowed.includes(rawStatus as GroupInPersonMeetingStatus)
+      ? (rawStatus as GroupInPersonMeetingStatus)
+      : null;
+
+    if (!meetingId || !nextStatus) {
+      redirect(`/groups/${id}/project?meeting_status=invalid&meeting_action=status&meeting_id=${meetingId}`);
+    }
+
+    try {
+      await updateGroupInPersonMeetingStatus(meetingId, nextStatus);
+    } catch {
+      redirect(`/groups/${id}/project?meeting_status=error&meeting_action=status&meeting_id=${meetingId}`);
+    }
+
+    revalidatePath(`/groups/${id}/project`);
+    redirect(`/groups/${id}/project?meeting_status=success&meeting_action=status&meeting_id=${meetingId}`);
+  }
+
   let sections = [] as Awaited<ReturnType<typeof ensureGroupProjectSectionsStructure>>;
   let sectionsError: string | null = null;
   let comments = [] as Awaited<ReturnType<typeof fetchGroupProjectSectionComments>>;
@@ -347,6 +428,8 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
   let checklistError: string | null = null;
   let stageSchedule = [] as Awaited<ReturnType<typeof fetchGroupProjectSectionStageSchedule>>;
   let stageScheduleError: string | null = null;
+  let inPersonMeetings = [] as Awaited<ReturnType<typeof fetchGroupInPersonMeetings>>;
+  let inPersonMeetingsError: string | null = null;
 
   try {
     sections = await ensureGroupProjectSectionsStructure(id);
@@ -388,6 +471,12 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
     stageSchedule = await fetchGroupProjectSectionStageSchedule(id);
   } catch (error) {
     stageScheduleError = error instanceof Error ? error.message : "Erro ao carregar cronograma por etapa.";
+  }
+
+  try {
+    inPersonMeetings = await fetchGroupInPersonMeetings(id);
+  } catch (error) {
+    inPersonMeetingsError = error instanceof Error ? error.message : "Erro ao carregar agenda de encontros presenciais.";
   }
 
   const commentsBySection = new Map<string, typeof comments>();
@@ -491,6 +580,179 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
             <p className="text-amber-800 text-sm mt-1">{stageScheduleError}</p>
           </div>
         )}
+
+        {inPersonMeetingsError && (
+          <div className="bg-amber-50 border border-amber-300 rounded-lg p-4 mb-6">
+            <p className="text-amber-900 font-medium">Configuração pendente da agenda de encontros presenciais</p>
+            <p className="text-amber-800 text-sm mt-1">{inPersonMeetingsError}</p>
+          </div>
+        )}
+
+        <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm mb-6">
+          <h2 className="text-lg font-semibold text-gray-900 mb-2">Agenda de encontros presenciais</h2>
+
+          {query.meeting_status === "success" && query.meeting_action === "add" && (
+            <p className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-md px-3 py-2 mb-3">
+              Encontro presencial cadastrado com sucesso.
+            </p>
+          )}
+          {query.meeting_status === "success" && query.meeting_action === "status" && (
+            <p className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-md px-3 py-2 mb-3">
+              Status do encontro atualizado com sucesso.
+            </p>
+          )}
+          {query.meeting_status === "invalid" && (
+            <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2 mb-3">
+              Dados inválidos para agenda de encontros. Revise e tente novamente.
+            </p>
+          )}
+          {query.meeting_status === "error" && (
+            <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2 mb-3">
+              Não foi possível salvar a agenda de encontros. Tente novamente.
+            </p>
+          )}
+          {query.meeting_status === "forbidden" && (
+            <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2 mb-3">
+              Apenas orientadores (ou coordenação) podem alterar a agenda de encontros nesta etapa.
+            </p>
+          )}
+
+          <div className="space-y-2 mb-4">
+            {inPersonMeetings.length === 0 ? (
+              <p className="text-sm text-gray-500">Ainda não há encontros presenciais registrados para este grupo.</p>
+            ) : (
+              inPersonMeetings.map((meeting) => (
+                <div key={String(meeting.id)} className="border border-gray-100 rounded-md px-3 py-3 bg-gray-50">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-medium text-gray-900">{meeting.agenda}</p>
+                      <p className="text-xs text-gray-600 mt-1">
+                        {new Date(`${meeting.meeting_date}T00:00:00`).toLocaleDateString("pt-BR", {
+                          day: "2-digit",
+                          month: "2-digit",
+                          year: "numeric",
+                        })}
+                        {meeting.meeting_time ? ` • ${meeting.meeting_time.slice(0, 5)}` : ""}
+                        {meeting.location ? ` • ${meeting.location}` : ""}
+                      </p>
+                      {meeting.notes && (
+                        <p className="text-xs text-gray-700 mt-1 whitespace-pre-line">{meeting.notes}</p>
+                      )}
+                      <p className="text-xs text-gray-500 mt-1">
+                        {meeting.author_name} ({meeting.author_role === "advisor" ? "orientador" : "coordenação"})
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`text-xs font-semibold px-2 py-1 rounded-full ${
+                          meeting.status === "realizado"
+                            ? "bg-green-100 text-green-700"
+                            : meeting.status === "cancelado"
+                              ? "bg-red-100 text-red-700"
+                              : "bg-amber-100 text-amber-700"
+                        }`}
+                      >
+                        {meeting.status === "realizado"
+                          ? "Realizado"
+                          : meeting.status === "cancelado"
+                            ? "Cancelado"
+                            : "Agendado"}
+                      </span>
+
+                      {canManageMeetings && (
+                        <form action={handleUpdateMeetingStatus} className="flex items-center gap-1">
+                          <input type="hidden" name="meeting_id" value={String(meeting.id)} />
+                          <select
+                            name="next_status"
+                            defaultValue={meeting.status}
+                            className="px-2 py-1 border border-gray-300 rounded-md text-xs text-black bg-white"
+                          >
+                            <option value="agendado">Agendado</option>
+                            <option value="realizado">Realizado</option>
+                            <option value="cancelado">Cancelado</option>
+                          </select>
+                          <button
+                            type="submit"
+                            className="text-xs font-medium px-2 py-1 rounded-md border border-gray-300 bg-white hover:bg-gray-100 text-gray-700"
+                          >
+                            Atualizar
+                          </button>
+                        </form>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+
+          {canManageMeetings && (
+            <form action={handleAddInPersonMeeting} className="space-y-3 border-t border-gray-100 pt-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div>
+                  <label htmlFor="meeting-date" className="block text-sm text-gray-700 mb-1">Data</label>
+                  <input
+                    id="meeting-date"
+                    name="meeting_date"
+                    type="date"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="meeting-time" className="block text-sm text-gray-700 mb-1">Horário (opcional)</label>
+                  <input
+                    id="meeting-time"
+                    name="meeting_time"
+                    type="time"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="meeting-location" className="block text-sm text-gray-700 mb-1">Local (opcional)</label>
+                  <input
+                    id="meeting-location"
+                    name="location"
+                    type="text"
+                    placeholder="Ex.: Sala 12"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label htmlFor="meeting-agenda" className="block text-sm text-gray-700 mb-1">Objetivo/Pauta</label>
+                <textarea
+                  id="meeting-agenda"
+                  name="agenda"
+                  rows={2}
+                  placeholder="Ex.: Revisar andamento da seção 3 e definir tarefas da semana."
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <div>
+                <label htmlFor="meeting-notes" className="block text-sm text-gray-700 mb-1">Observações (opcional)</label>
+                <textarea
+                  id="meeting-notes"
+                  name="notes"
+                  rows={2}
+                  placeholder="Ex.: Levar versão impressa do roteiro para discussão."
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              <button
+                type="submit"
+                className="bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2 rounded-md text-sm"
+              >
+                Agendar encontro presencial
+              </button>
+            </form>
+          )}
+        </div>
 
         <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm mb-6">
           <h2 className="text-lg font-semibold text-gray-900 mb-2">Checklist de desenvolvimento</h2>
