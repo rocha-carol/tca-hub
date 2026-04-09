@@ -10,6 +10,10 @@ import {
   createProjectSectionQuestion,
   fetchGroupProjectSectionQuestions,
 } from "@/services/project-section-question-service";
+import {
+  createProjectSectionQuestionAnswer,
+  fetchGroupProjectSectionQuestionAnswers,
+} from "@/services/project-section-question-answer-service";
 import { fetchGroupById } from "@/services/group-service";
 import { getAuthenticatedProfile } from "@/lib/auth/session-service";
 import type { ProjectSectionStatus } from "@/types/project-section";
@@ -23,6 +27,8 @@ interface GroupProjectPageProps {
     comment_section?: string;
     question_status?: string;
     question_section?: string;
+    answer_status?: string;
+    answer_question?: string;
   }>;
 }
 
@@ -37,6 +43,7 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
   const query = searchParams ? await searchParams : {};
   const profile = await getAuthenticatedProfile();
   const canCommentAsAdvisor = profile?.role === "advisor" || profile?.role === "coordinator";
+  const canAnswerAsAdvisor = profile?.role === "advisor" || profile?.role === "coordinator";
   const canAskAsStudent = profile?.role === "student";
 
   const group = await fetchGroupById(id);
@@ -139,12 +146,48 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
     redirect(`/groups/${id}/project?question_status=success&question_section=${sectionId}`);
   }
 
+  async function handleAddQuestionAnswer(formData: FormData) {
+    "use server";
+
+    const authenticatedProfile = await getAuthenticatedProfile();
+    if (!authenticatedProfile || (authenticatedProfile.role !== "advisor" && authenticatedProfile.role !== "coordinator")) {
+      redirect(`/groups/${id}/project?answer_status=forbidden`);
+    }
+
+    const sectionId = String(formData.get("section_id") ?? "").trim();
+    const questionId = String(formData.get("question_id") ?? "").trim();
+    const answer = String(formData.get("answer") ?? "").trim();
+
+    if (!sectionId || !questionId || answer.length < 3) {
+      redirect(`/groups/${id}/project?answer_status=invalid&answer_question=${questionId}`);
+    }
+
+    try {
+      await createProjectSectionQuestionAnswer({
+        group_id: id,
+        section_id: sectionId,
+        question_id: questionId,
+        author_profile_id: authenticatedProfile.id,
+        author_role: authenticatedProfile.role === "coordinator" ? "coordinator" : "advisor",
+        author_name: authenticatedProfile.name,
+        answer,
+      });
+    } catch {
+      redirect(`/groups/${id}/project?answer_status=error&answer_question=${questionId}`);
+    }
+
+    revalidatePath(`/groups/${id}/project`);
+    redirect(`/groups/${id}/project?answer_status=success&answer_question=${questionId}`);
+  }
+
   let sections = [] as Awaited<ReturnType<typeof ensureGroupProjectSectionsStructure>>;
   let sectionsError: string | null = null;
   let comments = [] as Awaited<ReturnType<typeof fetchGroupProjectSectionComments>>;
   let commentsError: string | null = null;
   let questions = [] as Awaited<ReturnType<typeof fetchGroupProjectSectionQuestions>>;
   let questionsError: string | null = null;
+  let answers = [] as Awaited<ReturnType<typeof fetchGroupProjectSectionQuestionAnswers>>;
+  let answersError: string | null = null;
 
   try {
     sections = await ensureGroupProjectSectionsStructure(id);
@@ -164,6 +207,12 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
     questionsError = error instanceof Error ? error.message : "Erro ao carregar dúvidas das seções.";
   }
 
+  try {
+    answers = await fetchGroupProjectSectionQuestionAnswers(id);
+  } catch (error) {
+    answersError = error instanceof Error ? error.message : "Erro ao carregar respostas das dúvidas.";
+  }
+
   const commentsBySection = new Map<string, typeof comments>();
   for (const comment of comments) {
     const key = String(comment.section_id);
@@ -178,6 +227,14 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
     const list = questionsBySection.get(key) ?? [];
     list.push(question);
     questionsBySection.set(key, list);
+  }
+
+  const answersByQuestion = new Map<string, typeof answers>();
+  for (const answer of answers) {
+    const key = String(answer.question_id);
+    const list = answersByQuestion.get(key) ?? [];
+    list.push(answer);
+    answersByQuestion.set(key, list);
   }
 
   return (
@@ -209,6 +266,13 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
           <div className="bg-amber-50 border border-amber-300 rounded-lg p-4 mb-6">
             <p className="text-amber-900 font-medium">Configuração pendente das dúvidas por seção</p>
             <p className="text-amber-800 text-sm mt-1">{questionsError}</p>
+          </div>
+        )}
+
+        {answersError && (
+          <div className="bg-amber-50 border border-amber-300 rounded-lg p-4 mb-6">
+            <p className="text-amber-900 font-medium">Configuração pendente das respostas às dúvidas</p>
+            <p className="text-amber-800 text-sm mt-1">{answersError}</p>
           </div>
         )}
 
@@ -337,6 +401,74 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
                                 })}`
                               : ""}
                           </p>
+
+                          <div className="mt-3 pl-3 border-l-2 border-gray-200">
+                            <p className="text-xs font-semibold text-gray-700 mb-2">Respostas à dúvida</p>
+
+                            {query.answer_status === "success" && query.answer_question === String(question.id) && (
+                              <p className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-md px-3 py-2 mb-2">
+                                Resposta registrada com sucesso.
+                              </p>
+                            )}
+                            {query.answer_status === "invalid" && query.answer_question === String(question.id) && (
+                              <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2 mb-2">
+                                Resposta inválida. Escreva ao menos 3 caracteres.
+                              </p>
+                            )}
+                            {query.answer_status === "error" && query.answer_question === String(question.id) && (
+                              <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2 mb-2">
+                                Não foi possível salvar a resposta. Tente novamente.
+                              </p>
+                            )}
+                            {query.answer_status === "forbidden" && (
+                              <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2 mb-2">
+                                Apenas orientadores (ou coordenação) podem responder dúvidas nesta etapa.
+                              </p>
+                            )}
+
+                            <div className="space-y-2 mb-2">
+                              {(answersByQuestion.get(String(question.id)) || []).length === 0 ? (
+                                <p className="text-sm text-gray-500">Nenhuma resposta registrada ainda.</p>
+                              ) : (
+                                (answersByQuestion.get(String(question.id)) || []).map((answer) => (
+                                  <div key={String(answer.id)} className="border border-gray-100 rounded-md px-3 py-2 bg-white">
+                                    <p className="text-sm text-gray-900">{answer.answer}</p>
+                                    <p className="text-xs text-gray-500 mt-1">
+                                      {answer.author_name} ({answer.author_role === "advisor" ? "orientador" : "coordenação"})
+                                      {answer.created_at
+                                        ? ` • ${new Date(answer.created_at).toLocaleString("pt-BR", {
+                                            day: "2-digit",
+                                            month: "2-digit",
+                                            year: "numeric",
+                                            hour: "2-digit",
+                                            minute: "2-digit",
+                                          })}`
+                                        : ""}
+                                    </p>
+                                  </div>
+                                ))
+                              )}
+                            </div>
+
+                            {canAnswerAsAdvisor && (
+                              <form action={handleAddQuestionAnswer} className="space-y-2">
+                                <input type="hidden" name="section_id" value={String(section.id)} />
+                                <input type="hidden" name="question_id" value={String(question.id)} />
+                                <textarea
+                                  name="answer"
+                                  rows={3}
+                                  placeholder="Responder dúvida do estudante..."
+                                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                                />
+                                <button
+                                  type="submit"
+                                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-medium px-3 py-2 rounded-md text-sm"
+                                >
+                                  Enviar resposta
+                                </button>
+                              </form>
+                            )}
+                          </div>
                         </div>
                       ))
                     )}
