@@ -27,6 +27,46 @@ function isIndicationColumnMissing(message: string) {
 	);
 }
 
+async function ensureAdvisorAvailableForPrimaryAssignment(
+	advisorId: string,
+	groupId: string
+): Promise<void> {
+	const supabase = await createClient();
+
+	const { data: advisorData, error: advisorError } = await supabase
+		.from("advisors")
+		.select("id, active, max_orientacoes")
+		.eq("id", advisorId)
+		.single();
+
+	if (advisorError) {
+		throw new Error(`Erro ao validar disponibilidade do orientador: ${advisorError.message}`);
+	}
+
+	if (!advisorData || advisorData.active === false) {
+		throw new Error("Orientador indisponível para assumir como principal.");
+	}
+
+	const maxOrientacoes = advisorData.max_orientacoes ?? 5;
+
+	const { count, error: countError } = await supabase
+		.from("groups")
+		.select("id", { count: "exact", head: true })
+		.eq("primary_advisor_id", advisorId)
+		.neq("id", groupId);
+
+	if (countError) {
+		throw new Error(`Erro ao calcular carga atual do orientador: ${countError.message}`);
+	}
+
+	const currentCount = count ?? 0;
+	if (currentCount >= maxOrientacoes) {
+		throw new Error(
+			`Orientador indisponível: limite de orientações atingido (${currentCount}/${maxOrientacoes}).`
+		);
+	}
+}
+
 export interface CreateGroupData {
 	student_1_id?: string | number | null;
 	member_1_name: string;
@@ -173,6 +213,10 @@ export async function updateGroupAdvisors(
 	primaryAdvisorId: string | null,
 	coAdvisorId: string | null
 ): Promise<void> {
+	if (primaryAdvisorId) {
+		await ensureAdvisorAvailableForPrimaryAssignment(primaryAdvisorId, groupId);
+	}
+
 	const supabase = await createClient();
 
 	const { error } = await supabase
@@ -233,8 +277,6 @@ export async function respondAdvisorIndication(
 	groupId: string,
 	decision: Exclude<AdvisorIndicationStatus, "pendente">
 ): Promise<void> {
-	const supabase = await createClient();
-
 	const group = await fetchGroupById(groupId);
 	if (!group) {
 		throw new Error("Grupo não encontrado para responder indicação.");
@@ -243,6 +285,12 @@ export async function respondAdvisorIndication(
 	if (!group.indicated_advisor_id) {
 		throw new Error("Não existe indicação pendente para este grupo.");
 	}
+
+	if (decision === "aceita") {
+		await ensureAdvisorAvailableForPrimaryAssignment(group.indicated_advisor_id, groupId);
+	}
+
+	const supabase = await createClient();
 
 	const updatePayload =
 		decision === "aceita"

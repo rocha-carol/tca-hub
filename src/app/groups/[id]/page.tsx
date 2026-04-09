@@ -68,6 +68,7 @@ interface GroupDetailPageProps {
   searchParams: Promise<{
     indication?: string;
     indication_response?: string;
+    advisor_error?: string;
     pref_error?: string;
     pref_success?: string;
   }>;
@@ -81,7 +82,7 @@ interface GroupDetailPageProps {
  */
 export default async function GroupDetailPage({ params, searchParams }: GroupDetailPageProps) {
   const { id } = await params;
-  const { indication, indication_response, pref_error, pref_success } = await searchParams;
+  const { indication, indication_response, advisor_error, pref_error, pref_success } = await searchParams;
 
   async function handleAssignAdvisors(formData: FormData) {
     "use server";
@@ -89,7 +90,15 @@ export default async function GroupDetailPage({ params, searchParams }: GroupDet
     const primaryAdvisorId = String(formData.get("primary_advisor_id") ?? "").trim() || null;
     const coAdvisorId = String(formData.get("co_advisor_id") ?? "").trim() || null;
 
-    await updateGroupAdvisors(id, primaryAdvisorId, coAdvisorId);
+    try {
+      await updateGroupAdvisors(id, primaryAdvisorId, coAdvisorId);
+    } catch (error) {
+      const message = error instanceof Error ? error.message.toLowerCase() : "";
+      if (message.includes("indisponível") || message.includes("limite")) {
+        redirect(`/groups/${id}?advisor_error=unavailable`);
+      }
+      redirect(`/groups/${id}?advisor_error=save`);
+    }
 
     revalidatePath(`/groups/${id}`);
     redirect(`/groups/${id}`);
@@ -171,7 +180,15 @@ export default async function GroupDetailPage({ params, searchParams }: GroupDet
       redirect(`/groups/${id}`);
     }
 
-    await respondAdvisorIndication(id, decision);
+    try {
+      await respondAdvisorIndication(id, decision);
+    } catch (error) {
+      const message = error instanceof Error ? error.message.toLowerCase() : "";
+      if (message.includes("indisponível") || message.includes("limite")) {
+        redirect(`/groups/${id}?indication_response=unavailable`);
+      }
+      redirect(`/groups/${id}?indication_response=error`);
+    }
 
     revalidatePath(`/groups/${id}`);
     revalidatePath("/groups");
@@ -465,6 +482,16 @@ export default async function GroupDetailPage({ params, searchParams }: GroupDet
                     Aceite registrado. O orientador foi definido como principal do grupo.
                   </p>
                 )}
+                {indication_response === "unavailable" && (
+                  <p className="text-xs text-red-700 mb-2 font-medium">
+                    Não foi possível aceitar: o orientador atingiu o limite e está indisponível.
+                  </p>
+                )}
+                {indication_response === "error" && (
+                  <p className="text-xs text-red-700 mb-2 font-medium">
+                    Não foi possível registrar a resposta da indicação. Tente novamente.
+                  </p>
+                )}
                 {indication_response === "recusada" && (
                   <p className="text-xs text-red-700 mb-2 font-medium">
                     Recusa registrada. A indicação foi removida para nova tentativa.
@@ -571,6 +598,17 @@ export default async function GroupDetailPage({ params, searchParams }: GroupDet
 
               <form action={handleAssignAdvisors} className="space-y-4 border-t border-gray-100 pt-4">
                 <p className="text-sm font-medium text-gray-700">Atualizar orientadores:</p>
+
+                {advisor_error === "unavailable" && (
+                  <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2">
+                    Este orientador principal está indisponível no momento (limite de orientações atingido).
+                  </p>
+                )}
+                {advisor_error === "save" && (
+                  <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2">
+                    Não foi possível salvar a atualização de orientadores. Tente novamente.
+                  </p>
+                )}
 
                 <div>
                   <label htmlFor="primary_advisor_id" className="block text-sm text-gray-600 mb-1">
