@@ -3,7 +3,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getAuthenticatedProfile, getAuthenticatedUser } from "@/lib/auth/session-service";
-import { fetchAllGroups } from "@/services/group-service";
+import { fetchAllGroups, updateGroupAdvisors } from "@/services/group-service";
 import { fetchAllAdvisors } from "@/services/advisor-service";
 import { fetchCoordinatorSummary } from "@/services/coordinator-summary-service";
 import type { GroupStatus } from "@/types/group";
@@ -19,7 +19,15 @@ function getStatusLabel(status: GroupStatus) {
  *
  * Exibe visão geral do sistema: contadores, grupos recentes e perfil do usuário.
  */
-export default async function DashboardPage() {
+interface DashboardPageProps {
+  searchParams?: Promise<{ bind_status?: string; bind_group?: string }>;
+}
+
+export default async function DashboardPage({ searchParams }: DashboardPageProps) {
+  const params = searchParams ? await searchParams : {};
+  const bindStatus = params.bind_status ?? null;
+  const bindGroup = params.bind_group ?? null;
+
   async function handleUpdateProfile(formData: FormData) {
     "use server";
 
@@ -51,6 +59,41 @@ export default async function DashboardPage() {
     redirect("/dashboard");
   }
 
+  async function handleManualBindAdvisors(formData: FormData) {
+    "use server";
+
+    const authenticatedProfile = await getAuthenticatedProfile();
+    if (authenticatedProfile?.role !== "coordinator") {
+      redirect("/dashboard?bind_status=forbidden");
+    }
+
+    const groupId = String(formData.get("group_id") ?? "").trim();
+    const primaryAdvisorId = String(formData.get("primary_advisor_id") ?? "").trim() || null;
+    const coAdvisorId = String(formData.get("co_advisor_id") ?? "").trim() || null;
+
+    if (!groupId || !primaryAdvisorId) {
+      redirect(`/dashboard?bind_status=invalid&bind_group=${groupId}`);
+    }
+
+    if (coAdvisorId && coAdvisorId === primaryAdvisorId) {
+      redirect(`/dashboard?bind_status=duplicate&bind_group=${groupId}`);
+    }
+
+    try {
+      await updateGroupAdvisors(groupId, primaryAdvisorId, coAdvisorId);
+    } catch (error) {
+      const message = error instanceof Error ? error.message.toLowerCase() : "";
+      if (message.includes("indisponível") || message.includes("limite")) {
+        redirect(`/dashboard?bind_status=unavailable&bind_group=${groupId}`);
+      }
+      redirect(`/dashboard?bind_status=error&bind_group=${groupId}`);
+    }
+
+    revalidatePath("/dashboard");
+    revalidatePath("/groups");
+    redirect(`/dashboard?bind_status=success&bind_group=${groupId}`);
+  }
+
   const user = await getAuthenticatedUser();
 
   if (!user) {
@@ -71,6 +114,7 @@ export default async function DashboardPage() {
 
   // Busca dados de resumo — falhas silenciosas para não quebrar o dashboard
   let groups: Awaited<ReturnType<typeof fetchAllGroups>> = [];
+  let advisors: Awaited<ReturnType<typeof fetchAllAdvisors>> = [];
   let advisorCount = 0;
   let coordinatorSummary: Awaited<ReturnType<typeof fetchCoordinatorSummary>> | null = null;
 
@@ -81,11 +125,13 @@ export default async function DashboardPage() {
   }
 
   try {
-    const advisors = await fetchAllAdvisors();
+    advisors = await fetchAllAdvisors();
     advisorCount = advisors.length;
   } catch {
     // tabela não existe ainda
   }
+
+  const activeAdvisors = advisors.filter((advisor) => advisor.active !== false);
 
   try {
     coordinatorSummary = await fetchCoordinatorSummary();
@@ -108,14 +154,16 @@ export default async function DashboardPage() {
           <p className="text-gray-600 mt-1">
             Olá, {profile?.name || user.email}
           </p>
-          <div className="mt-4">
-            <Link
-              href="/groups?from=coordinator"
-              className="inline-flex items-center bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-4 py-2 rounded-md"
-            >
-              Criar grupo manualmente
-            </Link>
-          </div>
+          {isCoordinator && (
+            <div className="mt-4">
+              <Link
+                href="/groups?from=coordinator"
+                className="inline-flex items-center bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium px-4 py-2 rounded-md"
+              >
+                Criar grupo manualmente
+              </Link>
+            </div>
+          )}
         </header>
 
         {/* Contadores */}
@@ -262,13 +310,92 @@ export default async function DashboardPage() {
                               <span className="text-gray-400">Sem indicação ativa</span>
                             )}
                           </p>
+
+                          {bindGroup === group.id && bindStatus === "success" && (
+                            <p className="text-xs text-green-700 mt-1 font-medium">Orientadores vinculados manualmente com sucesso.</p>
+                          )}
+                          {bindGroup === group.id && bindStatus === "unavailable" && (
+                            <p className="text-xs text-red-700 mt-1 font-medium">Orientador principal indisponível (limite atingido).</p>
+                          )}
+                          {bindGroup === group.id && bindStatus === "duplicate" && (
+                            <p className="text-xs text-red-700 mt-1 font-medium">Coorientador não pode ser igual ao orientador principal.</p>
+                          )}
+                          {bindGroup === group.id && bindStatus === "invalid" && (
+                            <p className="text-xs text-red-700 mt-1 font-medium">Selecione ao menos um orientador principal.</p>
+                          )}
+                          {bindGroup === group.id && bindStatus === "error" && (
+                            <p className="text-xs text-red-700 mt-1 font-medium">Não foi possível salvar o vínculo manual. Tente novamente.</p>
+                          )}
                         </div>
-                        <Link
-                          href={`/groups/${group.id}`}
-                          className="shrink-0 text-xs text-blue-600 hover:underline font-medium"
-                        >
-                          Gerenciar →
-                        </Link>
+
+                        <div className="w-full max-w-sm">
+                          {activeAdvisors.length > 0 ? (
+                            <form action={handleManualBindAdvisors} className="space-y-2">
+                              <input type="hidden" name="group_id" value={group.id} />
+
+                              <div>
+                                <label htmlFor={`manual-primary-${group.id}`} className="block text-xs text-gray-600 mb-1">
+                                  Orientador principal
+                                </label>
+                                <select
+                                  id={`manual-primary-${group.id}`}
+                                  name="primary_advisor_id"
+                                  defaultValue=""
+                                  className="w-full px-2.5 py-1.5 border border-gray-300 rounded-md text-black bg-white text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                >
+                                  <option value="">— Selecionar —</option>
+                                  {activeAdvisors.map((advisor) => (
+                                    <option key={advisor.id} value={String(advisor.id)}>
+                                      {advisor.name}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+
+                              <div>
+                                <label htmlFor={`manual-co-${group.id}`} className="block text-xs text-gray-600 mb-1">
+                                  Coorientador (opcional)
+                                </label>
+                                <select
+                                  id={`manual-co-${group.id}`}
+                                  name="co_advisor_id"
+                                  defaultValue=""
+                                  className="w-full px-2.5 py-1.5 border border-gray-300 rounded-md text-black bg-white text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                >
+                                  <option value="">— Nenhum —</option>
+                                  {activeAdvisors.map((advisor) => (
+                                    <option key={advisor.id} value={String(advisor.id)}>
+                                      {advisor.name}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+
+                              <div className="flex items-center justify-between gap-2">
+                                <button
+                                  type="submit"
+                                  className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium px-3 py-1.5 rounded-md"
+                                >
+                                  Vincular manualmente
+                                </button>
+
+                                <Link
+                                  href={`/groups/${group.id}`}
+                                  className="text-xs text-blue-600 hover:underline font-medium"
+                                >
+                                  Detalhes →
+                                </Link>
+                              </div>
+                            </form>
+                          ) : (
+                            <div className="text-right">
+                              <p className="text-xs text-gray-500 mb-1">Sem orientadores ativos para vincular.</p>
+                              <Link href="/advisors" className="text-xs text-blue-600 hover:underline font-medium">
+                                Cadastrar orientador →
+                              </Link>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     ))}
                 </div>
