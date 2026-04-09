@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getAuthenticatedProfile, getAuthenticatedUser } from "@/lib/auth/session-service";
 import { fetchAllGroups } from "@/services/group-service";
 import { fetchAllAdvisors } from "@/services/advisor-service";
+import { fetchCoordinatorSummary } from "@/services/coordinator-summary-service";
 import type { GroupStatus } from "@/types/group";
 
 function getStatusLabel(status: GroupStatus) {
@@ -70,6 +71,7 @@ export default async function DashboardPage() {
   // Busca dados de resumo — falhas silenciosas para não quebrar o dashboard
   let groups: Awaited<ReturnType<typeof fetchAllGroups>> = [];
   let advisorCount = 0;
+  let coordinatorSummary: Awaited<ReturnType<typeof fetchCoordinatorSummary>> | null = null;
 
   try {
     groups = await fetchAllGroups();
@@ -82,6 +84,12 @@ export default async function DashboardPage() {
     advisorCount = advisors.length;
   } catch {
     // tabela não existe ainda
+  }
+
+  try {
+    coordinatorSummary = await fetchCoordinatorSummary();
+  } catch {
+    // falha silenciosa — painel pode não aparecer se banco não estiver pronto
   }
 
   const recentGroups = groups.slice(0, 5);
@@ -128,6 +136,115 @@ export default async function DashboardPage() {
             <p className="text-gray-700">Concluídos: <strong>{statusCount.concluido}</strong></p>
           </div>
         </div>
+
+        {/* Painel do coordenador */}
+        {coordinatorSummary && (
+          <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm mb-8">
+            <h2 className="text-xl font-semibold text-gray-900 mb-5">Painel do coordenador</h2>
+
+            {/* Alertas */}
+            {(coordinatorSummary.groupsWithoutAdvisor > 0 || coordinatorSummary.advisorsFullCount > 0) && (
+              <div className="mb-5 space-y-2">
+                {coordinatorSummary.groupsWithoutAdvisor > 0 && (
+                  <div className="flex items-start gap-2 rounded-md bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-900">
+                    <span className="font-bold mt-0.5">⚠</span>
+                    <span>
+                      <strong>{coordinatorSummary.groupsWithoutAdvisor}</strong>{" "}
+                      {coordinatorSummary.groupsWithoutAdvisor === 1
+                        ? "grupo sem orientador principal"
+                        : "grupos sem orientador principal"}.
+                      {coordinatorSummary.groupsPendingIndication > 0 && (
+                        <> <strong>{coordinatorSummary.groupsPendingIndication}</strong>{" "}
+                        {coordinatorSummary.groupsPendingIndication === 1
+                          ? "deles tem lista de preferências e pode ser indicado automaticamente."
+                          : "deles têm lista de preferências e podem ser indicados automaticamente."}</>
+                      )}
+                    </span>
+                  </div>
+                )}
+                {coordinatorSummary.advisorsFullCount > 0 && (
+                  <div className="flex items-start gap-2 rounded-md bg-red-50 border border-red-200 px-4 py-3 text-sm text-red-900">
+                    <span className="font-bold mt-0.5">✕</span>
+                    <span>
+                      <strong>{coordinatorSummary.advisorsFullCount}</strong>{" "}
+                      {coordinatorSummary.advisorsFullCount === 1
+                        ? "orientador atingiu o limite de orientações."
+                        : "orientadores atingiram o limite de orientações."}
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Carga dos orientadores */}
+            {coordinatorSummary.advisorLoads.length > 0 ? (
+              <div className="mb-5">
+                <h3 className="text-sm font-semibold text-gray-700 mb-3">Carga de orientações por orientador</h3>
+                <div className="space-y-2">
+                  {coordinatorSummary.advisorLoads.map(({ advisor, currentCount, maxOrientacoes, available }) => {
+                    const pct = Math.min(100, Math.round((currentCount / maxOrientacoes) * 100));
+                    return (
+                      <div key={String(advisor.id)} className="flex items-center gap-3 text-sm">
+                        <div className="w-40 shrink-0 truncate text-gray-800 font-medium" title={advisor.name}>
+                          {advisor.name}
+                        </div>
+                        <div className="flex-1 h-2 rounded-full bg-gray-200 overflow-hidden">
+                          <div
+                            className={`h-2 rounded-full transition-all ${
+                              available ? "bg-green-500" : "bg-red-500"
+                            }`}
+                            style={{ width: `${pct}%` }}
+                          />
+                        </div>
+                        <span
+                          className={`w-28 text-right text-xs font-semibold ${
+                            available ? "text-green-700" : "text-red-700"
+                          }`}
+                        >
+                          {currentCount}/{maxOrientacoes} {available ? "— disponível" : "— cheio"}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : (
+              <p className="text-sm text-gray-500 mb-5">Nenhum orientador ativo cadastrado.</p>
+            )}
+
+            {/* Grupos sem orientador */}
+            {coordinatorSummary.groupIndicationStatuses.filter((g) => !g.hasPrimaryAdvisor).length > 0 && (
+              <div>
+                <h3 className="text-sm font-semibold text-gray-700 mb-3">Grupos sem orientador principal</h3>
+                <div className="divide-y divide-gray-100 border border-gray-100 rounded-md">
+                  {coordinatorSummary.groupIndicationStatuses
+                    .filter((g) => !g.hasPrimaryAdvisor)
+                    .map(({ group, hasPreferences }) => (
+                      <div key={group.id} className="flex items-center justify-between px-4 py-3 gap-3">
+                        <div>
+                          <p className="text-sm font-medium text-gray-900">
+                            {group.theme || group.member_1_name}
+                          </p>
+                          <p className="text-xs text-gray-500">{group.member_1_name} — {group.member_1_series}</p>
+                          {hasPreferences ? (
+                            <span className="text-xs text-blue-700 font-medium">Lista de preferências definida</span>
+                          ) : (
+                            <span className="text-xs text-gray-400">Sem lista de preferências</span>
+                          )}
+                        </div>
+                        <Link
+                          href={`/groups/${group.id}`}
+                          className="shrink-0 text-xs text-blue-600 hover:underline font-medium"
+                        >
+                          Gerenciar →
+                        </Link>
+                      </div>
+                    ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Grupos recentes */}
         <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm mb-8">
