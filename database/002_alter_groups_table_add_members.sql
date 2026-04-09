@@ -1,5 +1,4 @@
 -- Etapa 8 — ajuste da tabela groups para modelo com integrantes e série.
--- Use este script se a tabela groups já foi criada com o modelo anterior.
 
 alter table public.groups
   add column if not exists member_1_name text,
