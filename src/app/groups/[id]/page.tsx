@@ -372,6 +372,15 @@ export default async function GroupDetailPage({ params, searchParams }: GroupDet
           <div className="mt-5 pt-4 border-t border-gray-100">
             <h3 className="text-sm font-semibold text-gray-800 mb-2">Estrutura das seções do projeto TCA</h3>
 
+            <div className="mb-3">
+              <Link
+                href={`/groups/${id}/project`}
+                className="text-sm text-blue-600 hover:underline font-medium"
+              >
+                Editar projeto por seções →
+              </Link>
+            </div>
+
             {projectSectionsError && (
               <p className="text-xs text-amber-800 mb-2">{projectSectionsError}</p>
             )}

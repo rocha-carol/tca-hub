@@ -1,5 +1,9 @@
 import { createClient } from "@/lib/supabase/server";
-import type { GroupProjectSection, ProjectSectionTemplate } from "@/types/project-section";
+import type {
+  GroupProjectSection,
+  ProjectSectionStatus,
+  ProjectSectionTemplate,
+} from "@/types/project-section";
 
 export const DEFAULT_TCA_PROJECT_SECTIONS: ProjectSectionTemplate[] = [
   {
@@ -124,4 +128,32 @@ export async function ensureGroupProjectSectionsStructure(groupId: string): Prom
   }
 
   return fetchGroupProjectSections(groupId);
+}
+
+export async function updateGroupProjectSection(
+  sectionId: string | number,
+  data: {
+    content: string | null;
+    status: ProjectSectionStatus;
+  }
+): Promise<void> {
+  const supabase = await createClient();
+
+  const { error } = await supabase
+    .from("group_project_sections")
+    .update({
+      content: data.content,
+      status: data.status,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", sectionId);
+
+  if (error) {
+    const mapped = mapProjectSectionsErrorMessage(error.message, error.code);
+    if (mapped) {
+      throw new Error(mapped);
+    }
+
+    throw new Error(`Erro ao atualizar seção do projeto: ${error.message}`);
+  }
 }
