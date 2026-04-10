@@ -364,6 +364,11 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
   const { id } = await params;
   const query = searchParams ? await searchParams : {};
   const profile = await getAuthenticatedProfile();
+
+  if (profile?.role === "student") {
+    redirect("/meu-projeto");
+  }
+
   const canCommentAsAdvisor = profile?.role === "advisor" || profile?.role === "coordinator";
   const canAnswerAsAdvisor = profile?.role === "advisor" || profile?.role === "coordinator";
   const canManageChecklist = profile?.role === "advisor" || profile?.role === "coordinator";
@@ -374,10 +379,10 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
   const canManageProcessPhotos = !!profile;
   const canManageRepertory = !!profile;
   const canManageInteractiveGuides = !!profile;
-  const canRespondInteractiveGuides = profile?.role === "student";
+  const canRespondInteractiveGuides = false;
   const canManageAIFeedback = profile?.role === "advisor" || profile?.role === "coordinator";
   const canManageAuthorshipIndicator = profile?.role === "advisor" || profile?.role === "coordinator";
-  const canAskAsStudent = profile?.role === "student";
+  const canAskAsStudent = false;
 
   const group = await fetchGroupById(id);
   if (!group) {
