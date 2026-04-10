@@ -71,6 +71,9 @@ import {
 import { fetchGroupById } from "@/services/group-service";
 import { getAuthenticatedProfile } from "@/lib/auth/session-service";
 import { generatePedagogicalFeedbackWithAI } from "@/lib/ai/pedagogical-feedback-service";
+import { ProjectProgress } from "@/components/project/ProjectProgress";
+import { ProjectPreview } from "@/components/project/ProjectPreview";
+import { ProjectSections } from "@/components/project/ProjectSections";
 import type { ProjectSectionStatus } from "@/types/project-section";
 import type { ProjectDevelopmentChecklistStatus } from "@/types/project-development-checklist-item";
 import type { GroupInPersonMeetingStatus } from "@/types/group-in-person-meeting";
@@ -131,10 +134,117 @@ function getStatusLabel(status: ProjectSectionStatus) {
   return "Não iniciada";
 }
 
+function getFinalProductStatusLabel(status: GroupFinalProductStatus | null | undefined) {
+  return status === "finalizado" ? "Finalizado" : "Rascunho";
+}
+
+function getRepertoryTypeLabel(type: GroupRepertoryResourceType) {
+  if (type === "artigo") return "Artigo";
+  if (type === "livro") return "Livro";
+  if (type === "site") return "Site";
+  if (type === "video") return "Vídeo";
+  if (type === "podcast") return "Podcast";
+  return "Outro";
+}
+
+function buildPreviewExcerpt(content: string | null | undefined, maxLength = 220) {
+  if (!content || content.trim().length === 0) {
+    return "";
+  }
+
+  const normalized = content.replace(/\s+/g, " ").trim();
+  if (normalized.length <= maxLength) {
+    return normalized;
+  }
+
+  return `${normalized.slice(0, maxLength).trim()}...`;
+}
+
 type ProjectSectionReference = {
   id: string | number;
   section_title: string;
 };
+
+type SectionPedagogicalGuidance = {
+  objective: string;
+  guidingQuestions: string[];
+  expectedEvidence: string;
+};
+
+function getSectionPedagogicalGuidance(sectionKey: string): SectionPedagogicalGuidance {
+  const guidanceBySectionKey: Record<string, SectionPedagogicalGuidance> = {
+    tema_contexto: {
+      objective:
+        "Apresentar o tema escolhido, o contexto do território e a relevância inicial da investigação para a comunidade escolar.",
+      guidingQuestions: [
+        "Qual tema o grupo escolheu e por que ele importa no território?",
+        "Que situação concreta da escola, bairro ou comunidade motivou o projeto?",
+        "Quais vozes, experiências ou observações ajudam a contextualizar esse recorte?",
+      ],
+      expectedEvidence: "Registros do contexto, observações iniciais do território e justificativa da escolha do tema em linguagem autoral.",
+    },
+    problema_justificativa: {
+      objective:
+        "Definir com clareza o problema investigado e explicar por que enfrentá-lo é pedagogicamente e socialmente relevante.",
+      guidingQuestions: [
+        "Qual problema social, cultural, ambiental ou comunitário está sendo investigado?",
+        "Quem é afetado por esse problema e de que forma?",
+        "Por que vale a pena investigar esse problema no contexto do TCA?",
+      ],
+      expectedEvidence: "Problema formulado com clareza, justificativa consistente e relação explícita com a realidade do território.",
+    },
+    objetivos: {
+      objective:
+        "Transformar o problema em um objetivo geral e em objetivos específicos que orientem a pesquisa e a ação do grupo.",
+      guidingQuestions: [
+        "O que o grupo pretende compreender, analisar ou transformar com este projeto?",
+        "Quais etapas práticas precisam acontecer para alcançar o objetivo geral?",
+        "Os objetivos estão claros, viáveis e coerentes com o problema investigado?",
+      ],
+      expectedEvidence: "Objetivo geral objetivo, objetivos específicos acionáveis e coerência entre problema, investigação e proposta final.",
+    },
+    metodologia_plano: {
+      objective:
+        "Descrever como o grupo vai investigar o tema, organizar o percurso e distribuir responsabilidades ao longo do TCA.",
+      guidingQuestions: [
+        "Quais estratégias de pesquisa o grupo vai utilizar?",
+        "Como as tarefas serão divididas entre os integrantes?",
+        "Que recursos, fontes e prazos são necessários para executar o plano?",
+      ],
+      expectedEvidence: "Plano de investigação, divisão de responsabilidades, recursos previstos e sequência de ações com lógica clara.",
+    },
+    desenvolvimento_registros: {
+      objective:
+        "Registrar o percurso investigativo, os aprendizados, as revisões de rota e as evidências produzidas pelo grupo.",
+      guidingQuestions: [
+        "O que o grupo fez até aqui e o que aprendeu no processo?",
+        "Que evidências mostram o avanço da investigação?",
+        "Quais ajustes foram necessários ao longo do percurso?",
+      ],
+      expectedEvidence: "Síntese do processo com registros, análises, aprendizados, revisões e evidências concretas do percurso.",
+    },
+    resultado_produto_final: {
+      objective:
+        "Apresentar os resultados alcançados, o produto final construído e o potencial de transformação social do projeto.",
+      guidingQuestions: [
+        "Quais resultados o grupo alcançou com a investigação?",
+        "Como o produto final dialoga com o problema inicial?",
+        "Que impacto ou continuidade esse trabalho pode gerar?",
+      ],
+      expectedEvidence: "Resultados sintetizados, produto final descrito com clareza e relação explícita com a proposta de transformação.",
+    },
+  };
+
+  return guidanceBySectionKey[sectionKey] || {
+    objective: "Explicitar o propósito desta parte do projeto e o que o grupo precisa comunicar com clareza e autoria.",
+    guidingQuestions: [
+      "O que esta seção precisa mostrar para quem lê o projeto?",
+      "Que evidências ou argumentos fortalecem esta parte do trabalho?",
+      "Como o grupo pode escrever este trecho com mais clareza e autoria?",
+    ],
+    expectedEvidence: "Conteúdo coerente com o objetivo da seção, em linguagem autoral e com evidências do processo investigativo.",
+  };
+}
 
 function findSectionIdByKeywords(
   sections: ProjectSectionReference[],
@@ -1265,17 +1375,66 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
     };
   }
 
+  const totalSections = sections.length;
+  const completedSectionsCount = sections.filter((section) => section.status === "concluido").length;
+  const inProgressSectionsCount = sections.filter((section) => section.status === "em_andamento").length;
+  const notStartedSectionsCount = sections.filter((section) => section.status === "nao_iniciado").length;
+  const completionPercentage = totalSections > 0
+    ? Math.round((completedSectionsCount / totalSections) * 100)
+    : 0;
+  const safeCompletionPercentage = Math.min(100, Math.max(0, completionPercentage));
+  const previewTitle = finalProduct?.title || group.theme || "Projeto do grupo";
+  const previewSummary =
+    finalProduct?.description ||
+    group.description ||
+    buildPreviewExcerpt(sections.find((section) => !!section.content?.trim())?.content, 280) ||
+    "Esta prévia será enriquecida automaticamente conforme o grupo preencher as seções do projeto.";
+  const previewSections = sections
+    .filter((section) => !!section.content?.trim())
+    .map((section) => ({
+      id: String(section.id),
+      title: `${section.section_order}. ${section.section_title}`,
+      status: section.status,
+      excerpt: buildPreviewExcerpt(section.content, 180),
+    }));
+  const previewRepertoryItems = repertoryItems.slice(0, 3);
+  const previewProcessPhotos = processPhotos.slice(0, 3);
+  const hasPreviewContent =
+    previewSections.length > 0 ||
+    !!finalProduct ||
+    previewRepertoryItems.length > 0 ||
+    previewProcessPhotos.length > 0;
+
   return (
     <main className="min-h-screen bg-transparent">
-      <section className="max-w-4xl mx-auto px-6 py-10">
+      <section className="max-w-5xl mx-auto px-6 py-10">
         <div className="tca-stripes h-1.5 w-full rounded-md mb-6" />
         <header className="mb-8">
           <Link href={`/groups/${id}`} className="text-lime-700 hover:underline text-sm">
             ← Voltar para detalhe do grupo
           </Link>
-          <h1 className="text-3xl font-bold tca-title-guide mt-3">Projeto por seções</h1>
-          <p className="text-gray-600 mt-1">Grupo: {group.theme || group.member_1_name}</p>
+          <h1 className="text-3xl font-bold tca-title-guide mt-3">
+            Projeto: {group.theme || group.member_1_name}
+          </h1>
+          <p className="text-gray-600 mt-1">
+            Acompanhe o progresso do TCA e abra cada seção em cards clicáveis.
+          </p>
         </header>
+
+        <div className="mb-6">
+          <ProjectProgress
+            completed={completedSectionsCount}
+            inProgress={inProgressSectionsCount}
+            notStarted={notStartedSectionsCount}
+            total={totalSections}
+          />
+
+          {totalSections === 0 && (
+            <p className="text-sm text-amber-800 mt-4">
+              A estrutura de seções ainda não está disponível para calcular o progresso geral deste projeto.
+            </p>
+          )}
+        </div>
 
         <div className="tca-soft-surface rounded-lg p-6 shadow-sm mb-6 relative overflow-hidden">
           <div className="absolute left-0 top-0 h-full w-2 tca-stripes" aria-hidden="true" />
@@ -1897,6 +2056,28 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
               </button>
             </form>
           )}
+        </div>
+
+        <div className="mb-6">
+          <ProjectPreview
+            groupId={id}
+            title={previewTitle}
+            summary={previewSummary}
+            sections={previewSections}
+            repertoryItems={previewRepertoryItems}
+            photosCount={previewProcessPhotos.length}
+            hasContent={hasPreviewContent}
+          />
+        </div>
+
+        <div className="mb-6">
+          <div className="mb-4">
+            <h2 className="text-xl font-semibold text-[#1F2937]">Seções</h2>
+            <p className="text-sm text-[#6B7280] mt-1">
+              Introdução, diagnóstico, pesquisa, proposta de intervenção, resultados e conclusão organizados em cards clicáveis.
+            </p>
+          </div>
+          <ProjectSections groupId={id} sections={sections} />
         </div>
 
         <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm mb-6">
@@ -2922,7 +3103,7 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
         ) : (
           <div className="space-y-4">
             {sections.map((section) => (
-              <article key={String(section.id)} className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm">
+              <article id={`section-${section.id}`} key={String(section.id)} className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm scroll-mt-24">
                 {(() => {
                   const schedule = stageScheduleBySection.get(String(section.id));
                   return (
@@ -3004,6 +3185,37 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
                           </button>
                         </form>
                       )}
+                    </div>
+                  );
+                })()}
+
+                {(() => {
+                  const guidance = getSectionPedagogicalGuidance(section.section_key);
+
+                  return (
+                    <div className="mb-4 rounded-md border border-lime-100 bg-lime-50/80 p-4">
+                      <p className="text-sm font-semibold text-lime-900">Orientação pedagógica desta seção</p>
+                      <p className="text-sm text-lime-950 mt-2">{guidance.objective}</p>
+
+                      <div className="mt-3 grid gap-3 lg:grid-cols-[1.5fr_1fr]">
+                        <div>
+                          <p className="text-xs font-semibold uppercase tracking-wide text-lime-800">
+                            Perguntas orientadoras
+                          </p>
+                          <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-gray-700">
+                            {guidance.guidingQuestions.map((question) => (
+                              <li key={`${section.section_key}-${question}`}>{question}</li>
+                            ))}
+                          </ul>
+                        </div>
+
+                        <div className="rounded-md border border-lime-200 bg-white/70 px-3 py-3">
+                          <p className="text-xs font-semibold uppercase tracking-wide text-lime-800">
+                            Evidência esperada
+                          </p>
+                          <p className="text-sm text-gray-700 mt-2">{guidance.expectedEvidence}</p>
+                        </div>
+                      </div>
                     </div>
                   );
                 })()}

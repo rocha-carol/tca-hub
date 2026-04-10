@@ -10,6 +10,20 @@
   --tca-highlight: #e6546a;
   --tca-surface: #ffffff;
   --tca-border: #dfe4d2;
+
+  /* Design System — paleta institucional */
+  --color-green-600: #4CAF50;
+  --color-green-400: #8BC34A;
+  --color-yellow-400: #F2C94C;
+  --color-red-500: #EB5757;
+  --color-blue-500: #2F80ED;
+  --color-paper: #F5F2E9;
+  --color-card: #FFFFFF;
+  --color-text: #1F2937;
+  --color-muted: #6B7280;
+
+  /* Sidebar */
+  --sidebar-width: 17rem;
 }
 
 @theme inline {
@@ -34,7 +48,7 @@
 }
 
 body {
-  background: radial-gradient(circle at top left, #fffdf4 0%, var(--background) 42%, #f3f7e9 100%);
+  background: #fbfbf8;
   color: var(--foreground);
   font-family: "Inter", Arial, Helvetica, sans-serif;
 }

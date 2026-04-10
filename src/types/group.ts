@@ -15,6 +15,12 @@ export interface Group {
   student_3_id: string | number | null;
   member_3_name: string | null;
   member_3_series: string | null;
+  student_4_id?: string | number | null;
+  member_4_name?: string | null;
+  member_4_series?: string | null;
+  student_5_id?: string | number | null;
+  member_5_name?: string | null;
+  member_5_series?: string | null;
   theme: string | null;
   description: string | null;
   status?: GroupStatus | null;

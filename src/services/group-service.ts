@@ -212,6 +212,12 @@ export interface CreateGroupData {
 	student_3_id?: string | number | null;
 	member_3_name?: string | null;
 	member_3_series?: string | null;
+	student_4_id?: string | number | null;
+	member_4_name?: string | null;
+	member_4_series?: string | null;
+	student_5_id?: string | number | null;
+	member_5_name?: string | null;
+	member_5_series?: string | null;
 	theme?: string | null;
 	description?: string | null;
 	status?: GroupStatus;
@@ -270,6 +276,12 @@ export async function createGroup(data: CreateGroupData): Promise<Group> {
 		student_3_id: data.student_3_id ?? null,
 		member_3_name: data.member_3_name ?? null,
 		member_3_series: data.member_3_series ?? null,
+		student_4_id: data.student_4_id ?? null,
+		member_4_name: data.member_4_name ?? null,
+		member_4_series: data.member_4_series ?? null,
+		student_5_id: data.student_5_id ?? null,
+		member_5_name: data.member_5_name ?? null,
+		member_5_series: data.member_5_series ?? null,
 		theme: data.theme ?? null,
 		description: data.description ?? null,
 		status: data.status ?? "planejamento",
