@@ -59,6 +59,22 @@ function getGroupLabel(group: Group | null) {
   return group.theme || `Grupo ${String(group.id).slice(0, 8)}`;
 }
 
+function getGroupStatusText(hasGroup: boolean, group: Group | null) {
+  if (!hasGroup || !group) {
+    return "Grupo ainda não formado";
+  }
+
+  if (group.indication_status === "pendente") {
+    return "Aguardando retorno de orientadores";
+  }
+
+  if (group.primary_advisor_id) {
+    return "Grupo com orientação definida";
+  }
+
+  return "Grupo em organização";
+}
+
 export function StudentPortalSidebar({
   hasGroup,
   group,
@@ -93,37 +109,37 @@ export function StudentPortalSidebar({
   const links = [
     {
       href: STUDENT_ROUTES.HOME,
-      label: "Início do estudante",
+      label: "Início",
       icon: "⌂",
       enabled: true,
     },
     {
       href: groupStatusHref,
-      label: hasGroup ? "Meu grupo" : "Criar grupo",
+      label: hasGroup ? "Grupo" : "Criar grupo",
       icon: "◫",
       enabled: true,
     },
     {
       href: STUDENT_ROUTES.JOURNEY,
-      label: "Jornada do projeto",
+      label: "Jornada",
       icon: "↗",
       enabled: true,
     },
     {
       href: hasGroup && group ? `/estudante/groups/${group.id}/theme-guide` : STUDENT_ROUTES.GROUP_CREATE,
-      label: isJourneyPage && hasGroup ? "Revisar escolha do tema" : "Escolha do tema",
+      label: "Tema",
       icon: "✦",
       enabled: true,
     },
     {
       href: hasGroup && group ? `/estudante/groups/${group.id}/advisor-indication` : groupStatusHref,
-      label: "Indicação de orientadores",
+      label: "Orientadores",
       icon: "➜",
       enabled: hasGroup,
     },
     {
       href: `${STUDENT_ROUTES.JOURNEY}#minhas-recompensas`,
-      label: "Minhas conquistas",
+      label: "Conquistas",
       icon: "★",
       enabled: true,
     },
@@ -131,7 +147,7 @@ export function StudentPortalSidebar({
       ? [
           {
             href: `${STUDENT_ROUTES.JOURNEY}#${STUDENT_JOURNEY_SECTION_IDS.WAITING_STUDY}`,
-            label: waitingStudyCompleted ? "Reabrir apoio em espera" : "Abrir apoio em espera",
+            label: waitingStudyCompleted ? "Apoio em espera" : "Apoio em espera",
             icon: "✎",
             enabled: true,
           },
@@ -235,26 +251,28 @@ export function StudentPortalSidebar({
     [achievedRewards]
   );
 
+  const groupStatusText = getGroupStatusText(hasGroup, group);
+
   function getMobileLinkClass(href: string) {
     return isActive(href)
-      ? "border-[#2F6F35] bg-[#2F6F35] text-[#F8FFF6] shadow-sm"
-      : "border-[#CFE0C8] bg-white text-[#17301C] hover:border-[#B8D1AF] hover:bg-[#F4FAF1]";
+      ? "border-[#BFD8B5] bg-[#EDF7E8] text-[#24532A] shadow-sm"
+      : "border-[#DCE8D6] bg-white text-[#17301C] hover:border-[#C8DABD] hover:bg-[#F8FBF6]";
   }
 
   function getDesktopLinkClass(href: string) {
     return isActive(href)
-      ? "border-[#2F6F35] bg-[#2F6F35] text-[#F8FFF6] shadow-sm"
-      : "border-[#DCEBD5] bg-white text-[#17301C] hover:border-[#C7DEC0] hover:bg-[#F3FBF1]";
+      ? "border-[#C8DDC0] bg-[#EEF7EA] text-[#24532A] shadow-sm"
+      : "border-[#E3EDE0] bg-white/95 text-[#17301C] hover:border-[#D0DFCA] hover:bg-[#F8FBF6]";
   }
 
   function getDesktopIconClass(href: string) {
     return isActive(href)
-      ? "bg-[#F8FFF6]/20 text-[#F8FFF6]"
-      : "bg-[#EAF5E4] text-[#24532A]";
+      ? "bg-white text-[#2F6F35]"
+      : "bg-[#F1F8ED] text-[#24532A]";
   }
 
   function getDesktopIndicatorClass(href: string) {
-    return isActive(href) ? "text-[#F8FFF6]" : "text-[#2F6F35]";
+    return isActive(href) ? "text-[#2F6F35]" : "text-[#7AA56F]";
   }
 
   function isActive(href: string) {
@@ -292,7 +310,7 @@ export function StudentPortalSidebar({
                   <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#6B7280]">
                     Navegação do estudante
                   </p>
-                  <p className="text-sm text-[#374151] mt-1">{getGroupLabel(group)}</p>
+                  <p className="text-sm text-[#374151] mt-1">{groupStatusText}</p>
                 </div>
 
                 <Badge variant={hasGroup ? "green" : "yellow"}>
@@ -332,16 +350,14 @@ export function StudentPortalSidebar({
         <div className="sticky top-24 space-y-4">
           {isSidebarOpen ? (
             <Card className="border border-[#E3EDE0] bg-[#FBFDF9] p-5 shadow-[0_10px_30px_rgba(31,41,55,0.05)]">
-              <div className="space-y-3">
+              <div className="space-y-4">
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#6B7280]">
                       Navegação do estudante
                     </p>
                     <h2 className="mt-2 text-lg font-bold text-[#1F2937]">Portal do estudante</h2>
-                    <p className="mt-1 text-sm text-[#6B7280] leading-relaxed">
-                      O menu permanece disponível em todas as páginas do estudante para manter o contexto da navegação.
-                    </p>
+                    <p className="mt-1 text-sm text-[#6B7280] leading-relaxed">Acesso rápido ao que importa nesta etapa.</p>
                   </div>
 
                   <button
@@ -354,52 +370,33 @@ export function StudentPortalSidebar({
                   </button>
                 </div>
 
-                <div className="rounded-xl border border-[#E6EEE2] bg-white/95 px-4 py-3">
+                <div className="rounded-2xl border border-[#E6EEE2] bg-white/95 px-4 py-4">
                   <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-sm font-semibold text-[#1F2937]">Situação do grupo</p>
-                      <p className="text-sm text-[#374151] mt-1 leading-relaxed">{getGroupLabel(group)}</p>
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#6B7280]">Resumo atual</p>
+                      <p className="mt-2 text-base font-semibold text-[#1F2937] truncate">{getGroupLabel(group)}</p>
+                      <p className="text-sm text-[#6B7280] mt-1">{studentName}</p>
+                      <p className="text-sm text-[#4B5563] mt-2">{groupStatusText}</p>
                     </div>
 
                     <Badge variant={hasGroup ? "green" : "yellow"}>
                       {hasGroup ? "Em grupo" : "Sem grupo"}
                     </Badge>
                   </div>
-                </div>
 
-                <div className="rounded-xl border border-[#E6EEE2] bg-white/95 px-4 py-4">
-                  <div className="space-y-3">
-                    <div>
-                      <p className="text-sm font-semibold text-[#1F2937]">Sua situação atual</p>
-                      <p className="text-xs text-[#6B7280] mt-1">Estudante: {studentName}</p>
-                    </div>
-
-                    {!group ? (
-                      <div className="space-y-2 text-sm text-[#374151]">
-                        <p>Você ainda não participa de um grupo.</p>
-                        <p>Para começar o projeto, é necessário formar um grupo com seus colegas.</p>
-                      </div>
-                    ) : (
-                      <div className="space-y-2">
-                        <div>
-                          <p className="text-sm text-[#374151]">Você já está cadastrado no:</p>
-                          <p className="mt-1 font-semibold text-[#1F2937]">
-                            {group.theme || `Grupo ${String(group.id).slice(0, 8)}`}
-                          </p>
-                        </div>
-
-                        <Link
-                          href={`${STUDENT_ROUTES.GROUP}/${group.id}`}
-                          className="inline-flex rounded-lg border border-[#D9E8D2] bg-[#F8FBF6] px-4 py-2 text-sm font-medium text-[#2C5E31] transition-colors hover:border-[#C9DEC0] hover:bg-[#F3FBF1]"
-                        >
-                          Acessar meu grupo
-                        </Link>
-                      </div>
-                    )}
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <Link
+                      href={hasGroup && group ? `${STUDENT_ROUTES.GROUP}/${group.id}` : STUDENT_ROUTES.GROUP_CREATE}
+                      className="inline-flex rounded-lg border border-[#D9E8D2] bg-[#F8FBF6] px-4 py-2 text-sm font-medium text-[#2C5E31] transition-colors hover:border-[#C9DEC0] hover:bg-[#F3FBF1]"
+                    >
+                      {hasGroup ? "Acessar meu grupo" : "Criar grupo"}
+                    </Link>
                   </div>
                 </div>
 
-                <nav className="space-y-2">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#6B7280] mb-2">Navegação principal</p>
+                  <nav className="space-y-2">
                   {links.map((link) => {
                     const active = isActive(link.href);
 
@@ -424,7 +421,8 @@ export function StudentPortalSidebar({
                       </Link>
                     );
                   })}
-                </nav>
+                  </nav>
+                </div>
 
                 {isGroupWorkspacePage ? (
                   <div className="rounded-xl border border-[#E6EEE2] bg-white/95 px-4 py-4">
@@ -432,12 +430,9 @@ export function StudentPortalSidebar({
                       <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#6B7280]">
                         Navegação do projeto
                       </p>
-                      <p className="mt-1 text-sm text-[#374151] leading-relaxed">
-                        Os mesmos atalhos do projeto agora ficam integrados ao portal do estudante.
-                      </p>
                     </div>
 
-                    <nav className="mt-4 space-y-2">
+                    <nav className="mt-3 space-y-2">
                       {groupWorkspaceLinks.map((link) => {
                         const active = isActive(link.href);
 
@@ -468,9 +463,7 @@ export function StudentPortalSidebar({
                       <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#6B7280]">
                         Desafios concluídos
                       </p>
-                      <p className="mt-1 text-sm text-[#374151] leading-relaxed">
-                        Resumo das recompensas já conquistadas na jornada atual.
-                      </p>
+                      <p className="mt-1 text-sm text-[#6B7280] leading-relaxed">Resumo visual das conquistas já desbloqueadas.</p>
                     </div>
 
                     <div className="mt-3 flex flex-wrap gap-2">
