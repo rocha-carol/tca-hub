@@ -6,9 +6,11 @@ import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { ProgressBar } from "@/components/ui/ProgressBar";
 import type { Group } from "@/types/group";
+import type { ThemeGuideSuggestionResult } from "@/types/group-theme-guide-state";
 import type { GroupProjectSection } from "@/types/project-section";
 import { STUDENT_ROUTES } from "@/lib/utils/constants";
 import { StudentRewardsCard } from "@/components/student/StudentRewardsCard";
+import { StudentWaitingStudyCard } from "@/components/student/StudentWaitingStudyCard";
 
 const steps = [
   {
@@ -51,6 +53,7 @@ interface TcaStepsGuideProps {
   projectSections: GroupProjectSection[];
   processPhotosCount: number;
   repertoryItemsCount: number;
+  themeGuideSuggestions: ThemeGuideSuggestionResult | null;
   studentName: string;
   studentsError?: string | null;
   groupsError?: string | null;
@@ -312,6 +315,7 @@ export function TcaStepsGuide({
   projectSections,
   processPhotosCount,
   repertoryItemsCount,
+  themeGuideSuggestions,
   studentName,
   studentsError = null,
   groupsError = null,
@@ -328,6 +332,8 @@ export function TcaStepsGuide({
     missionStageLabel,
     achievements,
   } = getJourneySnapshot(hasGroup, group, groupId, nextJourneyHref, projectSections);
+  const themeSection = findSection(projectSections, "tema_contexto");
+  const shouldShowWaitingStudyCard = Boolean(group && group.indication_status === "pendente");
 
   useEffect(() => {
     const previousProgress = readStoredJourneyProgress();
@@ -438,6 +444,14 @@ export function TcaStepsGuide({
               </Link>
             </div>
           </div>
+
+          {shouldShowWaitingStudyCard ? (
+            <StudentWaitingStudyCard
+              groupId={group?.id}
+              themeText={themeSection?.content ?? group?.theme ?? null}
+              themeGuideSuggestions={themeGuideSuggestions}
+            />
+          ) : null}
         </div>
 
         <ProgressBar

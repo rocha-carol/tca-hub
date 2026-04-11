@@ -11,6 +11,7 @@ export default async function StudentJourneyPage() {
     projectSections,
     repertoryItemsCount,
     studentName,
+    themeGuideState,
   } = await loadStudentPortalData();
 
   return (
@@ -37,6 +38,7 @@ export default async function StudentJourneyPage() {
         projectSections={projectSections}
         processPhotosCount={processPhotosCount}
         repertoryItemsCount={repertoryItemsCount}
+        themeGuideSuggestions={themeGuideState?.ai_suggestions ?? null}
         studentName={studentName}
         studentsError={context.studentsError}
         groupsError={context.groupsError}

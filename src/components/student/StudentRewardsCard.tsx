@@ -13,7 +13,7 @@ interface StudentRewardsCardProps {
   repertoryItemsCount: number;
 }
 
-type RewardTier = "bronze" | "silver" | "gold" | "emerald" | "violet";
+type RewardTier = "silver" | "gold" | "emerald" | "violet" | "ultra";
 
 interface RewardMetrics {
   hasGroup: boolean;
@@ -33,12 +33,14 @@ interface RewardMetrics {
   developmentStarted: boolean;
   resultStarted: boolean;
   journeyCompleted: boolean;
+  platformCompleted: boolean;
 }
 
 interface RewardDefinition {
   id: string;
   title: string;
   description: string;
+  flavor: string;
   icon: string;
   tier: RewardTier;
   points: number;
@@ -108,62 +110,90 @@ function countGroupMembers(group: Group | null) {
 }
 
 function getRewardToneClasses(tier: RewardTier, unlocked: boolean) {
-  if (!unlocked) {
-    return {
-      containerClassName: "border-dashed border-[#D1D5DB] bg-[linear-gradient(135deg,#F9FAFB_0%,#F3F4F6_100%)] shadow-none",
-      stickerContainerClassName: "rounded-full border-[3px] border-white bg-[#E5E7EB] text-[#9CA3AF] shadow-sm",
-      iconInnerClassName: "",
-      statusVariant: "gray" as const,
-      pointsClassName: "bg-[#E5E7EB] text-[#6B7280]",
-    };
-  }
-
-  if (tier === "bronze") {
-    return {
-      containerClassName: "border-[#E7C7A8] bg-[linear-gradient(135deg,#FFF7ED_0%,#FFEDD5_100%)] shadow-[0_12px_24px_-20px_rgba(120,74,29,0.9)]",
-      stickerContainerClassName: "rounded-full border-[3px] border-white bg-[#D97706] text-white shadow-[0_10px_18px_-12px_rgba(120,74,29,1)]",
-      iconInnerClassName: "",
-      statusVariant: "yellow" as const,
-      pointsClassName: "bg-[#FDE7C7] text-[#9A580A]",
-    };
-  }
+  const lockedFilterClassName = unlocked ? "" : "grayscale saturate-0 brightness-[1.02] contrast-[0.92]";
+  const lockedOverlayClassName = unlocked ? "" : "bg-white/48";
 
   if (tier === "silver") {
     return {
-      containerClassName: "border-[#D5E1E8] bg-[linear-gradient(135deg,#F8FCFF_0%,#EEF6FB_100%)] shadow-[0_12px_24px_-20px_rgba(75,85,99,0.85)]",
-      stickerContainerClassName: "rounded-full border-[3px] border-white bg-[#94A3B8] text-white shadow-[0_10px_18px_-12px_rgba(75,85,99,1)]",
-      iconInnerClassName: "",
-      statusVariant: "blue" as const,
-      pointsClassName: "bg-[#DCEAF6] text-[#31506B]",
+      rarityLabel: "Silver",
+      outerClassName: `rounded-[2rem] bg-[linear-gradient(180deg,#F8FCFF_0%,#DDEAF3_55%,#C3D4E2_100%)] shadow-[0_22px_32px_-28px_rgba(71,85,105,0.95)] ${lockedFilterClassName}`,
+      innerClassName: "rounded-[1.8rem] border border-[#D6E0EA] bg-[linear-gradient(180deg,rgba(255,255,255,0.92)_0%,rgba(241,245,249,0.98)_100%)]",
+      rarityBadgeClassName: "rounded-full border border-white/80 bg-[#64748B] text-[#F8FAFC]",
+      namePlateClassName: "text-[#1E293B]",
+      artPanelClassName: "rounded-[1.55rem] border border-[#C7D6E4] bg-[radial-gradient(circle_at_top,#FFFFFF_0%,#DDEAF3_58%,#C8D8E7_100%)]",
+      artGlowClassName: "bg-[radial-gradient(circle,rgba(255,255,255,0.9)_0%,rgba(255,255,255,0)_68%)]",
+      descriptionPanelClassName: "rounded-[1.35rem] border border-[#D8E1EA] bg-white/85",
+      powerChipClassName: "rounded-full border border-[#D4DFE8] bg-[#EEF4F8] text-[#334155]",
+      footerClassName: "text-[#475569]",
+      shapeClassName: "",
+      overlayClassName: lockedOverlayClassName,
     };
   }
 
   if (tier === "gold") {
     return {
-      containerClassName: "border-[#F3DE92] bg-[linear-gradient(135deg,#FFFBEA_0%,#FEF3C7_100%)] shadow-[0_12px_24px_-20px_rgba(146,110,0,0.95)]",
-      stickerContainerClassName: "rounded-full border-[3px] border-white bg-[#F2C94C] text-[#5C4400] shadow-[0_10px_18px_-12px_rgba(146,110,0,1)]",
-      iconInnerClassName: "",
-      statusVariant: "yellow" as const,
-      pointsClassName: "bg-[#FAE9A5] text-[#735300]",
+      rarityLabel: "Gold",
+      outerClassName: `rounded-[2rem] bg-[linear-gradient(180deg,#FFF9D6_0%,#F5D56D_55%,#E4B93F_100%)] shadow-[0_24px_34px_-28px_rgba(161,98,7,1)] ${lockedFilterClassName}`,
+      innerClassName: "rounded-[1.8rem] border border-[#E7CE75] bg-[linear-gradient(180deg,rgba(255,251,235,0.96)_0%,rgba(255,244,201,0.98)_100%)]",
+      rarityBadgeClassName: "[clip-path:polygon(10%_0%,90%_0%,100%_45%,90%_100%,10%_100%,0%_45%)] bg-[#A16207] px-3 py-1 text-[#FFFBEB]",
+      namePlateClassName: "text-[#713F12]",
+      artPanelClassName: "[clip-path:polygon(8%_0%,92%_0%,100%_14%,100%_86%,92%_100%,8%_100%,0%_86%,0%_14%)] border border-[#E8CF84] bg-[radial-gradient(circle_at_top,#FFFBEA_0%,#FDE68A_52%,#F3C95B_100%)]",
+      artGlowClassName: "bg-[radial-gradient(circle,rgba(255,251,235,0.92)_0%,rgba(255,251,235,0)_70%)]",
+      descriptionPanelClassName: "rounded-[1.35rem] border border-[#ECDB9A] bg-white/78",
+      powerChipClassName: "rounded-full border border-[#EACD79] bg-[#FFF1B3] text-[#854D0E]",
+      footerClassName: "text-[#854D0E]",
+      shapeClassName: "",
+      overlayClassName: lockedOverlayClassName,
     };
   }
 
   if (tier === "emerald") {
     return {
-      containerClassName: "border-[#C9E8D1] bg-[linear-gradient(135deg,#F2FBF5_0%,#DCFCE7_100%)] shadow-[0_12px_24px_-20px_rgba(47,111,53,0.95)]",
-      stickerContainerClassName: "rounded-full border-[3px] border-white bg-[#4CAF50] text-white shadow-[0_10px_18px_-12px_rgba(47,111,53,1)]",
-      iconInnerClassName: "",
-      statusVariant: "green" as const,
-      pointsClassName: "bg-[#CDEFD4] text-[#20632C]",
+      rarityLabel: "Emerald",
+      outerClassName: `rounded-[2.2rem] bg-[linear-gradient(180deg,#ECFDF5_0%,#86EFAC_52%,#3FA466_100%)] shadow-[0_24px_34px_-28px_rgba(22,101,52,1)] ${lockedFilterClassName}`,
+      innerClassName: "rounded-[2rem_2rem_2.5rem_2.5rem] border border-[#99D8AF] bg-[linear-gradient(180deg,rgba(240,253,244,0.95)_0%,rgba(220,252,231,0.98)_100%)]",
+      rarityBadgeClassName: "rounded-[999px_999px_999px_200px] bg-[#166534] text-[#F0FDF4]",
+      namePlateClassName: "text-[#14532D]",
+      artPanelClassName: "rounded-[1.8rem_1.8rem_2.4rem_2.4rem] border border-[#9DDFB5] bg-[radial-gradient(circle_at_top,#F0FDF4_0%,#BBF7D0_50%,#59C37D_100%)]",
+      artGlowClassName: "bg-[radial-gradient(circle,rgba(240,253,244,0.95)_0%,rgba(240,253,244,0)_70%)]",
+      descriptionPanelClassName: "rounded-[1.45rem] border border-[#B7E7C7] bg-white/80",
+      powerChipClassName: "rounded-full border border-[#97D9AE] bg-[#DCFCE7] text-[#166534]",
+      footerClassName: "text-[#166534]",
+      shapeClassName: "",
+      overlayClassName: lockedOverlayClassName,
+    };
+  }
+
+  if (tier === "violet") {
+    return {
+      rarityLabel: "Violet",
+      outerClassName: `rounded-[2rem] bg-[linear-gradient(180deg,#FAF5FF_0%,#D8B4FE_52%,#8B5CF6_100%)] shadow-[0_24px_34px_-28px_rgba(109,40,217,1)] ${lockedFilterClassName}`,
+      innerClassName: "[clip-path:polygon(6%_0%,94%_0%,100%_11%,100%_89%,94%_100%,6%_100%,0%_89%,0%_11%)] border border-[#D8C1FA] bg-[linear-gradient(180deg,rgba(250,245,255,0.96)_0%,rgba(237,233,254,0.98)_100%)] rounded-[1.8rem]",
+      rarityBadgeClassName: "rounded-full border border-white/80 bg-[#6D28D9] text-[#FAF5FF]",
+      namePlateClassName: "text-[#5B21B6]",
+      artPanelClassName: "[clip-path:polygon(7%_0%,93%_0%,100%_18%,100%_82%,93%_100%,7%_100%,0%_82%,0%_18%)] border border-[#D6BDF8] bg-[radial-gradient(circle_at_top,#F5F3FF_0%,#DDD6FE_48%,#B794F4_100%)]",
+      artGlowClassName: "bg-[radial-gradient(circle,rgba(255,255,255,0.88)_0%,rgba(255,255,255,0)_68%)]",
+      descriptionPanelClassName: "rounded-[1.45rem] border border-[#DFCFFB] bg-white/80",
+      powerChipClassName: "rounded-full border border-[#D2B8FB] bg-[#F3E8FF] text-[#6D28D9]",
+      footerClassName: "text-[#6D28D9]",
+      shapeClassName: "",
+      overlayClassName: lockedOverlayClassName,
     };
   }
 
   return {
-    containerClassName: "border-[#E5DAFA] bg-[linear-gradient(135deg,#FBF7FF_0%,#F3E8FF_100%)] shadow-[0_12px_24px_-20px_rgba(107,70,193,1)]",
-    stickerContainerClassName: "rounded-full border-[3px] border-white bg-[#8B5CF6] text-white shadow-[0_10px_18px_-12px_rgba(107,70,193,1)]",
-    iconInnerClassName: "",
-    statusVariant: "blue" as const,
-    pointsClassName: "bg-[#E9DBFF] text-[#5E35B1]",
+    rarityLabel: "Ultra rara",
+    outerClassName: `rounded-[2.1rem] bg-[linear-gradient(135deg,#FFF7ED_0%,#FDE68A_18%,#A7F3D0_40%,#C4B5FD_68%,#F9A8D4_100%)] shadow-[0_28px_42px_-30px_rgba(126,34,206,0.95)] ${lockedFilterClassName}`,
+    innerClassName: "rounded-[1.95rem] border border-white/80 bg-[linear-gradient(180deg,rgba(255,255,255,0.92)_0%,rgba(250,245,255,0.94)_100%)]",
+    rarityBadgeClassName: "[clip-path:polygon(8%_0%,92%_0%,100%_50%,92%_100%,8%_100%,0%_50%)] bg-[linear-gradient(135deg,#A855F7_0%,#EC4899_50%,#F59E0B_100%)] px-3 py-1 text-white",
+    namePlateClassName: "text-[#4C1D95]",
+    artPanelClassName: "rounded-[1.75rem] border border-white/90 bg-[radial-gradient(circle_at_top,#FFFFFF_0%,#FDE68A_24%,#A7F3D0_48%,#C4B5FD_72%,#F9A8D4_100%)]",
+    artGlowClassName: "bg-[radial-gradient(circle,rgba(255,255,255,0.95)_0%,rgba(255,255,255,0)_64%)]",
+    descriptionPanelClassName: "rounded-[1.45rem] border border-white/75 bg-white/82",
+    powerChipClassName: "rounded-full border border-white/80 bg-[linear-gradient(135deg,#FAE8FF_0%,#FEF3C7_100%)] text-[#7E22CE]",
+    footerClassName: "text-[#7E22CE]",
+    shapeClassName: "",
+    overlayClassName: lockedOverlayClassName,
   };
 }
 
@@ -177,8 +207,9 @@ function buildRewardDefinitions(): RewardDefinition[] {
       id: "first-visit",
       title: "Primeiro passo",
       description: "A área de jornada foi aberta e a aventura no TCA Hub começou oficialmente.",
+      flavor: "Toda coleção começa com a primeira carta descoberta.",
       icon: "🌱",
-      tier: "bronze",
+      tier: "silver",
       points: 0.03,
       unlocked: () => true,
     },
@@ -186,8 +217,9 @@ function buildRewardDefinitions(): RewardDefinition[] {
       id: "group-formed",
       title: "Grupo formado",
       description: "O grupo já existe e liberou a trilha principal do projeto.",
+      flavor: "Sem equipe não existe guilda, sem guilda não existe jornada.",
       icon: "🤝",
-      tier: "bronze",
+      tier: "silver",
       points: 0.05,
       unlocked: (metrics) => metrics.hasGroup,
     },
@@ -195,8 +227,9 @@ function buildRewardDefinitions(): RewardDefinition[] {
       id: "team-expanded",
       title: "Equipe ampliada",
       description: "Três ou mais integrantes já estão envolvidos na construção coletiva.",
+      flavor: "A carta ganha força quando a inteligência deixa de ser solitária.",
       icon: "👥",
-      tier: "silver",
+      tier: "gold",
       points: 0.07,
       unlocked: (metrics) => metrics.memberCount >= 3,
     },
@@ -204,8 +237,9 @@ function buildRewardDefinitions(): RewardDefinition[] {
       id: "theme-started",
       title: "Tema em construção",
       description: "A seção de tema já ganhou os primeiros registros do grupo.",
+      flavor: "Toda grande investigação nasce de uma centelha bem guardada.",
       icon: "💡",
-      tier: "bronze",
+      tier: "silver",
       points: 0.05,
       unlocked: (metrics) => metrics.themeStarted,
     },
@@ -213,8 +247,9 @@ function buildRewardDefinitions(): RewardDefinition[] {
       id: "theme-deepened",
       title: "Tema aprofundado",
       description: "O grupo já escreveu um recorte mais consistente para o tema investigado.",
+      flavor: "Quando a ideia cria raízes, a carta muda de raridade.",
       icon: "🧠",
-      tier: "silver",
+      tier: "gold",
       points: 0.08,
       unlocked: (metrics) => metrics.themeWords >= 120,
     },
@@ -222,8 +257,9 @@ function buildRewardDefinitions(): RewardDefinition[] {
       id: "advisor-requested",
       title: "Orientação acionada",
       description: "A indicação de orientação já foi iniciada pelo grupo.",
+      flavor: "Pedir orientação é ativar uma habilidade estratégica do time.",
       icon: "📨",
-      tier: "bronze",
+      tier: "silver",
       points: 0.05,
       unlocked: (metrics) => metrics.advisorRequested,
     },
@@ -231,8 +267,9 @@ function buildRewardDefinitions(): RewardDefinition[] {
       id: "advisor-confirmed",
       title: "Orientação confirmada",
       description: "Um orientador principal já está vinculado ao grupo.",
+      flavor: "A presença da orientação eleva a carta ao patamar de suporte lendário.",
       icon: "🎓",
-      tier: "gold",
+      tier: "emerald",
       points: 0.12,
       unlocked: (metrics) => metrics.advisorConfirmed,
     },
@@ -240,8 +277,9 @@ function buildRewardDefinitions(): RewardDefinition[] {
       id: "problem-started",
       title: "Problema investigado",
       description: "A pergunta central do projeto já começou a ser construída.",
+      flavor: "Toda carta forte conhece exatamente o desafio que enfrenta.",
       icon: "🔎",
-      tier: "silver",
+      tier: "gold",
       points: 0.07,
       unlocked: (metrics) => metrics.problemStarted,
     },
@@ -249,8 +287,9 @@ function buildRewardDefinitions(): RewardDefinition[] {
       id: "objectives-started",
       title: "Objetivos definidos",
       description: "Os objetivos da investigação já começaram a tomar forma.",
+      flavor: "Objetivos claros funcionam como atributos de precisão da missão.",
       icon: "🎯",
-      tier: "silver",
+      tier: "gold",
       points: 0.07,
       unlocked: (metrics) => metrics.objectivesStarted,
     },
@@ -258,8 +297,9 @@ function buildRewardDefinitions(): RewardDefinition[] {
       id: "methodology-started",
       title: "Metodologia estruturada",
       description: "O grupo já registrou como pretende investigar e agir.",
+      flavor: "Estratégia registrada é o equivalente pedagógico de um deck bem montado.",
       icon: "🗺️",
-      tier: "silver",
+      tier: "gold",
       points: 0.07,
       unlocked: (metrics) => metrics.methodologyStarted,
     },
@@ -267,8 +307,9 @@ function buildRewardDefinitions(): RewardDefinition[] {
       id: "planning-complete",
       title: "Planejamento completo",
       description: "Problema, objetivos e metodologia já foram iniciados como base do percurso.",
+      flavor: "Essa carta só aparece quando a base do projeto para de oscilar.",
       icon: "🧩",
-      tier: "gold",
+      tier: "emerald",
       points: 0.12,
       unlocked: (metrics) => metrics.planningCompleted,
     },
@@ -276,8 +317,9 @@ function buildRewardDefinitions(): RewardDefinition[] {
       id: "development-started",
       title: "Mão na massa",
       description: "A etapa de desenvolvimento já começou a ser registrada pelo grupo.",
+      flavor: "A raridade sobe quando o projeto deixa de ser plano e vira ação.",
       icon: "⚙️",
-      tier: "emerald",
+      tier: "violet",
       points: 0.12,
       unlocked: (metrics) => metrics.developmentStarted,
     },
@@ -285,8 +327,9 @@ function buildRewardDefinitions(): RewardDefinition[] {
       id: "result-started",
       title: "Síntese em andamento",
       description: "Os resultados ou o produto final já começaram a ser consolidados.",
+      flavor: "Toda coleção respeita a carta que já mostra sinais concretos de conclusão.",
       icon: "🏁",
-      tier: "emerald",
+      tier: "violet",
       points: 0.12,
       unlocked: (metrics) => metrics.resultStarted,
     },
@@ -294,6 +337,7 @@ function buildRewardDefinitions(): RewardDefinition[] {
       id: "journey-complete",
       title: "Jornada central concluída",
       description: "As etapas principais da jornada do TCA já foram preenchidas.",
+      flavor: "Concluir o núcleo da jornada já coloca a carta no álbum das memoráveis.",
       icon: "👑",
       tier: "violet",
       points: 0.18,
@@ -303,8 +347,9 @@ function buildRewardDefinitions(): RewardDefinition[] {
       id: "wordsmith-300",
       title: "Escrita consistente",
       description: "O grupo já acumulou pelo menos 300 palavras no projeto.",
+      flavor: "Texto constante é poder silencioso que cresce linha por linha.",
       icon: "✍️",
-      tier: "bronze",
+      tier: "silver",
       points: 0.07,
       unlocked: (metrics) => metrics.totalWords >= 300,
     },
@@ -312,8 +357,9 @@ function buildRewardDefinitions(): RewardDefinition[] {
       id: "wordsmith-1200",
       title: "Autoria robusta",
       description: "O projeto já soma 1200 palavras ou mais em seus registros.",
+      flavor: "Uma carta de autoria forte sempre deixa rastros extensos no tabuleiro.",
       icon: "📚",
-      tier: "gold",
+      tier: "emerald",
       points: 0.13,
       unlocked: (metrics) => metrics.totalWords >= 1200,
     },
@@ -321,8 +367,9 @@ function buildRewardDefinitions(): RewardDefinition[] {
       id: "photo-collector",
       title: "Memória visual",
       description: "O grupo já registrou pelo menos 3 fotos do processo.",
+      flavor: "Registrar o processo transforma experiência em evidência jogável.",
       icon: "📸",
-      tier: "silver",
+      tier: "gold",
       points: 0.12,
       unlocked: (metrics) => metrics.processPhotosCount >= 3,
     },
@@ -330,8 +377,9 @@ function buildRewardDefinitions(): RewardDefinition[] {
       id: "source-curator",
       title: "Curadoria inicial",
       description: "O repertório do projeto já reúne pelo menos 3 fontes registradas.",
+      flavor: "Toda carta estratégica se fortalece quando o repertório vira base sólida.",
       icon: "🧾",
-      tier: "silver",
+      tier: "gold",
       points: 0.12,
       unlocked: (metrics) => metrics.repertoryItemsCount >= 3,
     },
@@ -339,8 +387,9 @@ function buildRewardDefinitions(): RewardDefinition[] {
       id: "time-15",
       title: "Presença ativa",
       description: "Foram registrados pelo menos 15 minutos ativos nesta jornada neste navegador.",
+      flavor: "Tempo de foco também conta como atributo da coleção.",
       icon: "⏱️",
-      tier: "bronze",
+      tier: "silver",
       points: 0.11,
       unlocked: (metrics) => metrics.activeMinutes >= 15,
     },
@@ -348,10 +397,21 @@ function buildRewardDefinitions(): RewardDefinition[] {
       id: "time-45",
       title: "Fôlego de maratona",
       description: "Foram registrados pelo menos 45 minutos ativos nesta jornada neste navegador.",
+      flavor: "Persistência longa é o tipo de poder que muda a mesa inteira.",
       icon: "🔥",
-      tier: "gold",
+      tier: "emerald",
       points: 0.25,
       unlocked: (metrics) => metrics.activeMinutes >= 45,
+    },
+    {
+      id: "platform-master",
+      title: "Lenda da plataforma",
+      description: "Concluir todas as etapas centrais da plataforma, com orientação confirmada, registros do processo e repertório ativo.",
+      flavor: "Ultrarrara: reservada para quem fecha o ciclo completo do TCA Hub.",
+      icon: "🏆",
+      tier: "ultra",
+      points: 0.35,
+      unlocked: (metrics) => metrics.platformCompleted,
     },
   ];
 }
@@ -429,6 +489,18 @@ export function StudentRewardsCard({
     const developmentSection = findSection(projectSections, "desenvolvimento_registros");
     const resultSection = findSection(projectSections, "resultado_produto_final");
 
+    const planningCompleted = [problemSection, objectivesSection, methodologySection].every(sectionHasProgress);
+    const developmentStarted = sectionHasProgress(developmentSection);
+    const resultStarted = sectionHasProgress(resultSection);
+    const advisorConfirmed = Boolean(group?.primary_advisor_id);
+    const journeyCompleted = Boolean(
+      sectionHasProgress(themeSection) &&
+      advisorConfirmed &&
+      planningCompleted &&
+      developmentStarted &&
+      resultStarted
+    );
+
     return {
       hasGroup: Boolean(group),
       memberCount: countGroupMembers(group),
@@ -439,19 +511,23 @@ export function StudentRewardsCard({
       activeMinutes,
       themeStarted: sectionHasProgress(themeSection),
       advisorRequested: Boolean(group?.indicated_advisor_id || group?.indication_status),
-      advisorConfirmed: Boolean(group?.primary_advisor_id),
+      advisorConfirmed,
       problemStarted: sectionHasProgress(problemSection),
       objectivesStarted: sectionHasProgress(objectivesSection),
       methodologyStarted: sectionHasProgress(methodologySection),
-      planningCompleted: [problemSection, objectivesSection, methodologySection].every(sectionHasProgress),
-      developmentStarted: sectionHasProgress(developmentSection),
-      resultStarted: sectionHasProgress(resultSection),
-      journeyCompleted: Boolean(
+      planningCompleted,
+      developmentStarted,
+      resultStarted,
+      journeyCompleted,
+      platformCompleted: Boolean(
+        group &&
         sectionHasProgress(themeSection) &&
-        group?.primary_advisor_id &&
-        [problemSection, objectivesSection, methodologySection].every(sectionHasProgress) &&
-        sectionHasProgress(developmentSection) &&
-        sectionHasProgress(resultSection)
+        advisorConfirmed &&
+        planningCompleted &&
+        developmentStarted &&
+        resultStarted &&
+        processPhotosCount >= 3 &&
+        repertoryItemsCount >= 3
       ),
     };
   }, [activeMinutes, group, processPhotosCount, projectSections, repertoryItemsCount]);
@@ -481,95 +557,123 @@ export function StudentRewardsCard({
     >
       <Card className="border border-[#DCEBD5] bg-white/95 px-4 py-5 md:px-5 xl:px-6">
         <div className="space-y-4">
-        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+        <div className="flex flex-col gap-3">
           <div className="max-w-3xl">
             <h2 className="text-xl font-bold text-[#1F2937]">Minhas recompensas</h2>
             <p className="text-sm text-[#6B7280] mt-1 leading-relaxed">
-              Estas badges ficam ocultas até a conquista ser alcançada. Quando o marco é desbloqueado,
-              a peça ganha cor, forma e destaque visual na coleção da jornada.
+              A coleção agora segue linguagem de carta rara: cada recompensa recebe cor, moldura e forma próprias
+              conforme a raridade, com nome, arte, descrição da conquista e valor de poder.
             </p>
-          </div>
+            <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-stretch">
+              <div className="inline-flex min-h-[58px] items-center rounded-2xl border border-[#D7E7D0] bg-[#F4FAF1] px-3 py-2">
+                <Badge variant={unlockedRewardsCount > 0 ? "green" : "gray"}>
+                  {unlockedRewardsCount} de {rewards.length} recompensas conquistadas
+                </Badge>
+              </div>
 
-          <div className="flex flex-col items-start gap-2 md:items-end">
-            <Badge variant={unlockedRewardsCount > 0 ? "green" : "gray"}>
-              {unlockedRewardsCount} de {rewards.length} recompensas reveladas
-            </Badge>
-            <div className="rounded-2xl border border-[#DCEBD5] bg-[#F8FBF6] px-3 py-2 text-right">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#6B7280]">
-                Pontuação extra
-              </p>
-              <p className="text-lg font-black text-[#1F2937] leading-tight">
-                {formatPoints(unlockedRewardPoints)} / {formatPoints(totalAvailableRewardPoints)}
-              </p>
-              <p className="text-[11px] text-[#6B7280]">
-                limite máximo de {formatPoints(MAX_REWARD_POINTS)} pontos na nota final
-              </p>
+              <div className="inline-flex min-h-[58px] flex-col justify-center rounded-2xl border border-[#DCEBD5] bg-[#F8FBF6] px-3 py-2">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#6B7280]">
+                  Pontuação extra
+                </p>
+                <p className="text-sm font-black text-[#1F2937] leading-tight">
+                  {formatPoints(unlockedRewardPoints)} / {formatPoints(totalAvailableRewardPoints)}
+                </p>
+                <p className="text-[10px] text-[#6B7280] leading-tight">
+                  limite máximo de {formatPoints(MAX_REWARD_POINTS)} pontos na nota final
+                </p>
+              </div>
             </div>
           </div>
         </div>
 
         <div className="rounded-2xl border border-[#E5E7EB] bg-[#F8FBF6] px-4 py-3 text-sm text-[#374151] leading-relaxed">
           <p>
-            As recompensas usam dados que já existem no projeto, como escrita acumulada, fotos do processo,
-            repertório registrado e avanço das etapas.
+            As cartas usam dados que já existem no projeto, como escrita acumulada, fotos do processo,
+            repertório registrado e avanço das etapas, sem inventar métricas artificiais no fluxo principal.
           </p>
           <p className="mt-2 text-xs text-[#6B7280]">
-            As metas permanecem visíveis mesmo quando a figurinha ainda está oculta, para orientar o que precisa ser alcançado.
+            A ultrarrara é liberada ao concluir o ciclo completo da plataforma: tema, planejamento, desenvolvimento,
+            resultados, orientação confirmada, repertório e memória visual do processo.
           </p>
           <p className="mt-1 text-xs text-[#6B7280]">
-            As badges de presença ativa usam o tempo registrado neste navegador até a etapa futura de telemetria.
+            As cartas de presença ativa usam o tempo registrado neste navegador até a etapa futura de telemetria.
           </p>
         </div>
 
-        <div className="grid grid-cols-2 gap-x-3 gap-y-5 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6">
-          {rewards.map((reward, index) => {
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+          {rewards.map((reward) => {
             const tone = getRewardToneClasses(reward.tier, reward.achieved);
-            const staggerClassName =
-              index % 3 === 0
-                ? "md:-translate-y-2"
-                : index % 3 === 1
-                  ? "md:translate-y-2"
-                  : "md:-translate-y-1";
-            const rotationClassName =
-              index % 2 === 0 ? "rotate-[-1.5deg] hover:rotate-0" : "rotate-[1.5deg] hover:rotate-0";
 
             return (
               <div
                 key={reward.id}
-                className={`group relative mt-7 min-h-[154px] overflow-visible rounded-[1.4rem] border px-3 pb-3 pt-8 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md ${staggerClassName} ${rotationClassName} ${tone.containerClassName}`}
+                className={`group relative overflow-hidden p-[2px] transition-all duration-200 hover:-translate-y-1 hover:shadow-xl ${tone.outerClassName} ${tone.shapeClassName}`}
               >
-                <div className="pointer-events-none absolute right-2 top-2 text-[10px] font-black uppercase tracking-[0.14em] text-black/10">
-                  sticker
-                </div>
+                <div className={`relative flex h-full min-h-[282px] flex-col overflow-hidden p-2.5 ${tone.innerClassName}`}>
+                  <div className={`pointer-events-none absolute inset-0 ${tone.overlayClassName}`} />
 
-                <div className={`absolute -top-7 left-1/2 flex h-14 w-14 -translate-x-1/2 items-center justify-center text-xl ${tone.stickerContainerClassName}`}>
-                  <span className={tone.iconInnerClassName}>{reward.achieved ? reward.icon : "✦"}</span>
-                </div>
+                  <div className="relative z-10 flex items-start justify-between gap-2">
+                    <span className={`inline-flex items-center px-2.5 py-1 text-[9px] font-black uppercase tracking-[0.16em] shadow-sm ${tone.rarityBadgeClassName}`}>
+                      {tone.rarityLabel}
+                    </span>
 
-                <div className="flex items-start justify-between gap-2">
-                  <Badge variant={tone.statusVariant} className="text-[10px] px-2 py-1">
-                    {reward.achieved ? "Revelada" : "Oculta"}
-                  </Badge>
+                    {reward.achieved ? (
+                      <div className={`inline-flex flex-col items-end rounded-2xl px-2.5 py-1 text-right ${tone.powerChipClassName}`}>
+                        <span className="text-[9px] font-black uppercase tracking-[0.16em]">Poder</span>
+                        <span className="text-[13px] font-black leading-none">+{formatPoints(reward.points)}</span>
+                      </div>
+                    ) : null}
+                  </div>
 
-                  <span className={`inline-flex rounded-full px-2 py-1 text-[10px] font-black uppercase tracking-[0.12em] ${tone.pointsClassName}`}>
-                    +{formatPoints(reward.points)} pt
-                  </span>
-                </div>
+                  <div className="relative z-10 mt-2.5">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-[#6B7280]">
+                          Carta da jornada
+                        </p>
+                        <h3 className={`mt-1 overflow-hidden text-ellipsis whitespace-nowrap text-[15px] font-black leading-tight ${tone.namePlateClassName}`}>
+                          {reward.title}
+                        </h3>
+                      </div>
 
-                <div className="mt-4 space-y-1.5 text-center">
-                  <h3 className={`text-[13px] font-extrabold leading-tight ${reward.achieved ? "text-[#1F2937]" : "text-[#4B5563]"}`}>
-                    {reward.title}
-                  </h3>
+                      <Badge variant={reward.achieved ? "green" : "gray"} className="text-[10px] px-2 py-1">
+                        {reward.achieved ? "Conquistada" : "Oculta"}
+                      </Badge>
+                    </div>
+                  </div>
 
-                  <p className={`text-[12px] leading-relaxed ${reward.achieved ? "text-[#374151]" : "text-[#6B7280]"}`}>
-                    {reward.description}
-                  </p>
-                </div>
+                  <div className={`relative z-10 mt-2.5 flex h-[104px] items-center justify-center overflow-hidden p-3 ${tone.artPanelClassName}`}>
+                    <div className={`pointer-events-none absolute inset-0 ${tone.artGlowClassName}`} />
+                    <div className="pointer-events-none absolute inset-x-3 top-2.5 flex items-center justify-between text-[9px] font-bold uppercase tracking-[0.16em] text-white/80">
+                      <span>{tone.rarityLabel}</span>
+                      <span>#{reward.id}</span>
+                    </div>
+                    <span className="relative text-5xl drop-shadow-[0_8px_10px_rgba(0,0,0,0.18)]">
+                      {reward.achieved ? reward.icon : "🔒"}
+                    </span>
+                  </div>
 
-                <div className="mt-3 flex items-center justify-center gap-2 text-center">
-                  <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-[#6B7280]">
-                    {reward.tier}
-                  </span>
+                  <div className={`relative z-10 mt-2.5 flex flex-1 flex-col justify-between p-2.5 ${tone.descriptionPanelClassName}`}>
+                    <div>
+                      <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#6B7280]">
+                        Conquista
+                      </p>
+                      <p className="mt-1 text-[12px] leading-relaxed text-[#374151]">
+                        {reward.description}
+                      </p>
+                    </div>
+
+                    <div className="mt-2.5 border-t border-black/10 pt-2.5">
+                      <p className={`text-[10px] italic leading-relaxed ${tone.footerClassName}`}>
+                        {reward.flavor}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="relative z-10 mt-2.5 flex items-center justify-between text-[9px] font-bold uppercase tracking-[0.12em] text-[#6B7280]">
+                    <span>{reward.achieved ? "No álbum" : "Meta visível"}</span>
+                    <span>{tone.rarityLabel}</span>
+                  </div>
                 </div>
               </div>
             );

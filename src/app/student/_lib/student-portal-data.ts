@@ -5,6 +5,7 @@ import { resolveStudentGroupContext } from "@/app/student/_lib/student-group-con
 import { STUDENT_ROUTES } from "@/lib/utils/constants";
 import { fetchGroupProcessPhotos } from "@/services/group-process-photo-service";
 import { fetchGroupRepertoryItems } from "@/services/group-repertory-item-service";
+import { fetchGroupThemeGuideState } from "@/services/group-theme-guide-state-service";
 
 function getFirstName(nameOrEmail: string) {
   const baseName = nameOrEmail.includes("@") ? nameOrEmail.split("@")[0] : nameOrEmail;
@@ -49,6 +50,9 @@ export async function loadStudentPortalData() {
         .then((items) => items.length)
         .catch(() => 0)
     : 0;
+  const themeGuideState = context.group
+    ? await fetchGroupThemeGuideState(context.group.id).catch(() => null)
+    : null;
 
   return {
     user,
@@ -61,5 +65,6 @@ export async function loadStudentPortalData() {
     projectSections,
     processPhotosCount,
     repertoryItemsCount,
+    themeGuideState,
   };
 }
