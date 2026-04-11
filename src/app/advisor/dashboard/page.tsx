@@ -42,6 +42,15 @@ interface AdvisorDashboardPageProps {
   searchParams?: Promise<{ modo?: string; perfil?: string }>;
 }
 
+type AdvisorPriorityItem = {
+  title: string;
+  description: string;
+  href: string;
+  actionLabel: string;
+  accentClassName: string;
+  badgeLabel: string;
+};
+
 export default async function AdvisorDashboardPage({ searchParams }: AdvisorDashboardPageProps) {
   const params = searchParams ? await searchParams : {};
   const isProvisionalMode = params.modo === "provisorio";
@@ -216,6 +225,7 @@ export default async function AdvisorDashboardPage({ searchParams }: AdvisorDash
   );
   const featuredCompletedSections = featuredSections.filter((section) => section.status === "concluido").length;
   const featuredTotalSections = Math.max(featuredSections.length, 1);
+  const pendingChecklistCount = featuredChecklist.filter((item) => item.status !== "concluido").length;
   const featuredRecentActivity = [
     ...featuredVersions.slice(0, 3).map((version) => ({
       id: `version-${version.id}`,
@@ -231,6 +241,54 @@ export default async function AdvisorDashboardPage({ searchParams }: AdvisorDash
     })),
   ].sort((left, right) => right.created_at.localeCompare(left.created_at)).slice(0, 4);
 
+  const priorityItems: AdvisorPriorityItem[] = [];
+
+  if (pendingIndicationNotifications.length > 0) {
+    priorityItems.push({
+      title: "Responder orientações pendentes",
+      description: `${pendingIndicationNotifications.length} grupo(s) aguardam resposta à solicitação de orientação.`,
+      href: `/groups/${pendingIndicationNotifications[0].groupId}`,
+      actionLabel: "Responder agora",
+      accentClassName: "border-amber-200 bg-amber-50/80",
+      badgeLabel: `${pendingIndicationNotifications.length} pendência(s)`,
+    });
+  }
+
+  if (featuredGroup && pendingChecklistCount > 0) {
+    priorityItems.push({
+      title: "Retomar acompanhamento do projeto",
+      description: `${pendingChecklistCount} item(ns) do checklist ainda pedem validação no grupo em destaque.`,
+      href: `/groups/${featuredGroup.id}/checklist`,
+      actionLabel: "Abrir checklist",
+      accentClassName: "border-blue-200 bg-blue-50/70",
+      badgeLabel: `${pendingChecklistCount} item(ns) pendente(s)`,
+    });
+  }
+
+  if (featuredGroup && featuredNextSteps.length === 0) {
+    priorityItems.push({
+      title: "Registrar próximos passos",
+      description: "O projeto em destaque ainda não possui orientação prática registrada para a próxima entrega.",
+      href: `/groups/${featuredGroup.id}/project`,
+      actionLabel: "Definir próximos passos",
+      accentClassName: "border-lime-200 bg-lime-50/80",
+      badgeLabel: "Ação pedagógica",
+    });
+  }
+
+  if (featuredGroup && featuredComments.length === 0) {
+    priorityItems.push({
+      title: "Fazer primeira intervenção",
+      description: "Ainda não há comentários pedagógicos registrados no projeto em destaque.",
+      href: `/groups/${featuredGroup.id}/project`,
+      actionLabel: "Abrir projeto",
+      accentClassName: "border-[#D9E7D4] bg-[#F8FBF6]",
+      badgeLabel: "Sem comentários",
+    });
+  }
+
+  const visiblePriorityItems = priorityItems.slice(0, 3);
+
   return (
     <main className="min-h-screen bg-transparent">
       <section className="max-w-5xl mx-auto px-6 py-10">
@@ -245,6 +303,52 @@ export default async function AdvisorDashboardPage({ searchParams }: AdvisorDash
             </p>
           )}
         </header>
+
+        <Card className="mb-8 border border-[#DCEBD5] bg-[#FBFDF9]">
+          <div className="flex items-start justify-between gap-4 flex-wrap mb-4">
+            <div>
+              <p className="text-xs uppercase tracking-[0.16em] text-[#6B7280] font-semibold">Prioridades do momento</p>
+              <h2 className="text-xl font-semibold text-[#1F2937] mt-1">O que merece atenção primeiro</h2>
+              <p className="text-sm text-[#6B7280] mt-1">
+                Resumo das ações mais importantes para manter o acompanhamento pedagógico em movimento.
+              </p>
+            </div>
+          </div>
+
+          {visiblePriorityItems.length > 0 ? (
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+              {visiblePriorityItems.map((item) => (
+                <div key={item.title} className={`rounded-2xl border px-4 py-4 shadow-sm ${item.accentClassName}`}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold text-[#1F2937]">{item.title}</p>
+                      <p className="text-sm text-[#4B5563] mt-2 leading-relaxed">{item.description}</p>
+                    </div>
+                    <span className="inline-flex rounded-full bg-white/90 px-3 py-1 text-xs font-semibold text-[#355E3B]">
+                      {item.badgeLabel}
+                    </span>
+                  </div>
+
+                  <div className="mt-4">
+                    <Link
+                      href={item.href}
+                      className="inline-flex rounded-lg bg-[#2F6F35] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#275C2C]"
+                    >
+                      {item.actionLabel}
+                    </Link>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-[#D9E7D4] bg-white px-4 py-4">
+              <p className="text-sm font-semibold text-[#1F2937]">Nenhuma pendência crítica no momento</p>
+              <p className="text-sm text-[#6B7280] mt-1">
+                O acompanhamento atual está estável. Este é um bom momento para revisar os grupos e aprofundar intervenções pedagógicas.
+              </p>
+            </div>
+          )}
+        </Card>
 
         {/* Contadores */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-8">
