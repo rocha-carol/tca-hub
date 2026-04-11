@@ -1,7 +1,35 @@
 import { createClient } from "@/lib/supabase/client";
-import type { SignUpData, SignInData, AuthResponse, AuthError } from "@/types/auth";
+import type { SignUpData, SignInData, AuthResponse, AuthError, UserRole } from "@/types/auth";
 
 type BrowserSupabaseClient = ReturnType<typeof createClient>;
+
+const PROFILES_SYNC_SQL_FILE = "database/038_enable_profiles_crud_and_auth_sync.sql";
+
+function isHandledAuthError(error: unknown): error is AuthError {
+  return Boolean(error) && error instanceof Object && "code" in error && "message" in error;
+}
+
+function mapProfileSyncErrorMessage(error: unknown) {
+  if (!(error instanceof Error)) {
+    return null;
+  }
+
+  const message = error.message.toLowerCase();
+
+  if (!message.includes("profile")) {
+    return null;
+  }
+
+  return `O usuário foi criado no Auth, mas não foi possível sincronizar o registro em public.profiles. Execute o script local ${PROFILES_SYNC_SQL_FILE} no Supabase SQL Editor e tente novamente.`;
+}
+
+function normalizeUserRole(value: unknown): UserRole {
+  if (value === "advisor" || value === "coordinator" || value === "student") {
+    return value;
+  }
+
+  return "student";
+}
 
 /**
  * Etapa 3 — Integração auth.users ↔ profiles.
@@ -19,9 +47,11 @@ async function ensureProfileForAuthUser(
     email?: string | null;
     user_metadata?: {
       name?: unknown;
+      role?: unknown;
     };
   },
-  preferredName?: string
+  preferredName?: string,
+  preferredRole?: UserRole
 ) {
   const normalizedNameFromArg = preferredName?.trim() || "";
   const normalizedNameFromMetadata =
@@ -29,6 +59,7 @@ async function ensureProfileForAuthUser(
 
   const fallbackName = normalizedNameFromArg || normalizedNameFromMetadata || "Usuário";
   const fallbackEmail = authUser.email || "";
+  const fallbackRole = preferredRole || normalizeUserRole(authUser.user_metadata?.role);
 
   const { data: existingProfile, error: findError } = await supabase
     .from("profiles")
@@ -46,7 +77,7 @@ async function ensureProfileForAuthUser(
       id: authUser.id,
       name: fallbackName,
       email: fallbackEmail,
-      role: "student",
+      role: fallbackRole,
       active: true,
     };
 
@@ -72,6 +103,10 @@ async function ensureProfileForAuthUser(
 
   if ((!existingProfile.email || existingProfile.email.trim() === "") && fallbackEmail) {
     patch.email = fallbackEmail;
+  }
+
+  if (!existingProfile.role && fallbackRole) {
+    patch.role = fallbackRole;
   }
 
   if (Object.keys(patch).length === 0) {
@@ -118,6 +153,7 @@ export async function signUp(data: SignUpData): Promise<AuthResponse> {
         // Dados adicionais que serão armazenados em auth.users.user_metadata
         data: {
           name: data.name,
+          role: data.role,
         },
       },
     });
@@ -148,8 +184,12 @@ export async function signUp(data: SignUpData): Promise<AuthResponse> {
       } as AuthError;
     }
 
-    // 2) Garantir profile 1:1 integrado com auth.users
-    const profileData = await ensureProfileForAuthUser(supabase, authData.user, data.name);
+    // 2) Quando há sessão ativa, também garante o profile imediatamente via cliente autenticado.
+    // Quando o projeto exige confirmação de email, o Supabase pode não devolver sessão no signup.
+    // Nesse cenário, a sincronização imediata depende do trigger SQL em auth.users.
+    const profileData = authData.session
+      ? await ensureProfileForAuthUser(supabase, authData.user, data.name, data.role)
+      : undefined;
 
     // 3) Retornar resposta com dados de autenticação e perfil
     return {
@@ -157,6 +197,7 @@ export async function signUp(data: SignUpData): Promise<AuthResponse> {
         id: authData.user.id,
         email: authData.user.email || data.email,
       },
+      requiresEmailConfirmation: !authData.session,
       profile: profileData
         ? {
             id: profileData.id,
@@ -169,13 +210,21 @@ export async function signUp(data: SignUpData): Promise<AuthResponse> {
         : undefined,
     };
   } catch (error) {
-    // Log do erro para debug
-    console.error("Erro em signUp:", error);
-
-    // Se for AuthError, re-lançar como está
-    if (error instanceof Object && "code" in error && "message" in error) {
+    // Se for AuthError previsto, re-lançar sem poluir o console no modo dev
+    if (isHandledAuthError(error)) {
       throw error as AuthError;
     }
+
+    const profileSyncMessage = mapProfileSyncErrorMessage(error);
+    if (profileSyncMessage) {
+      throw {
+        code: "profile_sync_error",
+        message: profileSyncMessage,
+      } as AuthError;
+    }
+
+    // Log do erro inesperado para debug
+    console.error("Erro inesperado em signUp:", error);
 
     // Caso contrário, lançar erro genérico
     throw {
@@ -252,13 +301,21 @@ export async function signIn(data: SignInData): Promise<AuthResponse> {
         : undefined,
     };
   } catch (error) {
-    // Log do erro para debug
-    console.error("Erro em signIn:", error);
-
-    // Se for AuthError, re-lançar como está
-    if (error instanceof Object && "code" in error && "message" in error) {
+    // Se for AuthError previsto, re-lançar sem poluir o console no modo dev
+    if (isHandledAuthError(error)) {
       throw error as AuthError;
     }
+
+    const profileSyncMessage = mapProfileSyncErrorMessage(error);
+    if (profileSyncMessage) {
+      throw {
+        code: "profile_sync_error",
+        message: profileSyncMessage,
+      } as AuthError;
+    }
+
+    // Log do erro inesperado para debug
+    console.error("Erro inesperado em signIn:", error);
 
     // Caso contrário, lançar erro genérico
     throw {
@@ -288,11 +345,11 @@ export async function signOut(): Promise<void> {
       } as AuthError;
     }
   } catch (error) {
-    console.error("Erro em signOut:", error);
-
-    if (error instanceof Object && "code" in error && "message" in error) {
+    if (isHandledAuthError(error)) {
       throw error as AuthError;
     }
+
+    console.error("Erro inesperado em signOut:", error);
 
     throw {
       code: "unknown_error",

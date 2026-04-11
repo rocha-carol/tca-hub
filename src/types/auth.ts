@@ -10,6 +10,7 @@ export interface SignUpData {
   email: string;
   password: string;
   name: string;
+  role: UserRole;
 }
 
 /**
@@ -30,6 +31,7 @@ export interface AuthResponse {
     id: string;
     email: string;
   };
+  requiresEmailConfirmation?: boolean;
   profile?: {
     id: string;
     name: string;
