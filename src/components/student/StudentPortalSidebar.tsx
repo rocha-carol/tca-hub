@@ -58,7 +58,7 @@ export function StudentPortalSidebar({
       enabled: hasGroup,
     },
     {
-      href: `${STUDENT_ROUTES.JOURNEY}#conquistas-da-jornada`,
+      href: STUDENT_ROUTES.ACHIEVEMENTS,
       label: "Minhas conquistas",
       icon: "★",
       enabled: true,
