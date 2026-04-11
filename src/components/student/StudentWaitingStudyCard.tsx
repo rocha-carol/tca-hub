@@ -28,6 +28,7 @@ interface QuizOption {
 }
 
 interface QuizStep {
+  type: "quiz";
   id: string;
   title: string;
   explanation: string;
@@ -35,6 +36,59 @@ interface QuizStep {
   question: string;
   options: QuizOption[];
 }
+
+interface ExerciseStep {
+  type: "exercise";
+  id: string;
+  title: string;
+  explanation: string;
+  source: string;
+  prompt: string;
+  referenceText: string;
+  placeholder: string;
+}
+
+type StudyStep = QuizStep | ExerciseStep;
+
+const STOP_WORDS = new Set([
+  "a",
+  "as",
+  "o",
+  "os",
+  "e",
+  "de",
+  "da",
+  "do",
+  "das",
+  "dos",
+  "em",
+  "no",
+  "na",
+  "nos",
+  "nas",
+  "um",
+  "uma",
+  "para",
+  "por",
+  "com",
+  "sem",
+  "que",
+  "como",
+  "mais",
+  "sobre",
+  "ao",
+  "aos",
+  "à",
+  "às",
+  "se",
+  "ser",
+  "sua",
+  "suas",
+  "seu",
+  "seus",
+  "tema",
+  "grupo",
+]);
 
 function normalizeText(value: string | null | undefined) {
   if (!value) {
@@ -60,9 +114,81 @@ function resolveThemeReference(themeText: string | null, themeGuideSuggestions: 
   return normalizedTheme || normalizedSummary || firstPossiblePath || "tema do grupo";
 }
 
-function buildQuizSteps(themeReference: string, themeGuideSuggestions: ThemeGuideSuggestionResult | null): QuizStep[] {
+function normalizeWord(value: string) {
+  return value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "")
+    .trim();
+}
+
+function tokenizeRelevantWords(value: string) {
+  return value
+    .split(/\s+/)
+    .map(normalizeWord)
+    .filter((item) => item.length >= 4 && !STOP_WORDS.has(item));
+}
+
+function buildExerciseSourceText(themeReference: string, themeGuideSuggestions: ThemeGuideSuggestionResult | null) {
+  const summary = normalizeText(themeGuideSuggestions?.interest_summary);
+
+  return (
+    summary ||
+    `Pesquisar sobre ${themeReference} exige comparar fontes confiáveis, anotar referências, compreender as ideias principais e reescrever o que foi aprendido com palavras do próprio grupo.`
+  );
+}
+
+function evaluateRewriting(sourceText: string, rewrittenText: string): QuizFeedback {
+  const normalizedRewrite = normalizeText(rewrittenText);
+
+  if (normalizedRewrite.length < 60) {
+    return {
+      badgeVariant: "yellow",
+      title: "Texto ainda curto",
+      summary: "A reescrita ainda está pequena demais para mostrar compreensão e autoria com clareza.",
+      tips: [
+        "Explique a ideia principal com pelo menos duas frases curtas.",
+        "Mostre o que foi entendido e como isso se conecta ao tema do grupo.",
+      ],
+    };
+  }
+
+  const sourceWords = Array.from(new Set(tokenizeRelevantWords(sourceText)));
+  const rewriteWords = tokenizeRelevantWords(normalizedRewrite);
+  const rewriteWordSet = new Set(rewriteWords);
+  const overlapCount = sourceWords.filter((word) => rewriteWordSet.has(word)).length;
+  const overlapRatio = sourceWords.length > 0 ? overlapCount / sourceWords.length : 0;
+
+  if (overlapRatio >= 0.72) {
+    return {
+      badgeVariant: "yellow",
+      title: "Muito próxima do texto-base",
+      summary: "A ideia apareceu, mas a formulação ainda está muito colada ao texto de apoio.",
+      tips: [
+        "Feche o texto-base e tente explicar a ideia como o próprio grupo falaria.",
+        "Troque a ordem das ideias e use exemplos ligados ao tema escolhido.",
+      ],
+    };
+  }
+
+  return {
+    badgeVariant: "green",
+    title: "Boa autoria em construção",
+    summary: "A reescrita já mostra compreensão e um movimento consistente de transformar leitura em texto próprio.",
+    tips: [
+      "Na próxima versão, vale acrescentar a referência da leitura usada como apoio.",
+      "Se quiser fortalecer ainda mais a autoria, conecte a ideia ao problema investigado pelo grupo.",
+    ],
+  };
+}
+
+function buildStudySteps(themeReference: string, themeGuideSuggestions: ThemeGuideSuggestionResult | null): StudyStep[] {
+  const exerciseSourceText = buildExerciseSourceText(themeReference, themeGuideSuggestions);
+
   return [
     {
+      type: "quiz",
       id: "fontes",
       title: "Você sabe como fazer pesquisas?",
       explanation: "Para fazer uma boa pesquisa sobre seu tema, alguns pontos são essenciais: escolher fontes confiáveis, comparar mais de uma referência, anotar autoria e data do material consultado, identificar a ideia principal de cada leitura e só depois escrever com palavras do próprio grupo. Pesquisar bem não é juntar textos prontos — é compreender, selecionar e transformar leitura em conhecimento autoral.",
@@ -117,6 +243,7 @@ function buildQuizSteps(themeReference: string, themeGuideSuggestions: ThemeGuid
       ],
     },
     {
+      type: "quiz",
       id: "plagio",
       title: "Como usar referências sem virar cópia?",
       explanation:
@@ -172,6 +299,7 @@ function buildQuizSteps(themeReference: string, themeGuideSuggestions: ThemeGuid
       ],
     },
     {
+      type: "quiz",
       id: "produto",
       title: "Pesquisa não precisa virar só texto",
       explanation:
@@ -226,6 +354,18 @@ function buildQuizSteps(themeReference: string, themeGuideSuggestions: ThemeGuid
         },
       ],
     },
+    {
+      type: "exercise",
+      id: "autoria",
+      title: "Treino de autoria",
+      explanation:
+        "Agora é hora de praticar. Leia o texto-base abaixo e reescreva a ideia com palavras do próprio grupo, mostrando compreensão sem copiar a estrutura original.",
+      source: "Fonte usada: síntese pedagógica simulada do TCA Hub para treino final de reescrita autoral.",
+      prompt: "Reescreva a ideia abaixo com linguagem própria do grupo.",
+      referenceText: exerciseSourceText,
+      placeholder:
+        "Exemplo: nosso grupo entendeu que pesquisar bem sobre esse tema exige comparar fontes, identificar ideias principais e transformar a leitura em um texto próprio...",
+    },
   ];
 }
 
@@ -237,16 +377,23 @@ export function StudentWaitingStudyCard({
   const [hasStartedStudySupport, setHasStartedStudySupport] = useState(false);
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [selectedOptionId, setSelectedOptionId] = useState<string | null>(null);
+  const [rewrittenText, setRewrittenText] = useState("");
   const [activeFeedback, setActiveFeedback] = useState<QuizFeedback | null>(null);
   const themeReference = resolveThemeReference(themeText, themeGuideSuggestions);
   const themePreview = shortenText(themeReference, 170);
-  const quizSteps = buildQuizSteps(themePreview, themeGuideSuggestions);
-  const currentStep = quizSteps[currentStepIndex];
-  const selectedOption = currentStep.options.find((option) => option.id === selectedOptionId) ?? null;
-  const isLastStep = currentStepIndex === quizSteps.length - 1;
+  const studySteps = buildStudySteps(themePreview, themeGuideSuggestions);
+  const currentStep = studySteps[currentStepIndex];
+  const selectedOption = currentStep.type === "quiz"
+    ? currentStep.options.find((option) => option.id === selectedOptionId) ?? null
+    : null;
+  const isLastStep = currentStepIndex === studySteps.length - 1;
   const themeGuideHref = groupId ? `/estudante/groups/${groupId}/theme-guide` : null;
 
   function handleChooseOption(optionId: string) {
+    if (currentStep.type !== "quiz") {
+      return;
+    }
+
     const selectedOption = currentStep.options.find((option) => option.id === optionId);
 
     if (!selectedOption) {
@@ -264,12 +411,21 @@ export function StudentWaitingStudyCard({
 
     setCurrentStepIndex((currentValue) => currentValue + 1);
     setSelectedOptionId(null);
+    setRewrittenText("");
     setActiveFeedback(null);
   }
 
   function handleRetryStep() {
     setSelectedOptionId(null);
     setActiveFeedback(null);
+  }
+
+  function handleEvaluateRewriting() {
+    if (currentStep.type !== "exercise") {
+      return;
+    }
+
+    setActiveFeedback(evaluateRewriting(currentStep.referenceText, rewrittenText));
   }
 
   return (
@@ -318,7 +474,7 @@ export function StudentWaitingStudyCard({
               <div className="max-w-3xl">
                 <div className="flex flex-wrap items-center gap-2">
                   <p className="text-sm font-semibold text-[#1D4ED8]">{currentStep.title}</p>
-                  <Badge variant="blue">Card {currentStepIndex + 1} de {quizSteps.length}</Badge>
+                  <Badge variant="blue">Card {currentStepIndex + 1} de {studySteps.length}</Badge>
                 </div>
                 <p className="mt-1 text-sm leading-relaxed text-[#374151]">
                   {currentStep.explanation}
@@ -331,32 +487,74 @@ export function StudentWaitingStudyCard({
               <Badge variant="blue">Preparação para a orientação</Badge>
             </div>
 
-            <div className="mt-4 rounded-xl border border-[#D7E6FF] bg-[#F8FBFF] px-4 py-4">
-              <p className="text-sm font-semibold text-[#1F2937]">Pergunta de fixação</p>
-              <p className="mt-2 text-sm leading-relaxed text-[#374151]">{currentStep.question}</p>
+            {currentStep.type === "quiz" ? (
+              <div className="mt-4 rounded-xl border border-[#D7E6FF] bg-[#F8FBFF] px-4 py-4">
+                <p className="text-sm font-semibold text-[#1F2937]">Pergunta de fixação</p>
+                <p className="mt-2 text-sm leading-relaxed text-[#374151]">{currentStep.question}</p>
 
-              <div className="mt-4 space-y-3">
-                {currentStep.options.map((option) => {
-                  const isSelected = selectedOptionId === option.id;
+                <div className="mt-4 space-y-3">
+                  {currentStep.options.map((option) => {
+                    const isSelected = selectedOptionId === option.id;
 
-                  return (
-                    <button
-                      key={option.id}
-                      type="button"
-                      onClick={() => handleChooseOption(option.id)}
-                      className={`w-full rounded-xl border px-4 py-3 text-left transition-colors ${isSelected ? "border-[#93C5FD] bg-white shadow-sm" : "border-[#D6E4FF] bg-white hover:border-[#AFCBFF] hover:bg-[#F8FBFF]"}`}
-                    >
-                      <div className="flex items-start gap-3">
-                        <span className="inline-flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-[#E8F1FF] text-sm font-semibold text-[#1D4ED8]">
-                          {option.label}
-                        </span>
-                        <span className="text-sm leading-relaxed text-[#1F2937]">{option.text}</span>
-                      </div>
-                    </button>
-                  );
-                })}
+                    return (
+                      <button
+                        key={option.id}
+                        type="button"
+                        onClick={() => handleChooseOption(option.id)}
+                        className={`w-full rounded-xl border px-4 py-3 text-left transition-colors ${isSelected ? "border-[#93C5FD] bg-white shadow-sm" : "border-[#D6E4FF] bg-white hover:border-[#AFCBFF] hover:bg-[#F8FBFF]"}`}
+                      >
+                        <div className="flex items-start gap-3">
+                          <span className="inline-flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-[#E8F1FF] text-sm font-semibold text-[#1D4ED8]">
+                            {option.label}
+                          </span>
+                          <span className="text-sm leading-relaxed text-[#1F2937]">{option.text}</span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
+            ) : (
+              <div className="mt-4 rounded-xl border border-[#D7E6FF] bg-[#F8FBFF] px-4 py-4">
+                <p className="text-sm font-semibold text-[#1F2937]">{currentStep.prompt}</p>
+
+                <div className="mt-4 rounded-xl border border-[#CFE8C8] bg-white px-4 py-3">
+                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#2F6F35]">Texto-base para reescrever</p>
+                  <p className="mt-2 text-sm leading-relaxed text-[#374151]">{currentStep.referenceText}</p>
+                </div>
+
+                <label className="mt-4 block text-sm font-medium text-[#1F2937]" htmlFor="simulador-reescrita">
+                  Reescreva com palavras do próprio grupo
+                </label>
+                <textarea
+                  id="simulador-reescrita"
+                  value={rewrittenText}
+                  onChange={(event) => setRewrittenText(event.target.value)}
+                  placeholder={currentStep.placeholder}
+                  className="mt-2 min-h-[140px] w-full rounded-xl border border-[#D1D5DB] bg-white px-4 py-3 text-sm leading-relaxed text-[#1F2937] outline-none transition-colors placeholder:text-[#9CA3AF] focus:border-[#93C5FD]"
+                />
+
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={handleEvaluateRewriting}
+                    className="inline-flex rounded-lg bg-[#2F6F35] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#275B2C]"
+                  >
+                    Avaliar minha reescrita
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setRewrittenText("");
+                      setActiveFeedback(null);
+                    }}
+                    className="inline-flex rounded-lg border border-[#CFE8C8] bg-white px-4 py-2 text-sm font-medium text-[#2F6F35] transition-colors hover:bg-[#F6FBF4]"
+                  >
+                    Limpar exercício
+                  </button>
+                </div>
+              </div>
+            )}
 
             {activeFeedback ? (
               <div className="mt-4 rounded-xl border border-[#DCEBD5] bg-white px-4 py-4 transition-all duration-300">
@@ -377,22 +575,32 @@ export function StudentWaitingStudyCard({
                 </ul>
 
                 <div className="mt-4 flex flex-wrap gap-2">
-                  {selectedOption?.isCorrect ? (
-                    <button
-                      type="button"
-                      onClick={handleNextStep}
-                      disabled={isLastStep}
-                      className="inline-flex rounded-lg bg-[#2F6F35] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#275B2C] disabled:cursor-default disabled:bg-[#9BC79F]"
-                    >
-                      {isLastStep ? "Sequência concluída" : "Próximo card"}
-                    </button>
+                  {currentStep.type === "quiz" ? (
+                    selectedOption?.isCorrect ? (
+                      <button
+                        type="button"
+                        onClick={handleNextStep}
+                        disabled={isLastStep}
+                        className="inline-flex rounded-lg bg-[#2F6F35] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#275B2C] disabled:cursor-default disabled:bg-[#9BC79F]"
+                      >
+                        {isLastStep ? "Sequência concluída" : "Próximo card"}
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={handleRetryStep}
+                        className="inline-flex rounded-lg border border-[#D6E4FF] bg-white px-4 py-2 text-sm font-medium text-[#1D4ED8] transition-colors hover:bg-[#F8FBFF]"
+                      >
+                        Tentar novamente
+                      </button>
+                    )
                   ) : (
                     <button
                       type="button"
-                      onClick={handleRetryStep}
-                      className="inline-flex rounded-lg border border-[#D6E4FF] bg-white px-4 py-2 text-sm font-medium text-[#1D4ED8] transition-colors hover:bg-[#F8FBFF]"
+                      disabled
+                      className="inline-flex rounded-lg bg-[#2F6F35] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#275B2C] disabled:cursor-default disabled:bg-[#9BC79F]"
                     >
-                      Tentar novamente
+                      Sequência concluída
                     </button>
                   )}
                 </div>
@@ -400,7 +608,7 @@ export function StudentWaitingStudyCard({
             ) : null}
 
             <div className="mt-4 flex items-center justify-center gap-2">
-              {quizSteps.map((step, index) => (
+              {studySteps.map((step, index) => (
                 <span
                   key={step.id}
                   className={`h-2.5 rounded-full transition-all duration-300 ${index === currentStepIndex ? "w-8 bg-[#1D4ED8]" : "w-2.5 bg-[#C7D7F7]"}`}
