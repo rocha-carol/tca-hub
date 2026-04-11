@@ -34,11 +34,7 @@ export default async function AppHeader({ groupName }: AppHeaderProps) {
     if (!user) return [] as Array<{ href: string; label: string }>;
 
     if (role === "student") {
-      return [
-        { href: "/estudante", label: "Meu Projeto" },
-        { href: "/estudante/groups/status", label: "Meu grupo" },
-        { href: "/profile/setup", label: "Perfil" },
-      ];
+      return [];
     }
 
     if (role === "advisor") {
