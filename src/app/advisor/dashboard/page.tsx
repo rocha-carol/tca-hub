@@ -294,9 +294,12 @@ export default async function AdvisorDashboardPage({ searchParams }: AdvisorDash
       <section className="max-w-5xl mx-auto px-6 py-10">
         <div className="tca-stripes h-1.5 w-full rounded-md mb-6" />
 
-        <header className="mb-8">
-          <h1 className="text-3xl font-bold tca-title-guide">Dashboard — Orientador</h1>
-          <p className="text-gray-600 mt-1">Olá, {displayName}</p>
+        <header className="mb-8 rounded-2xl border border-[#E3EDE0] bg-white/90 px-5 py-5 shadow-[0_8px_24px_rgba(31,41,55,0.04)]">
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#7AA56F]">Área do orientador</p>
+          <h1 className="mt-2 text-3xl font-bold tca-title-guide">Dashboard — Orientador</h1>
+          <p className="text-gray-600 mt-1.5 max-w-2xl">
+            Olá, {displayName}. Aqui ficam as prioridades do acompanhamento pedagógico, o panorama dos grupos vinculados e os acessos rápidos do ciclo atual.
+          </p>
           {isProvisionalMode && (
             <p className="text-xs text-amber-700 mt-1 font-medium">
               Navegação provisória ativa (sem autenticação real)

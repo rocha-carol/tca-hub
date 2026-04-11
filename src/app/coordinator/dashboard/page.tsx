@@ -43,6 +43,15 @@ interface CoordinatorDashboardPageProps {
   }>;
 }
 
+type CoordinatorPriorityItem = {
+  title: string;
+  description: string;
+  href: string;
+  actionLabel: string;
+  accentClassName: string;
+  badgeLabel: string;
+};
+
 export default async function CoordinatorDashboardPage({ searchParams }: CoordinatorDashboardPageProps) {
   const params = searchParams ? await searchParams : {};
   const bindStatus = params.bind_status ?? null;
@@ -226,14 +235,76 @@ export default async function CoordinatorDashboardPage({ searchParams }: Coordin
     })),
   ].sort((left, right) => right.created_at.localeCompare(left.created_at)).slice(0, 4);
 
+  const priorityItems: CoordinatorPriorityItem[] = [];
+
+  if (coordinatorSummary?.groupsWithoutAdvisor && coordinatorSummary.groupsWithoutAdvisor > 0) {
+    priorityItems.push({
+      title: "Vincular grupos sem orientação",
+      description: `${coordinatorSummary.groupsWithoutAdvisor} grupo(s) ainda estão sem orientador principal definido.`,
+      href: "#grupos-sem-orientador",
+      actionLabel: "Abrir vinculações",
+      accentClassName: "border-amber-200 bg-amber-50/80",
+      badgeLabel: `${coordinatorSummary.groupsWithoutAdvisor} pendência(s)`,
+    });
+  }
+
+  if (coordinatorSummary?.studentsWithoutGroup.length && coordinatorSummary.studentsWithoutGroup.length > 0) {
+    priorityItems.push({
+      title: "Organizar estudantes sem grupo",
+      description: `${coordinatorSummary.studentsWithoutGroup.length} estudante(s) seguem fora de um grupo ativo e pedem composição manual.`,
+      href: "/groups?from=coordinator",
+      actionLabel: "Ir para grupos",
+      accentClassName: "border-blue-200 bg-blue-50/70",
+      badgeLabel: `${coordinatorSummary.studentsWithoutGroup.length} sem grupo`,
+    });
+  }
+
+  if (coordinatorSummary?.groupsPendingIndication && coordinatorSummary.groupsPendingIndication > 0) {
+    priorityItems.push({
+      title: "Aproveitar preferências já registradas",
+      description: `${coordinatorSummary.groupsPendingIndication} grupo(s) já têm preferências definidas e podem avançar na distribuição de orientação.`,
+      href: "#grupos-sem-orientador",
+      actionLabel: "Ver grupos prontos",
+      accentClassName: "border-lime-200 bg-lime-50/80",
+      badgeLabel: "Indicação pronta",
+    });
+  }
+
+  if (coordinatorSummary?.advisorsFullCount && coordinatorSummary.advisorsFullCount > 0) {
+    priorityItems.push({
+      title: "Revisar carga de orientação",
+      description: `${coordinatorSummary.advisorsFullCount} orientador(es) atingiram o limite atual e podem gerar gargalos no fluxo.`,
+      href: "#carga-orientadores",
+      actionLabel: "Ver carga",
+      accentClassName: "border-red-200 bg-red-50/75",
+      badgeLabel: "Carga no limite",
+    });
+  }
+
+  if (activeAdvisors.length === 0) {
+    priorityItems.push({
+      title: "Cadastrar orientadores ativos",
+      description: "Ainda não há orientadores ativos disponíveis para distribuição dos grupos.",
+      href: "/coordinator/advisors",
+      actionLabel: "Cadastrar orientador",
+      accentClassName: "border-[#D9E7D4] bg-[#F8FBF6]",
+      badgeLabel: "Base mínima",
+    });
+  }
+
+  const visiblePriorityItems = priorityItems.slice(0, 3);
+
   return (
     <main className="min-h-screen bg-transparent">
       <section className="max-w-5xl mx-auto px-6 py-10">
         <div className="tca-stripes h-1.5 w-full rounded-md mb-6" />
 
-        <header className="mb-8">
-          <h1 className="text-3xl font-bold tca-title-guide">Dashboard — Coordenador</h1>
-          <p className="text-gray-600 mt-1">Olá, {displayName}</p>
+        <header className="mb-8 rounded-2xl border border-[#E3EDE0] bg-white/90 px-5 py-5 shadow-[0_8px_24px_rgba(31,41,55,0.04)]">
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#7AA56F]">Área da coordenação</p>
+          <h1 className="mt-2 text-3xl font-bold tca-title-guide">Dashboard — Coordenador</h1>
+          <p className="text-gray-600 mt-1.5 max-w-3xl">
+            Olá, {displayName}. Esta visão reúne prioridades institucionais, gargalos do processo e os atalhos para organizar grupos, orientações e acompanhamento do ciclo.
+          </p>
           {isProvisionalMode && (
             <p className="text-xs text-amber-700 mt-1 font-medium">
               Navegação provisória ativa (sem autenticação real)
@@ -248,6 +319,52 @@ export default async function CoordinatorDashboardPage({ searchParams }: Coordin
             </Link>
           </div>
         </header>
+
+        <Card className="mb-8 border border-[#DCEBD5] bg-[#FBFDF9]">
+          <div className="flex items-start justify-between gap-4 flex-wrap mb-4">
+            <div>
+              <p className="text-xs uppercase tracking-[0.16em] text-[#6B7280] font-semibold">Prioridades da coordenação</p>
+              <h2 className="text-xl font-semibold text-[#1F2937] mt-1">O que precisa de decisão agora</h2>
+              <p className="text-sm text-[#6B7280] mt-1">
+                Resumo das ações mais importantes para manter os grupos distribuídos, acompanhados e em andamento.
+              </p>
+            </div>
+          </div>
+
+          {visiblePriorityItems.length > 0 ? (
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+              {visiblePriorityItems.map((item) => (
+                <div key={item.title} className={`rounded-2xl border px-4 py-4 shadow-sm ${item.accentClassName}`}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold text-[#1F2937]">{item.title}</p>
+                      <p className="text-sm text-[#4B5563] mt-2 leading-relaxed">{item.description}</p>
+                    </div>
+                    <span className="inline-flex rounded-full bg-white/90 px-3 py-1 text-xs font-semibold text-[#355E3B]">
+                      {item.badgeLabel}
+                    </span>
+                  </div>
+
+                  <div className="mt-4">
+                    <Link
+                      href={item.href}
+                      className="inline-flex rounded-lg bg-[#2F6F35] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#275C2C]"
+                    >
+                      {item.actionLabel}
+                    </Link>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-[#D9E7D4] bg-white px-4 py-4">
+              <p className="text-sm font-semibold text-[#1F2937]">Nenhuma pendência institucional crítica no momento</p>
+              <p className="text-sm text-[#6B7280] mt-1">
+                A base atual está organizada. Este é um bom momento para revisar o panorama dos grupos e acompanhar a evolução pedagógica do ciclo.
+              </p>
+            </div>
+          )}
+        </Card>
 
         {/* Contadores */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-8">
@@ -270,106 +387,9 @@ export default async function CoordinatorDashboardPage({ searchParams }: Coordin
           />
         </div>
 
-        {/* Progresso geral + distribuição */}
-        <div className="grid grid-cols-1 lg:grid-cols-[1.4fr_1fr] gap-6 mb-8">
-          <ProgressCard
-            title="Progresso geral"
-            description="Panorama geral dos projetos concluídos em relação ao total cadastrado."
-            value={dashboardCompletedCount}
-            max={dashboardTotalCount}
-          />
-
-          <Card>
-            <h2 className="text-lg font-semibold text-gray-900 mb-3">Distribuição dos grupos</h2>
-            <div className="grid grid-cols-1 gap-3 text-sm">
-              <p className="text-gray-700">Planejamento: <strong>{statusCount.planejamento}</strong></p>
-              <p className="text-gray-700">Em andamento: <strong>{statusCount.em_andamento}</strong></p>
-              <p className="text-gray-700">Concluídos: <strong>{statusCount.concluido}</strong></p>
-            </div>
-          </Card>
-        </div>
-
-        {/* Projeto em destaque */}
-        <Card className="mb-8">
-          <div className="flex items-start justify-between gap-4 flex-wrap mb-5">
-            <div>
-              <p className="text-xs uppercase tracking-[0.16em] text-[#6B7280] font-semibold">Projeto TCA</p>
-              <h2 className="text-2xl font-bold text-[#1F2937] mt-1">
-                {featuredGroup?.theme || featuredGroup?.member_1_name || "Selecione um grupo para começar"}
-              </h2>
-              <p className="text-sm text-[#6B7280] mt-2">
-                Visão geral rápida do projeto com cards de navegação para as áreas principais.
-              </p>
-            </div>
-          </div>
-
-          {featuredGroup ? (
-            <>
-              <div className="mb-6">
-                <ProgressCard
-                  title="Progresso geral"
-                  description={`${featuredCompletedSections} de ${featuredSections.length} seções concluídas neste projeto.`}
-                  value={featuredCompletedSections}
-                  max={featuredTotalSections}
-                />
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
-                <ActionCard
-                  title="Seções do projeto"
-                  value={featuredSections.length}
-                  description="Abra e acompanhe as etapas do texto autoral."
-                  href={`/groups/${featuredGroup.id}/project`}
-                  accent="green"
-                />
-                <ActionCard
-                  title="Cronograma"
-                  value={featuredSchedule.length}
-                  description="Veja prazos e marcos do desenvolvimento."
-                  href={`/groups/${featuredGroup.id}/timeline`}
-                  accent="blue"
-                />
-                <ActionCard
-                  title="Checklist"
-                  value={featuredChecklist.length}
-                  description="Itens de acompanhamento e validação do percurso."
-                  href={`/groups/${featuredGroup.id}/checklist`}
-                  accent="yellow"
-                />
-                <ActionCard
-                  title="Próximos passos"
-                  value={featuredNextSteps.length}
-                  description="Orientações práticas para a próxima entrega."
-                  href={`/groups/${featuredGroup.id}/project`}
-                  accent="blue"
-                />
-              </div>
-            </>
-          ) : (
-            <p className="text-sm text-[#6B7280]">Ainda não há grupos suficientes para preencher a visão geral do projeto.</p>
-          )}
-        </Card>
-
-        {/* Atividade recente */}
-        <Card className="mb-8">
-          <h2 className="text-xl font-semibold text-[#1F2937] mb-4">Atividade recente</h2>
-          {!featuredGroup || featuredRecentActivity.length === 0 ? (
-            <p className="text-sm text-[#6B7280]">Sem atividade recente registrada ainda para o projeto em destaque.</p>
-          ) : (
-            <div className="space-y-3">
-              {featuredRecentActivity.map((activity) => (
-                <div key={activity.id} className="rounded-2xl bg-[#f8fbf6] border border-[#e6efe1] px-4 py-3 shadow-sm">
-                  <p className="text-sm font-medium text-[#1F2937]">{activity.title}</p>
-                  <p className="text-sm text-[#6B7280] mt-1">{activity.description}</p>
-                </div>
-              ))}
-            </div>
-          )}
-        </Card>
-
         {/* Painel do coordenador */}
         {coordinatorSummary && (
-          <div className="tca-soft-surface rounded-lg p-6 shadow-sm mb-8">
+          <div id="painel-coordenador" className="tca-soft-surface rounded-lg p-6 shadow-sm mb-8">
             <h2 className="text-xl font-semibold text-gray-900 mb-5">Painel do coordenador</h2>
 
             <div className="mb-5 rounded-md border border-lime-200 bg-lime-50 px-4 py-3">
@@ -421,7 +441,7 @@ export default async function CoordinatorDashboardPage({ searchParams }: Coordin
 
             {/* Carga dos orientadores */}
             {coordinatorSummary.advisorLoads.length > 0 ? (
-              <div className="mb-5">
+              <div id="carga-orientadores" className="mb-5">
                 <h3 className="text-sm font-semibold text-gray-700 mb-3">Carga de orientações por orientador</h3>
                 <div className="space-y-2">
                   {coordinatorSummary.advisorLoads.map(({ advisor, currentCount, maxOrientacoes, available }) => {
@@ -451,7 +471,7 @@ export default async function CoordinatorDashboardPage({ searchParams }: Coordin
 
             {/* Grupos sem orientador com vinculação manual */}
             {coordinatorSummary.groupsWithoutAdvisorList.length > 0 && (
-              <div>
+              <div id="grupos-sem-orientador">
                 <h3 className="text-sm font-semibold text-gray-700 mb-3">Grupos sem orientador principal</h3>
                 <div className="divide-y divide-gray-100 border border-gray-100 rounded-md">
                   {coordinatorSummary.groupsWithoutAdvisorList.map((group) => (
@@ -597,6 +617,103 @@ export default async function CoordinatorDashboardPage({ searchParams }: Coordin
             </div>
           </div>
         )}
+
+        {/* Progresso geral + distribuição */}
+        <div className="grid grid-cols-1 lg:grid-cols-[1.4fr_1fr] gap-6 mb-8">
+          <ProgressCard
+            title="Progresso geral"
+            description="Panorama geral dos projetos concluídos em relação ao total cadastrado."
+            value={dashboardCompletedCount}
+            max={dashboardTotalCount}
+          />
+
+          <Card>
+            <h2 className="text-lg font-semibold text-gray-900 mb-3">Distribuição dos grupos</h2>
+            <div className="grid grid-cols-1 gap-3 text-sm">
+              <p className="text-gray-700">Planejamento: <strong>{statusCount.planejamento}</strong></p>
+              <p className="text-gray-700">Em andamento: <strong>{statusCount.em_andamento}</strong></p>
+              <p className="text-gray-700">Concluídos: <strong>{statusCount.concluido}</strong></p>
+            </div>
+          </Card>
+        </div>
+
+        {/* Projeto em destaque */}
+        <Card className="mb-8">
+          <div className="flex items-start justify-between gap-4 flex-wrap mb-5">
+            <div>
+              <p className="text-xs uppercase tracking-[0.16em] text-[#6B7280] font-semibold">Projeto TCA</p>
+              <h2 className="text-2xl font-bold text-[#1F2937] mt-1">
+                {featuredGroup?.theme || featuredGroup?.member_1_name || "Selecione um grupo para começar"}
+              </h2>
+              <p className="text-sm text-[#6B7280] mt-2">
+                Visão geral rápida do projeto com cards de navegação para as áreas principais.
+              </p>
+            </div>
+          </div>
+
+          {featuredGroup ? (
+            <>
+              <div className="mb-6">
+                <ProgressCard
+                  title="Progresso geral"
+                  description={`${featuredCompletedSections} de ${featuredSections.length} seções concluídas neste projeto.`}
+                  value={featuredCompletedSections}
+                  max={featuredTotalSections}
+                />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+                <ActionCard
+                  title="Seções do projeto"
+                  value={featuredSections.length}
+                  description="Abra e acompanhe as etapas do texto autoral."
+                  href={`/groups/${featuredGroup.id}/project`}
+                  accent="green"
+                />
+                <ActionCard
+                  title="Cronograma"
+                  value={featuredSchedule.length}
+                  description="Veja prazos e marcos do desenvolvimento."
+                  href={`/groups/${featuredGroup.id}/timeline`}
+                  accent="blue"
+                />
+                <ActionCard
+                  title="Checklist"
+                  value={featuredChecklist.length}
+                  description="Itens de acompanhamento e validação do percurso."
+                  href={`/groups/${featuredGroup.id}/checklist`}
+                  accent="yellow"
+                />
+                <ActionCard
+                  title="Próximos passos"
+                  value={featuredNextSteps.length}
+                  description="Orientações práticas para a próxima entrega."
+                  href={`/groups/${featuredGroup.id}/project`}
+                  accent="blue"
+                />
+              </div>
+            </>
+          ) : (
+            <p className="text-sm text-[#6B7280]">Ainda não há grupos suficientes para preencher a visão geral do projeto.</p>
+          )}
+        </Card>
+
+        {/* Atividade recente */}
+        <Card className="mb-8">
+          <h2 className="text-xl font-semibold text-[#1F2937] mb-4">Atividade recente</h2>
+          {!featuredGroup || featuredRecentActivity.length === 0 ? (
+            <p className="text-sm text-[#6B7280]">Sem atividade recente registrada ainda para o projeto em destaque.</p>
+          ) : (
+            <div className="space-y-3">
+              {featuredRecentActivity.map((activity) => (
+                <div key={activity.id} className="rounded-2xl bg-[#f8fbf6] border border-[#e6efe1] px-4 py-3 shadow-sm">
+                  <p className="text-sm font-medium text-[#1F2937]">{activity.title}</p>
+                  <p className="text-sm text-[#6B7280] mt-1">{activity.description}</p>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
 
         {/* Grupos recentes */}
         <Card className="mb-8">
