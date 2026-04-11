@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { loadStudentPortalData } from "@/app/student/_lib/student-portal-data";
 import { StudentPortalSidebar } from "@/components/student/StudentPortalSidebar";
+import { StudentProjectHeaderNav } from "@/components/student/StudentProjectHeaderNav";
 
 interface StudentLayoutProps {
   children: ReactNode;
@@ -26,7 +27,13 @@ export default async function StudentLayout({ children }: StudentLayoutProps) {
           repertoryItemsCount={repertoryItemsCount}
           studentName={studentName}
         />
-        <div className="min-w-0 flex-1">{children}</div>
+        <div className="min-w-0 flex-1 space-y-4">
+          <StudentProjectHeaderNav
+            group={context.group}
+            projectSections={projectSections}
+          />
+          <div>{children}</div>
+        </div>
       </div>
     </div>
   );
