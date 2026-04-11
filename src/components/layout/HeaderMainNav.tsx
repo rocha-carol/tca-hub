@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { STUDENT_ROUTES } from "@/lib/utils/constants";
 
 interface HeaderMainNavProps {
   items: Array<{ href: string; label: string }>;
@@ -13,12 +14,15 @@ interface HeaderMainNavProps {
  */
 export default function HeaderMainNav({ items, quickItems = [] }: HeaderMainNavProps) {
   const pathname = usePathname();
+  const shouldHideQuickItems =
+    pathname === STUDENT_ROUTES.HOME || pathname === STUDENT_ROUTES.LEGACY_NAMESPACE_HOME;
+  const visibleQuickItems = shouldHideQuickItems ? [] : quickItems;
 
   if (pathname === "/") {
     return null;
   }
 
-  if (items.length === 0 && quickItems.length === 0) {
+  if (items.length === 0 && visibleQuickItems.length === 0) {
     return null;
   }
 
@@ -38,9 +42,9 @@ export default function HeaderMainNav({ items, quickItems = [] }: HeaderMainNavP
         </nav>
       ) : null}
 
-      {quickItems.length > 0 ? (
+      {visibleQuickItems.length > 0 ? (
         <nav className={`flex items-center gap-2 flex-wrap justify-center ${items.length > 0 ? "border-t border-[#dfe8d9] pt-2" : ""}`}>
-          {quickItems.map((item) => {
+          {visibleQuickItems.map((item) => {
             const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
 
             return (
