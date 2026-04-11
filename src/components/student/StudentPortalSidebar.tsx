@@ -138,14 +138,14 @@ export function StudentPortalSidebar({
 
   function getMobileLinkClass(href: string) {
     return isActive(href)
-      ? "border-[#BFD8B5] bg-[#EDF7E8] text-[#24532A] shadow-sm"
-      : "border-[#DCE8D6] bg-white text-[#17301C] hover:border-[#C8DABD] hover:bg-[#F8FBF6]";
+      ? "border-[#BFD8B5] bg-transparent text-[#24532A] shadow-sm"
+      : "border-[#DCE8D6] bg-transparent text-[#17301C] hover:border-[#C8DABD] hover:bg-transparent";
   }
 
   function getDesktopLinkClass(href: string) {
     return isActive(href)
-      ? "border-[#C8DDC0] bg-[#EEF7EA] text-[#24532A] shadow-sm"
-      : "border-[#E3EDE0] bg-white/95 text-[#17301C] hover:border-[#D0DFCA] hover:bg-[#F8FBF6]";
+      ? "border-[#C8DDC0] bg-transparent text-[#24532A] shadow-sm"
+      : "border-[#E3EDE0] bg-transparent text-[#17301C] hover:border-[#D0DFCA] hover:bg-transparent";
   }
 
   function getDesktopIconClass(href: string) {
@@ -239,7 +239,6 @@ export function StudentPortalSidebar({
                     <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#6B7280]">
                       Menu do estudante
                     </p>
-                    <h2 className="mt-2 text-lg font-bold text-[#1F2937]">Navegação</h2>
                   </div>
 
                   <button
@@ -252,8 +251,11 @@ export function StudentPortalSidebar({
                   </button>
                 </div>
 
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#6B7280] mb-2">Jornada do estudante</p>
+                <div className="rounded-xl border border-[#E8EFE5] bg-[#FCFDFB] px-4 py-4">
+                  <div className="mb-3">
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#6B7280]">Jornada do estudante</p>
+                    <p className="mt-1 text-sm text-[#6B7280] leading-relaxed">Navegação principal do percurso e das próximas etapas.</p>
+                  </div>
                   <nav className="space-y-2">
                   {links.map((link) => {
                     const active = isActive(link.href);
@@ -283,10 +285,13 @@ export function StudentPortalSidebar({
                 </div>
 
                 {isGroupWorkspacePage ? (
-                  <div className="rounded-xl border border-[#E6EEE2] bg-white/95 px-4 py-4">
+                  <div className="rounded-2xl border border-[#D7E7D0] bg-[linear-gradient(180deg,#F8FBF6_0%,#EEF7EA_100%)] px-4 py-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)]">
                     <div>
-                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#6B7280]">
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#2F6F35]">
                         Ferramentas do projeto
+                      </p>
+                      <p className="mt-1 text-sm text-[#58705C] leading-relaxed">
+                        Atalhos do workspace do grupo para executar o projeto nesta etapa.
                       </p>
                     </div>
 
