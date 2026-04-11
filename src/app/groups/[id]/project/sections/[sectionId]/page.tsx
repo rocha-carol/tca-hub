@@ -9,6 +9,7 @@ import { requireGroupAccess } from "@/services/group-access-service";
 import { fetchGroupThemeGuideState } from "@/services/group-theme-guide-state-service";
 import { STUDENT_ROUTES } from "@/lib/utils/constants";
 import { generateProblemJustificationGuidanceSimulated } from "@/lib/ai/project-section-simulated-guidance";
+import { SectionWritingThermometer } from "@/components/project/SectionWritingThermometer";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import type { ProjectSectionStatus } from "@/types/project-section";
@@ -155,7 +156,7 @@ export default async function SectionEditorPage({ params, searchParams }: Sectio
       })
     : null;
 
-  const guidance = simulatedProblemGuidance ?? getSectionGuidance(section.section_key);
+  const guidance = getSectionGuidance(section.section_key);
   const sl = statusLabel(section.status);
   const isStudentView = profile?.role === "student";
   const shouldShowThemeTitleGuidance = isStudentView && section.section_key === "tema_contexto";
@@ -341,13 +342,16 @@ export default async function SectionEditorPage({ params, searchParams }: Sectio
                 )}
               </div>
 
-              <textarea
+              <SectionWritingThermometer
                 id="content"
                 name="content"
                 defaultValue={section.content ?? ""}
                 rows={18}
                 placeholder={`Escreva aqui o texto da seção "${section.section_title}"…\n\n${simulatedProblemGuidance ? `Para começar, adapte esta ideia: ${simulatedProblemGuidance.starterText}\n\n` : ""}Dica: ${guidance.howToWrite}`}
-                className="w-full rounded-xl border border-gray-200 bg-[#fafaf9] px-4 py-3 text-sm text-[#1F2937] placeholder:text-gray-400 focus:border-[#4CAF50] focus:outline-none focus:ring-2 focus:ring-[#4CAF50]/30 leading-relaxed resize-y"
+                sectionTitle={section.section_title}
+                sectionKey={section.section_key}
+                guidance={guidance}
+                writingSupportTips={simulatedProblemGuidance?.writingSupportTips ?? []}
               />
 
               <div className="flex items-center justify-between gap-3 flex-wrap">
