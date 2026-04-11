@@ -14,6 +14,9 @@ export default async function StudentJourneyPage() {
     themeGuideState,
   } = await loadStudentPortalData();
 
+  const sectionCount = projectSections.length;
+  const currentGroupLabel = context.group?.theme || (context.group?.id ? `Grupo ${String(context.group.id).slice(0, 8)}` : "Sem grupo formado");
+
   return (
     <section className="space-y-4">
       <header>
@@ -29,6 +32,26 @@ export default async function StudentJourneyPage() {
           indica o próximo passo do grupo e concentra os reconhecimentos pedagógicos do percurso.
         </p>
       </Card>
+
+      <section className="grid gap-3 md:grid-cols-3">
+        <Card className="border border-[#E3EDE0] bg-white/95 p-4 shadow-[0_6px_18px_rgba(31,41,55,0.04)]">
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#7AA56F] mb-2">Situação</p>
+          <p className="text-lg font-bold text-[#1F2937]">{hasGroup ? "Grupo ativo" : "Sem grupo"}</p>
+          <p className="text-sm text-[#6B7280] mt-1">{currentGroupLabel}</p>
+        </Card>
+
+        <Card className="border border-[#E3EDE0] bg-white/95 p-4 shadow-[0_6px_18px_rgba(31,41,55,0.04)]">
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#7AA56F] mb-2">Projeto</p>
+          <p className="text-lg font-bold text-[#1F2937]">{sectionCount} etapas</p>
+          <p className="text-sm text-[#6B7280] mt-1">Estrutura principal disponível para acompanhamento.</p>
+        </Card>
+
+        <Card className="border border-[#E3EDE0] bg-white/95 p-4 shadow-[0_6px_18px_rgba(31,41,55,0.04)]">
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#7AA56F] mb-2">Acesso rápido</p>
+          <p className="text-lg font-bold text-[#1F2937]">Jornada</p>
+          <p className="text-sm text-[#6B7280] mt-1">Missão atual, avanço por etapas e conquistas do grupo.</p>
+        </Card>
+      </section>
 
       <TcaStepsGuide
         hasGroup={hasGroup}
