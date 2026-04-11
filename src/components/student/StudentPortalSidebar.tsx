@@ -201,28 +201,54 @@ export function StudentPortalSidebar({
                 </Badge>
               </div>
 
-              <div className="flex gap-2 overflow-x-auto pb-1">
-                {links.map((link) => (
-                  <Link
-                    key={link.href}
-                    href={link.href}
-                    className={`shrink-0 rounded-xl border px-3 py-2 text-sm font-semibold transition-colors ${getMobileLinkClass(link.href)}`}
-                  >
-                    {link.label}
-                  </Link>
-                ))}
+              <div className="space-y-3">
+                <div className="rounded-xl border border-[#E8EFE5] bg-[#FCFDFB] px-3 py-3">
+                  <div className="mb-2">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#6B7280]">
+                      Jornada do estudante
+                    </p>
+                    <p className="mt-1 text-xs text-[#6B7280] leading-relaxed">
+                      Navegação principal do percurso e das próximas etapas.
+                    </p>
+                  </div>
 
-                {isGroupWorkspacePage
-                  ? groupWorkspaceLinks.map((link) => (
+                  <div className="flex flex-wrap gap-2">
+                    {links.map((link) => (
                       <Link
                         key={link.href}
                         href={link.href}
-                        className={`shrink-0 rounded-xl border px-3 py-2 text-sm font-semibold transition-colors ${getMobileLinkClass(link.href)}`}
+                        className={`rounded-xl border px-3 py-2 text-sm font-semibold transition-colors ${getMobileLinkClass(link.href)}`}
                       >
                         {link.label}
                       </Link>
-                    ))
-                  : null}
+                    ))}
+                  </div>
+                </div>
+
+                {isGroupWorkspacePage ? (
+                  <div className="rounded-2xl border border-[#D7E7D0] bg-[linear-gradient(180deg,#F8FBF6_0%,#EEF7EA_100%)] px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)]">
+                    <div className="mb-2">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#2F6F35]">
+                        Ferramentas do projeto
+                      </p>
+                      <p className="mt-1 text-xs text-[#58705C] leading-relaxed">
+                        Atalhos do workspace do grupo para executar o projeto nesta etapa.
+                      </p>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
+                      {groupWorkspaceLinks.map((link) => (
+                        <Link
+                          key={link.href}
+                          href={link.href}
+                          className={`rounded-xl border px-3 py-2 text-sm font-semibold transition-colors ${getMobileLinkClass(link.href)}`}
+                        >
+                          {link.label}
+                        </Link>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
               </div>
             </Card>
           ) : null}
