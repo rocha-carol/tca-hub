@@ -19,6 +19,12 @@ const ACTIVITY_TYPES = [
   { key: "registro", label: "Registro", color: "bg-[#6B7280]", text: "text-white" },
 ] as const;
 
+function getMediaKindLabel(kind?: string | null) {
+  if (kind === "audio") return "Áudio";
+  if (kind === "video") return "Vídeo";
+  return "Imagem";
+}
+
 function inferActivityType(caption: string | null) {
   const c = (caption ?? "").toLowerCase();
   if (c.includes("entrevist")) return ACTIVITY_TYPES[0];
@@ -145,19 +151,38 @@ export default async function DiaryPage({ params }: DiaryPageProps) {
 
                       <div className="grid gap-4 sm:grid-cols-[180px_1fr] items-start">
                         {photo.photo_url && (
-                          <a
-                            href={photo.photo_url}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="block rounded-xl overflow-hidden bg-gray-100 aspect-[4/3] flex-shrink-0 hover:opacity-90 transition-opacity"
-                          >
-                            <img
-                              src={photo.photo_url}
-                              alt={photo.caption || "Registro do processo"}
-                              className="h-full w-full object-cover"
-                              loading="lazy"
-                            />
-                          </a>
+                          <div className="space-y-2">
+                            <div className="inline-flex rounded-full bg-[#EEF5FF] px-2.5 py-1 text-[11px] font-semibold text-[#2F80ED]">
+                              {getMediaKindLabel(photo.media_kind)}
+                            </div>
+                            {photo.media_kind === "audio" ? (
+                              <div className="rounded-xl bg-gray-100 p-3">
+                                <audio controls className="w-full" src={photo.photo_url}>
+                                  Seu navegador não suporta reprodução de áudio.
+                                </audio>
+                              </div>
+                            ) : photo.media_kind === "video" ? (
+                              <div className="rounded-xl overflow-hidden bg-gray-100 aspect-video">
+                                <video controls className="h-full w-full" src={photo.photo_url}>
+                                  Seu navegador não suporta reprodução de vídeo.
+                                </video>
+                              </div>
+                            ) : (
+                              <a
+                                href={photo.photo_url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="block rounded-xl overflow-hidden bg-gray-100 aspect-[4/3] flex-shrink-0 hover:opacity-90 transition-opacity"
+                              >
+                                <img
+                                  src={photo.photo_url}
+                                  alt={photo.caption || "Registro do processo"}
+                                  className="h-full w-full object-cover"
+                                  loading="lazy"
+                                />
+                              </a>
+                            )}
+                          </div>
                         )}
                         <div>
                           <p className="text-sm text-[#1F2937] leading-relaxed">
@@ -167,6 +192,9 @@ export default async function DiaryPage({ params }: DiaryPageProps) {
                             Registrado por{" "}
                             <span className="font-medium text-[#1F2937]">{photo.author_name}</span>
                           </p>
+                          {photo.file_name ? (
+                            <p className="text-xs text-[#6B7280] mt-1">Arquivo: {photo.file_name}</p>
+                          ) : null}
                         </div>
                       </div>
                     </Card>

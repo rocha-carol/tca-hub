@@ -40,6 +40,8 @@ export default async function FinalProductPage({ params }: FinalProductPageProps
 
   try { finalProduct = await fetchGroupFinalProduct(id); } catch { /* silencioso */ }
   try { photos = await fetchGroupProcessPhotos(id); } catch { /* silencioso */ }
+    const imageRecords = photos.filter((photo) => (photo.media_kind ?? "imagem") === "imagem");
+
   try { repertoryItems = await fetchGroupRepertoryItems(id); } catch { /* silencioso */ }
 
   const title = finalProduct?.title || group.theme || "Produto Final";
@@ -109,11 +111,11 @@ export default async function FinalProductPage({ params }: FinalProductPageProps
         <section>
           <div className="flex items-center gap-3 mb-4">
             <h2 className="text-xl font-semibold text-[#1F2937]">Fotos</h2>
-            {photos.length > 0 && (
-              <Badge variant="gray">{photos.length} registro{photos.length !== 1 ? "s" : ""}</Badge>
+            {imageRecords.length > 0 && (
+              <Badge variant="gray">{imageRecords.length} registro{imageRecords.length !== 1 ? "s" : ""}</Badge>
             )}
           </div>
-          {photos.length === 0 ? (
+          {imageRecords.length === 0 ? (
             <Card>
               <div className="text-center py-6">
                 <p className="text-2xl mb-2">📷</p>
@@ -122,7 +124,7 @@ export default async function FinalProductPage({ params }: FinalProductPageProps
             </Card>
           ) : (
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-              {photos.map((photo) => (
+              {imageRecords.map((photo) => (
                 <a
                   key={String(photo.id)}
                   href={photo.photo_url}

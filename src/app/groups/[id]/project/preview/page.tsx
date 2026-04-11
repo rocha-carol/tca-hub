@@ -36,6 +36,8 @@ export default async function PreviewPage({ params }: PreviewPageProps) {
   try { sections = await ensureGroupProjectSectionsStructure(id); } catch { /* silencioso */ }
   try { finalProduct = await fetchGroupFinalProduct(id); } catch { /* silencioso */ }
   try { photos = await fetchGroupProcessPhotos(id); } catch { /* silencioso */ }
+    const imageRecords = photos.filter((photo) => (photo.media_kind ?? "imagem") === "imagem");
+
   try { repertoryItems = await fetchGroupRepertoryItems(id); } catch { /* silencioso */ }
 
   const title = finalProduct?.title || group.theme || "Trabalho Colaborativo de Autoria";
@@ -118,13 +120,13 @@ export default async function PreviewPage({ params }: PreviewPageProps) {
         )}
 
         {/* ── FOTOS DO PROCESSO ── */}
-        {photos.length > 0 && (
+        {imageRecords.length > 0 && (
           <div className="px-10 py-8 border-t border-gray-100">
             <h2 className="text-base font-bold text-[#1F2937] uppercase tracking-widest mb-5">
               Registros do Processo
             </h2>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-              {photos.map((photo) => (
+              {imageRecords.map((photo) => (
                 <figure key={String(photo.id)} className="m-0">
                   <div className="rounded-xl overflow-hidden bg-gray-100 aspect-video">
                     <img

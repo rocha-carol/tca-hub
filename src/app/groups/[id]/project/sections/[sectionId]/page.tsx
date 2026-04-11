@@ -1,22 +1,26 @@
 import { notFound, redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import Link from "next/link";
-import { fetchGroupById } from "@/services/group-service";
+import { randomUUID } from "node:crypto";
+import { createClient } from "@/lib/supabase/server";
 import { ensureGroupProjectSectionsStructure, updateGroupProjectSection } from "@/services/project-section-service";
 import { fetchGroupProjectSectionComments } from "@/services/project-section-comment-service";
 import { fetchGroupProjectSectionNextSteps } from "@/services/project-section-next-step-service";
 import { requireGroupAccess } from "@/services/group-access-service";
 import { fetchGroupThemeGuideState } from "@/services/group-theme-guide-state-service";
+import { createGroupProcessPhoto, fetchGroupProcessPhotos } from "@/services/group-process-photo-service";
 import { STUDENT_ROUTES } from "@/lib/utils/constants";
 import { generateProblemJustificationGuidanceSimulated } from "@/lib/ai/project-section-simulated-guidance";
 import { SectionWritingThermometer } from "@/components/project/SectionWritingThermometer";
+import { ProblemJustificationExplainerCard } from "@/components/project/ProblemJustificationExplainerCard";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import type { ProjectSectionStatus } from "@/types/project-section";
+import type { GroupProcessMediaKind } from "@/types/group-process-photo";
 
 interface SectionEditorPageProps {
   params: Promise<{ id: string; sectionId: string }>;
-  searchParams?: Promise<{ saved?: string }>;
+  searchParams?: Promise<{ saved?: string; media_status?: string }>;
 }
 
 type SectionGuidance = {
@@ -121,6 +125,41 @@ function formatDate(date?: string | null) {
   }
 }
 
+function formatDateTime(date?: string | null) {
+  if (!date) return "";
+  try {
+    return new Date(date).toLocaleDateString("pt-BR", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    });
+  } catch {
+    return date;
+  }
+}
+
+function getMediaKindLabel(kind?: string | null) {
+  if (kind === "audio") return "Áudio";
+  if (kind === "video") return "Vídeo";
+  return "Imagem";
+}
+
+function sanitizeFileName(fileName: string) {
+  return fileName
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9._-]+/g, "-")
+    .replace(/-+/g, "-")
+    .toLowerCase();
+}
+
+function inferMediaKindFromMimeType(mimeType: string): GroupProcessMediaKind | null {
+  if (mimeType.startsWith("image/")) return "imagem";
+  if (mimeType.startsWith("audio/")) return "audio";
+  if (mimeType.startsWith("video/")) return "video";
+  return null;
+}
+
 export default async function SectionEditorPage({ params, searchParams }: SectionEditorPageProps) {
   const { id, sectionId } = await params;
   const query = searchParams ? await searchParams : {};
@@ -163,6 +202,8 @@ export default async function SectionEditorPage({ params, searchParams }: Sectio
 
   let comments: Awaited<ReturnType<typeof fetchGroupProjectSectionComments>> = [];
   let nextSteps: Awaited<ReturnType<typeof fetchGroupProjectSectionNextSteps>> = [];
+  let processMedia: Awaited<ReturnType<typeof fetchGroupProcessPhotos>> = [];
+  const isDevelopmentRecordsSection = section.section_key === "desenvolvimento_registros";
 
   try {
     const all = await fetchGroupProjectSectionComments(id);
@@ -173,6 +214,15 @@ export default async function SectionEditorPage({ params, searchParams }: Sectio
     const all = await fetchGroupProjectSectionNextSteps(id);
     nextSteps = all.filter((n) => String(n.section_id) === sectionId);
   } catch { /* silencioso */ }
+
+  if (isDevelopmentRecordsSection) {
+    try {
+      const all = await fetchGroupProcessPhotos(id);
+      processMedia = all.filter((item) => String(item.section_id ?? "") === sectionId);
+    } catch {
+      processMedia = [];
+    }
+  }
 
   async function handleSave(formData: FormData) {
     "use server";
@@ -204,6 +254,76 @@ export default async function SectionEditorPage({ params, searchParams }: Sectio
     }
 
     redirect(`/groups/${id}/project/sections/${sectionId}?saved=1`);
+  }
+
+  async function handleUploadProcessMedia(formData: FormData) {
+    "use server";
+
+    const { profile } = await requireGroupAccess(id);
+    const fileEntry = formData.get("process_media_file");
+    const captionRaw = String(formData.get("process_media_caption") ?? "").trim();
+    const caption = captionRaw.length > 0 ? captionRaw : null;
+    const takenAtRaw = String(formData.get("process_media_taken_at") ?? "").trim();
+    const takenAt = takenAtRaw.length > 0 ? takenAtRaw : null;
+
+    if (!(fileEntry instanceof File) || fileEntry.size === 0) {
+      redirect(`/groups/${id}/project/sections/${sectionId}?media_status=invalid`);
+    }
+
+    const mediaKind = inferMediaKindFromMimeType(fileEntry.type);
+    const isDateValid = !takenAt || /^\d{4}-\d{2}-\d{2}$/.test(takenAt);
+
+    if (!mediaKind || !isDateValid) {
+      redirect(`/groups/${id}/project/sections/${sectionId}?media_status=invalid`);
+    }
+
+    if (fileEntry.size > 50 * 1024 * 1024) {
+      redirect(`/groups/${id}/project/sections/${sectionId}?media_status=too_large`);
+    }
+
+    const supabase = await createClient();
+    const safeFileName = sanitizeFileName(fileEntry.name || `${randomUUID()}.${mediaKind}`);
+    const storagePath = `${id}/${sectionId}/${Date.now()}-${randomUUID()}-${safeFileName}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from("group-process-media")
+      .upload(storagePath, fileEntry, {
+        cacheControl: "3600",
+        upsert: false,
+        contentType: fileEntry.type,
+      });
+
+    if (uploadError) {
+      redirect(`/groups/${id}/project/sections/${sectionId}?media_status=error`);
+    }
+
+    const { data: publicData } = supabase.storage.from("group-process-media").getPublicUrl(storagePath);
+
+    try {
+      await createGroupProcessPhoto({
+        group_id: id,
+        section_id: sectionId,
+        photo_url: publicData.publicUrl,
+        media_kind: mediaKind,
+        file_name: fileEntry.name,
+        mime_type: fileEntry.type,
+        caption,
+        taken_at: takenAt,
+        author_profile_id: profile.id,
+        author_role: profile.role,
+        author_name: profile.name,
+      });
+    } catch {
+      redirect(`/groups/${id}/project/sections/${sectionId}?media_status=error`);
+    }
+
+    revalidatePath(`/groups/${id}/project/sections/${sectionId}`);
+    revalidatePath(`/groups/${id}/project`);
+    revalidatePath(`/groups/${id}/diary`);
+    revalidatePath(`/groups/${id}/project/preview`);
+    revalidatePath(`/groups/${id}/final-product`);
+
+    redirect(`/groups/${id}/project/sections/${sectionId}?media_status=success`);
   }
 
   const sectionIndex = sections.findIndex((s) => String(s.id) === sectionId);
@@ -259,6 +379,10 @@ export default async function SectionEditorPage({ params, searchParams }: Sectio
             <Badge variant={sl.variant}>{sl.text}</Badge>
           </div>
 
+          {section.section_key === "problema_justificativa" ? (
+            <ProblemJustificationExplainerCard />
+          ) : null}
+
           {/* Perguntas norteadoras */}
           <Card className="bg-[#fffdf5] border border-[#fce9b0]">
             <p className="text-xs font-semibold text-[#F2C94C] uppercase tracking-widest mb-3">
@@ -274,46 +398,35 @@ export default async function SectionEditorPage({ params, searchParams }: Sectio
             </ul>
           </Card>
 
-          {simulatedProblemGuidance ? (
-            <Card className="bg-[#F5F9FF] border border-[#DBEAFE]">
-              <div className="flex items-start justify-between gap-3 flex-wrap mb-3">
-                <div>
-                  <p className="text-xs font-semibold text-[#2F80ED] uppercase tracking-widest mb-1">
-                    {simulatedProblemGuidance.writingSupportTitle}
-                  </p>
-                  <p className="text-xs text-[#4B5563]">{simulatedProblemGuidance.themeReferenceLabel}</p>
-                </div>
-                <span className="rounded-full bg-[#DBEAFE] px-3 py-1 text-[11px] font-semibold text-[#1D4ED8]">
-                  Apoio contextual
-                </span>
-              </div>
-
-              <div className="rounded-xl bg-white/80 border border-[#DBEAFE] px-4 py-3 mb-4">
-                <p className="text-xs font-semibold text-[#1F2937] mb-2">Rascunho inicial sugerido</p>
-                <p className="text-sm text-[#374151] leading-relaxed">{simulatedProblemGuidance.starterText}</p>
-              </div>
-
-              <div>
-                <p className="text-xs font-semibold text-[#1F2937] uppercase tracking-widest mb-2">
-                  Como fortalecer a escrita
-                </p>
-                <ul className="space-y-2">
-                  {simulatedProblemGuidance.writingSupportTips.map((tip, index) => (
-                    <li key={index} className="flex gap-2 text-sm text-[#1F2937]">
-                      <span className="text-[#2F80ED] font-bold flex-shrink-0">{index + 1}.</span>
-                      <span>{tip}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </Card>
-          ) : null}
-
           {/* Editor de texto */}
           <Card>
             {query.saved === "1" && (
               <div className="mb-4 rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
                 Texto da seção salvo com sucesso.
+              </div>
+            )}
+
+            {query.media_status === "success" && (
+              <div className="mb-4 rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
+                Mídia do processo enviada com sucesso.
+              </div>
+            )}
+
+            {query.media_status === "invalid" && (
+              <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                Envie um arquivo de imagem, áudio ou vídeo e confira a data informada.
+              </div>
+            )}
+
+            {query.media_status === "too_large" && (
+              <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                O arquivo excede o limite de 50 MB. Escolha uma versão menor para continuar.
+              </div>
+            )}
+
+            {query.media_status === "error" && (
+              <div className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+                Não foi possível enviar a mídia agora. Verifique se o SQL de suporte ao upload foi executado no Supabase.
               </div>
             )}
 
@@ -369,6 +482,132 @@ export default async function SectionEditorPage({ params, searchParams }: Sectio
               </div>
             </form>
           </Card>
+
+          {isDevelopmentRecordsSection ? (
+            <Card className="border border-[#DCEBD5] bg-[#F8FBF6]">
+              <div className="space-y-5">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-widest text-[#2F6F35] mb-1">
+                    Registros multimídia do processo
+                  </p>
+                  <h2 className="text-lg font-bold text-[#1F2937]">Imagens, áudios e vídeos da investigação</h2>
+                  <p className="text-sm text-[#4B5563] mt-1 leading-relaxed">
+                    Use este espaço para anexar evidências produzidas ao longo do projeto: visitas, entrevistas, observações, reuniões, testes e outros registros do percurso.
+                  </p>
+                </div>
+
+                <form action={handleUploadProcessMedia} className="space-y-4 rounded-2xl border border-[#DCEBD5] bg-white p-4">
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="space-y-2 md:col-span-2">
+                      <label htmlFor="process_media_file" className="text-sm font-semibold text-[#1F2937]">
+                        Upload de arquivo
+                      </label>
+                      <input
+                        id="process_media_file"
+                        name="process_media_file"
+                        type="file"
+                        accept="image/*,audio/*,video/*"
+                        required
+                        className="block w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-[#1F2937] file:mr-3 file:rounded-lg file:border-0 file:bg-[#EAF5E4] file:px-3 file:py-2 file:text-sm file:font-semibold file:text-[#24532A]"
+                      />
+                      <p className="text-xs text-[#6B7280]">
+                        Formatos aceitos: imagem, áudio e vídeo. Limite por arquivo: 50 MB.
+                      </p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <label htmlFor="process_media_taken_at" className="text-sm font-semibold text-[#1F2937]">
+                        Data do registro
+                      </label>
+                      <input
+                        id="process_media_taken_at"
+                        name="process_media_taken_at"
+                        type="date"
+                        className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-[#1F2937]"
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <label htmlFor="process_media_caption" className="text-sm font-semibold text-[#1F2937]">
+                        Descrição do registro
+                      </label>
+                      <input
+                        id="process_media_caption"
+                        name="process_media_caption"
+                        type="text"
+                        placeholder="Ex.: entrevista com moradores sobre mobilidade no bairro"
+                        className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-[#1F2937]"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end">
+                    <button
+                      type="submit"
+                      className="rounded-xl bg-[#2F6F35] px-5 py-2 text-sm font-semibold text-white shadow hover:bg-[#275E2D] transition-colors"
+                    >
+                      Enviar mídia do processo
+                    </button>
+                  </div>
+                </form>
+
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between gap-3 flex-wrap">
+                    <p className="text-sm font-semibold text-[#1F2937]">Registros já enviados nesta seção</p>
+                    <Badge variant="gray">{processMedia.length} mídia{processMedia.length !== 1 ? "s" : ""}</Badge>
+                  </div>
+
+                  {processMedia.length === 0 ? (
+                    <div className="rounded-2xl border border-dashed border-[#DCEBD5] bg-white px-4 py-5 text-sm text-[#6B7280]">
+                      Nenhuma mídia foi anexada ainda nesta etapa. Os registros enviados aparecerão aqui conforme o desenvolvimento do projeto.
+                    </div>
+                  ) : (
+                    <div className="grid gap-4 md:grid-cols-2">
+                      {processMedia.map((media) => (
+                        <div key={String(media.id)} className="rounded-2xl border border-[#DCEBD5] bg-white p-4 shadow-sm">
+                          <div className="flex items-start justify-between gap-3 mb-3">
+                            <div>
+                              <p className="text-sm font-semibold text-[#1F2937]">{media.caption || media.file_name || "Registro do processo"}</p>
+                              <p className="text-xs text-[#6B7280] mt-1">
+                                {formatDateTime(media.taken_at ?? media.created_at)}
+                              </p>
+                            </div>
+                            <Badge variant="blue">{getMediaKindLabel(media.media_kind)}</Badge>
+                          </div>
+
+                          {media.media_kind === "audio" ? (
+                            <audio controls className="w-full" src={media.photo_url}>
+                              Seu navegador não suporta reprodução de áudio.
+                            </audio>
+                          ) : media.media_kind === "video" ? (
+                            <div className="overflow-hidden rounded-xl bg-gray-100 aspect-video">
+                              <video controls className="h-full w-full" src={media.photo_url}>
+                                Seu navegador não suporta reprodução de vídeo.
+                              </video>
+                            </div>
+                          ) : (
+                            <a href={media.photo_url} target="_blank" rel="noreferrer" className="block overflow-hidden rounded-xl bg-gray-100 aspect-video">
+                              <img
+                                src={media.photo_url}
+                                alt={media.caption || media.file_name || "Registro do processo"}
+                                className="h-full w-full object-cover"
+                                loading="lazy"
+                              />
+                            </a>
+                          )}
+
+                          <div className="mt-3 space-y-1 text-xs text-[#6B7280]">
+                            {media.file_name ? <p>Arquivo: {media.file_name}</p> : null}
+                            <p>Registrado por {media.author_name}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </Card>
+          ) : null}
 
           {/* Navegação entre seções */}
           <div className="flex items-center justify-between gap-4 pt-2">

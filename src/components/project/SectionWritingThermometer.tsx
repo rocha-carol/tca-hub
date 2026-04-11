@@ -61,6 +61,16 @@ export function SectionWritingThermometer({
 
   return (
     <div className="space-y-4">
+      <textarea
+        id={id}
+        name={name}
+        value={content}
+        onChange={(event) => setContent(event.target.value)}
+        rows={rows}
+        placeholder={placeholder}
+        className="w-full rounded-xl border border-gray-200 bg-[#fafaf9] px-4 py-3 text-sm text-[#1F2937] placeholder:text-gray-400 focus:border-[#4CAF50] focus:outline-none focus:ring-2 focus:ring-[#4CAF50]/30 leading-relaxed resize-y"
+      />
+
       <div className={`rounded-2xl border px-4 py-4 ${resolveMeterTrack(analysis.score)}`}>
         <div className="flex items-start justify-between gap-3 flex-wrap mb-3">
           <div>
@@ -84,34 +94,18 @@ export function SectionWritingThermometer({
 
         <p className="text-sm text-[#374151] leading-relaxed mb-3">{analysis.encouragement}</p>
 
-        <div className="grid gap-3 md:grid-cols-2">
-          <div className="rounded-xl bg-white/75 px-3 py-3 border border-white/80">
-            <p className="text-xs font-semibold uppercase tracking-widest text-[#1F2937] mb-2">
-              Leitura da IA simulada
-            </p>
-            <ul className="space-y-2">
-              {analysis.feedbackPhrases.map((phrase, index) => (
-                <li key={index} className="flex gap-2 text-sm text-[#374151] leading-relaxed">
-                  <span className="font-bold text-[#2F80ED] flex-shrink-0">•</span>
-                  <span>{phrase}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          <div className="rounded-xl bg-white/75 px-3 py-3 border border-white/80">
-            <p className="text-xs font-semibold uppercase tracking-widest text-[#1F2937] mb-2">
-              Dicas para melhorar agora
-            </p>
-            <ul className="space-y-2">
-              {analysis.improvementTips.map((tip, index) => (
-                <li key={index} className="flex gap-2 text-sm text-[#374151] leading-relaxed">
-                  <span className="font-bold text-[#4CAF50] flex-shrink-0">{index + 1}.</span>
-                  <span>{tip}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
+        <div className="rounded-xl bg-white/75 px-3 py-3 border border-white/80">
+          <p className="text-xs font-semibold uppercase tracking-widest text-[#1F2937] mb-2">
+            Dicas para melhorar agora
+          </p>
+          <ul className="space-y-2">
+            {analysis.improvementTips.map((tip, index) => (
+              <li key={index} className="flex gap-2 text-sm text-[#374151] leading-relaxed">
+                <span className="font-bold text-[#4CAF50] flex-shrink-0">{index + 1}.</span>
+                <span>{tip}</span>
+              </li>
+            ))}
+          </ul>
         </div>
 
         <div className="mt-3 flex flex-wrap gap-2 text-[11px] text-[#4B5563]">
@@ -129,16 +123,6 @@ export function SectionWritingThermometer({
           </span>
         </div>
       </div>
-
-      <textarea
-        id={id}
-        name={name}
-        value={content}
-        onChange={(event) => setContent(event.target.value)}
-        rows={rows}
-        placeholder={placeholder}
-        className="w-full rounded-xl border border-gray-200 bg-[#fafaf9] px-4 py-3 text-sm text-[#1F2937] placeholder:text-gray-400 focus:border-[#4CAF50] focus:outline-none focus:ring-2 focus:ring-[#4CAF50]/30 leading-relaxed resize-y"
-      />
     </div>
   );
 }
