@@ -15,9 +15,13 @@ function isStatusColumnMissing(message: string) {
 
 function isStudentLinkColumnMissing(message: string) {
 	return (
-		(message.includes("student_1_id") ||
+		(
+			message.includes("student_1_id") ||
 			message.includes("student_2_id") ||
-			message.includes("student_3_id")) &&
+			message.includes("student_3_id") ||
+			message.includes("student_4_id") ||
+			message.includes("student_5_id")
+		) &&
 		message.includes("schema cache")
 	);
 }
@@ -37,6 +41,17 @@ function mapSupabaseErrorToIndicationMessage(message: string) {
 	}
 
 	return null;
+}
+
+function isOptionalAdvisorQueueInfrastructureError(message: string) {
+	const normalizedMessage = message.toLowerCase();
+
+	return (
+		normalizedMessage.includes("group_advisor_preferences") ||
+		normalizedMessage.includes("preferências de orientadores") ||
+		normalizedMessage.includes("fila de indicação") ||
+		normalizedMessage.includes("fluxo de indicação ainda não está preparado")
+	);
 }
 
 function getGroupDisplayLabel(group: Pick<Group, "id" | "theme">) {
@@ -391,7 +406,7 @@ export async function fetchGroupsVisibleToProfile(profile: Pick<Profile, "id" | 
 /**
  * Cria um novo grupo.
  *
- * MVP: criação com até 3 integrantes e suas respectivas séries.
+ * MVP: criação com até 5 integrantes e suas respectivas séries.
  */
 export async function createGroup(data: CreateGroupData): Promise<Group> {
 	const supabase = await createClient();
@@ -437,7 +452,7 @@ export async function createGroup(data: CreateGroupData): Promise<Group> {
 	if (error) {
 		if (isStudentLinkColumnMissing(error.message)) {
 			throw new Error(
-				"Vínculo entre groups e students ainda não existe no Supabase. Execute o arquivo local database/006_link_groups_students.sql no SQL Editor."
+				"Vínculo entre groups e students ainda não está completo no Supabase. Se integrantes 4 e 5 ainda não funcionarem, execute o arquivo local database/027_add_members_4_5_to_groups.sql no SQL Editor."
 			);
 		}
 
@@ -505,27 +520,50 @@ export async function updateGroupAdvisors(
 
 	const supabase = await createClient();
 
+	const fullUpdatePayload = {
+		primary_advisor_id: primaryAdvisorId,
+		co_advisor_id: coAdvisorId,
+		indicated_advisor_id: null,
+		indication_status: null,
+		indication_updated_at: new Date().toISOString(),
+	};
+
 	const { error } = await supabase
 		.from("groups")
-		.update({
-			primary_advisor_id: primaryAdvisorId,
-			co_advisor_id: coAdvisorId,
-			indicated_advisor_id: null,
-			indication_status: null,
-			indication_updated_at: new Date().toISOString(),
-		})
+		.update(fullUpdatePayload)
 		.eq("id", groupId);
 
 	if (error) {
 		const indicationMessage = mapSupabaseErrorToIndicationMessage(error.message);
+
 		if (indicationMessage) {
-			throw new Error(indicationMessage);
+			const { error: fallbackError } = await supabase
+				.from("groups")
+				.update({
+					primary_advisor_id: primaryAdvisorId,
+					co_advisor_id: coAdvisorId,
+				})
+				.eq("id", groupId);
+
+			if (fallbackError) {
+				throw new Error(`Erro ao atualizar orientadores: ${fallbackError.message}`);
+			}
+
+			return;
 		}
 
 		throw new Error(`Erro ao atualizar orientadores: ${error.message}`);
 	}
 
-	await recalculateAdvisorIndicationQueue(groupId);
+	try {
+		await recalculateAdvisorIndicationQueue(groupId);
+	} catch (queueError) {
+		const message = queueError instanceof Error ? queueError.message : String(queueError ?? "");
+
+		if (!isOptionalAdvisorQueueInfrastructureError(message)) {
+			throw queueError;
+		}
+	}
 }
 
 /**
@@ -686,5 +724,85 @@ export async function updateGroupStatus(groupId: string, status: GroupStatus): P
 		}
 
 		throw new Error(`Erro ao atualizar status do grupo: ${error.message}`);
+	}
+}
+
+export async function addStudentToGroup(groupId: string, studentId: string | number): Promise<void> {
+	const group = await fetchGroupById(groupId);
+
+	if (!group) {
+		throw new Error("Grupo não encontrado para adicionar integrante.");
+	}
+
+	const supabase = await createClient();
+	const normalizedStudentId = typeof studentId === "number" ? studentId : /^\d+$/.test(String(studentId)) ? Number(studentId) : String(studentId).trim();
+
+	const existingStudentIds = [group.student_1_id, group.student_2_id, group.student_3_id, group.student_4_id, group.student_5_id]
+		.map((value) => String(value ?? ""))
+		.filter(Boolean);
+
+	if (existingStudentIds.includes(String(normalizedStudentId))) {
+		throw new Error("Este estudante já faz parte deste grupo.");
+	}
+
+	const { data: studentData, error: studentError } = await supabase
+		.from("students")
+		.select("id, name, grade, active")
+		.eq("id", normalizedStudentId)
+		.single();
+
+	if (studentError || !studentData) {
+		throw new Error(`Erro ao buscar estudante para inclusão no grupo: ${studentError?.message || "Estudante não encontrado."}`);
+	}
+
+	if (studentData.active === false) {
+		throw new Error("Estudante inativo não pode ser adicionado ao grupo.");
+	}
+
+	const { data: groupsData, error: groupsError } = await supabase
+		.from("groups")
+		.select("id, student_1_id, student_2_id, student_3_id, student_4_id, student_5_id");
+
+	if (groupsError) {
+		throw new Error(`Erro ao validar vínculo atual do estudante: ${groupsError.message}`);
+	}
+
+	const isLinkedToAnotherGroup = (groupsData || []).some((currentGroup) => {
+		if (String(currentGroup.id) === String(groupId)) {
+			return false;
+		}
+
+		return [currentGroup.student_1_id, currentGroup.student_2_id, currentGroup.student_3_id, currentGroup.student_4_id, currentGroup.student_5_id]
+			.some((value) => String(value ?? "") === String(normalizedStudentId));
+	});
+
+	if (isLinkedToAnotherGroup) {
+		throw new Error("Este estudante já está vinculado a outro grupo.");
+	}
+
+	const nextSlot = [2, 3, 4, 5].find((slot) => {
+		const studentId = group[`student_${slot}_id` as keyof Group];
+		const memberName = group[`member_${slot}_name` as keyof Group];
+
+		return !studentId && !memberName;
+	});
+
+	if (!nextSlot) {
+		throw new Error("Este grupo já possui 5 integrantes.");
+	}
+
+	const payload = {
+		[`student_${nextSlot}_id`]: normalizedStudentId,
+		[`member_${nextSlot}_name`]: studentData.name,
+		[`member_${nextSlot}_series`]: studentData.grade || "Série não informada",
+	};
+
+	const { error: updateError } = await supabase
+		.from("groups")
+		.update(payload)
+		.eq("id", groupId);
+
+	if (updateError) {
+		throw new Error(`Erro ao adicionar integrante ao grupo: ${updateError.message}`);
 	}
 }
