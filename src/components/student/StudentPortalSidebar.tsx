@@ -72,6 +72,11 @@ export function StudentPortalSidebar({
   const [waitingStudyCompleted, setWaitingStudyCompleted] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const groupStatusHref = STUDENT_ROUTES.GROUP_STATUS;
+  const isStudentHomePage =
+    pathname === STUDENT_ROUTES.HOME ||
+    pathname === STUDENT_ROUTES.LEGACY_NAMESPACE_HOME ||
+    pathname === STUDENT_ROUTES.LEGACY_HOME ||
+    pathname === STUDENT_ROUTES.LEGACY_ROOT_HOME;
   const isJourneyPage = pathname === STUDENT_ROUTES.JOURNEY || pathname.startsWith(`${STUDENT_ROUTES.JOURNEY}/`);
   const isGroupWorkspacePage = Boolean(
     group?.id && (pathname === `/groups/${group.id}` || pathname.startsWith(`/groups/${group.id}/`))
@@ -261,6 +266,10 @@ export function StudentPortalSidebar({
     setIsSidebarOpen((current) => !current);
   }
 
+  if (isStudentHomePage) {
+    return null;
+  }
+
   return (
     <>
       <div className="lg:hidden">
@@ -268,16 +277,16 @@ export function StudentPortalSidebar({
           <button
             type="button"
             onClick={toggleSidebar}
-            className="inline-flex items-center gap-2 rounded-xl border border-[#CFE0C8] bg-white px-4 py-2.5 text-sm font-semibold text-[#17301C] shadow-sm transition-colors hover:bg-[#F4FAF1]"
+            className="inline-flex items-center gap-2 rounded-xl border border-[#DCE8D6] bg-white/95 px-4 py-2.5 text-sm font-semibold text-[#17301C] shadow-[0_4px_14px_rgba(31,41,55,0.06)] transition-colors hover:bg-[#F8FBF6]"
           >
-            <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-[#EAF5E4] text-[#24532A]">
+            <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-[#F1F8ED] text-[#24532A]">
               {isSidebarOpen ? "×" : "☰"}
             </span>
             {isSidebarOpen ? "Ocultar menu" : "Mostrar menu"}
           </button>
 
           {isSidebarOpen ? (
-            <Card className="border border-[#DCEBD5] bg-[#F8FBF6] p-4">
+            <Card className="border border-[#E3EDE0] bg-[#FBFDF9] p-4 shadow-[0_8px_24px_rgba(31,41,55,0.05)]">
               <div className="flex items-center justify-between gap-3 mb-3">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#6B7280]">
@@ -322,7 +331,7 @@ export function StudentPortalSidebar({
       <aside className={`hidden lg:block lg:shrink-0 ${isSidebarOpen ? "lg:w-72" : "lg:w-20"}`}>
         <div className="sticky top-24 space-y-4">
           {isSidebarOpen ? (
-            <Card className="border border-[#DCEBD5] bg-[#F8FBF6] p-5">
+            <Card className="border border-[#E3EDE0] bg-[#FBFDF9] p-5 shadow-[0_10px_30px_rgba(31,41,55,0.05)]">
               <div className="space-y-3">
                 <div className="flex items-start justify-between gap-3">
                   <div>
@@ -338,14 +347,14 @@ export function StudentPortalSidebar({
                   <button
                     type="button"
                     onClick={toggleSidebar}
-                    className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-[#DCEBD5] bg-white text-[#24532A] transition-colors hover:bg-[#F3FBF1]"
+                    className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-[#E3EDE0] bg-white text-[#24532A] transition-colors hover:bg-[#F8FBF6]"
                     aria-label="Ocultar sidebar"
                   >
                     ←
                   </button>
                 </div>
 
-                <div className="rounded-xl border border-[#DCEBD5] bg-white px-4 py-3">
+                <div className="rounded-xl border border-[#E6EEE2] bg-white/95 px-4 py-3">
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <p className="text-sm font-semibold text-[#1F2937]">Situação do grupo</p>
@@ -358,7 +367,7 @@ export function StudentPortalSidebar({
                   </div>
                 </div>
 
-                <div className="rounded-xl border border-[#DCEBD5] bg-white px-4 py-4">
+                <div className="rounded-xl border border-[#E6EEE2] bg-white/95 px-4 py-4">
                   <div className="space-y-3">
                     <div>
                       <p className="text-sm font-semibold text-[#1F2937]">Sua situação atual</p>
@@ -381,7 +390,7 @@ export function StudentPortalSidebar({
 
                         <Link
                           href={`${STUDENT_ROUTES.GROUP}/${group.id}`}
-                          className="inline-flex rounded-lg border border-lime-200 bg-[#F8FBF6] px-4 py-2 text-sm font-medium text-lime-800 transition-colors hover:border-lime-300 hover:bg-[#F3FBF1]"
+                          className="inline-flex rounded-lg border border-[#D9E8D2] bg-[#F8FBF6] px-4 py-2 text-sm font-medium text-[#2C5E31] transition-colors hover:border-[#C9DEC0] hover:bg-[#F3FBF1]"
                         >
                           Acessar meu grupo
                         </Link>
@@ -418,7 +427,7 @@ export function StudentPortalSidebar({
                 </nav>
 
                 {isGroupWorkspacePage ? (
-                  <div className="rounded-xl border border-[#DCEBD5] bg-white px-4 py-4">
+                  <div className="rounded-xl border border-[#E6EEE2] bg-white/95 px-4 py-4">
                     <div>
                       <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#6B7280]">
                         Navegação do projeto
@@ -454,7 +463,7 @@ export function StudentPortalSidebar({
                 ) : null}
 
                 {isJourneyPage ? (
-                  <div className="rounded-xl border border-[#DCEBD5] bg-white px-4 py-4">
+                  <div className="rounded-xl border border-[#E6EEE2] bg-white/95 px-4 py-4">
                     <div>
                       <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#6B7280]">
                         Desafios concluídos
@@ -479,7 +488,7 @@ export function StudentPortalSidebar({
                           <Link
                             key={reward.id}
                             href={`${STUDENT_ROUTES.JOURNEY}#minhas-recompensas`}
-                            className="flex items-start justify-between gap-3 rounded-xl border border-[#E4EFE0] bg-[#F8FBF6] px-3 py-3 text-sm transition-colors hover:border-[#D0E3CA] hover:bg-[#F3FBF1]"
+                            className="flex items-start justify-between gap-3 rounded-xl border border-[#E7EFE3] bg-[#FAFCF8] px-3 py-3 text-sm transition-colors hover:border-[#D9E6D2] hover:bg-[#F6FBF3]"
                           >
                             <span className="flex min-w-0 items-start gap-3">
                               <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white text-base shadow-sm">
@@ -510,10 +519,10 @@ export function StudentPortalSidebar({
               <button
                 type="button"
                 onClick={toggleSidebar}
-                className="inline-flex items-center gap-2 rounded-2xl border border-[#DCEBD5] bg-white px-4 py-3 text-sm font-semibold text-[#17301C] shadow-sm transition-colors hover:bg-[#F4FAF1]"
+                className="inline-flex items-center gap-2 rounded-2xl border border-[#E3EDE0] bg-white/95 px-4 py-3 text-sm font-semibold text-[#17301C] shadow-[0_6px_18px_rgba(31,41,55,0.05)] transition-colors hover:bg-[#F8FBF6]"
                 aria-label="Mostrar sidebar"
               >
-                <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-[#EAF5E4] text-[#24532A]">
+                <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-[#F1F8ED] text-[#24532A]">
                   ☰
                 </span>
                 Menu
