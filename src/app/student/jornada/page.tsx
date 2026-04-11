@@ -1,7 +1,24 @@
 import { Card } from "@/components/ui/Card";
+import { Badge } from "@/components/ui/Badge";
 import BackLinkButton from "@/components/ui/BackLinkButton";
 import { TcaStepsGuide } from "@/components/student/TcaStepsGuide";
 import { loadStudentPortalData } from "@/app/student/_lib/student-portal-data";
+
+function getGroupStatusText(hasGroup: boolean, group: Awaited<ReturnType<typeof loadStudentPortalData>>["context"]["group"]) {
+  if (!hasGroup || !group) {
+    return "Grupo ainda não formado";
+  }
+
+  if (group.indication_status === "pendente") {
+    return "Aguardando retorno de orientadores";
+  }
+
+  if (group.primary_advisor_id) {
+    return "Grupo com orientação definida";
+  }
+
+  return "Grupo em organização";
+}
 
 export default async function StudentJourneyPage() {
   const {
@@ -17,6 +34,7 @@ export default async function StudentJourneyPage() {
 
   const sectionCount = projectSections.length;
   const currentGroupLabel = context.group?.theme || (context.group?.id ? `Grupo ${String(context.group.id).slice(0, 8)}` : "Sem grupo formado");
+  const groupStatusText = getGroupStatusText(hasGroup, context.group);
 
   return (
     <section className="space-y-4">
@@ -32,9 +50,18 @@ export default async function StudentJourneyPage() {
 
       <section className="grid gap-3 md:grid-cols-2">
         <Card className="border border-[#E3EDE0] bg-white/95 p-4 shadow-[0_6px_18px_rgba(31,41,55,0.04)]">
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#7AA56F] mb-2">Situação</p>
-          <p className="text-lg font-bold text-[#1F2937]">{hasGroup ? "Grupo ativo" : "Sem grupo"}</p>
-          <p className="text-sm text-[#6B7280] mt-1">{currentGroupLabel}</p>
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#7AA56F] mb-2">Situação</p>
+              <p className="text-lg font-bold text-[#1F2937] truncate">{studentName}</p>
+              <p className="text-sm text-[#6B7280] mt-1 truncate">{currentGroupLabel}</p>
+              <p className="text-sm text-[#4B5563] mt-2">{groupStatusText}</p>
+            </div>
+
+            <Badge variant={hasGroup ? "green" : "yellow"}>
+              {hasGroup ? "Em grupo" : "Sem grupo"}
+            </Badge>
+          </div>
         </Card>
 
         <Card className="border border-[#E3EDE0] bg-white/95 p-4 shadow-[0_6px_18px_rgba(31,41,55,0.04)]">

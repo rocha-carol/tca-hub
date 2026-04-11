@@ -48,7 +48,6 @@ function getGroupStatusText(hasGroup: boolean, group: Group | null) {
 export function StudentPortalSidebar({
   hasGroup,
   group,
-  studentName,
 }: StudentPortalSidebarProps) {
   const pathname = usePathname();
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
@@ -108,11 +107,11 @@ export function StudentPortalSidebar({
   const groupWorkspaceLinks = hasGroup && group
     ? [
         { href: `/groups/${group.id}/project`, label: "Projeto", icon: "▣" },
-        { href: `/groups/${group.id}/checklist`, label: "Checklist", icon: "✓" },
         { href: `/groups/${group.id}/timeline`, label: "Cronograma", icon: "◷" },
+        { href: `/groups/${group.id}/checklist`, label: "Checklist", icon: "✓" },
         { href: `/groups/${group.id}/questions`, label: "Dúvidas", icon: "?" },
-        { href: `/groups/${group.id}/project/preview`, label: "Preview do projeto", icon: "◉" },
         { href: `/groups/${group.id}/comments`, label: "Comentários", icon: "◌" },
+        { href: `/groups/${group.id}/project/preview`, label: "Preview do projeto", icon: "◉" },
       ]
     : [];
 
@@ -253,23 +252,8 @@ export function StudentPortalSidebar({
                   </button>
                 </div>
 
-                <div className="rounded-2xl border border-[#E6EEE2] bg-white/95 px-4 py-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#6B7280]">Contexto atual</p>
-                      <p className="mt-2 text-base font-semibold text-[#1F2937] truncate">{studentName}</p>
-                      <p className="text-sm text-[#6B7280] mt-1 truncate">{getGroupLabel(group)}</p>
-                      <p className="text-sm text-[#4B5563] mt-2">{groupStatusText}</p>
-                    </div>
-
-                    <Badge variant={hasGroup ? "green" : "yellow"}>
-                      {hasGroup ? "Em grupo" : "Sem grupo"}
-                    </Badge>
-                  </div>
-                </div>
-
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#6B7280] mb-2">Navegação principal</p>
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#6B7280] mb-2">Jornada do estudante</p>
                   <nav className="space-y-2">
                   {links.map((link) => {
                     const active = isActive(link.href);
@@ -302,7 +286,7 @@ export function StudentPortalSidebar({
                   <div className="rounded-xl border border-[#E6EEE2] bg-white/95 px-4 py-4">
                     <div>
                       <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#6B7280]">
-                        Projeto do grupo
+                        Ferramentas do projeto
                       </p>
                     </div>
 
