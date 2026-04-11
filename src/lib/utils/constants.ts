@@ -24,7 +24,7 @@ export const PROJECT_SECTION_KEYS = {
 export const STUDENT_ROUTES = {
   HOME: "/estudante",
   JOURNEY: "/estudante/jornada",
-  ACHIEVEMENTS: "/estudante/jornada#conquistas-da-jornada",
+  ACHIEVEMENTS: "/estudante/conquistas",
   GROUP: "/estudante/grupo",
   GROUP_CREATE: "/estudante/groups/create",
   GROUP_STATUS: "/estudante/groups/status",

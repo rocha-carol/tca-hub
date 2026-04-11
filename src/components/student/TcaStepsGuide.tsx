@@ -8,6 +8,7 @@ import { ProgressBar } from "@/components/ui/ProgressBar";
 import type { Group } from "@/types/group";
 import type { GroupProjectSection } from "@/types/project-section";
 import { STUDENT_ROUTES } from "@/lib/utils/constants";
+import { StudentRewardsCard } from "@/components/student/StudentRewardsCard";
 
 const steps = [
   {
@@ -48,6 +49,8 @@ interface TcaStepsGuideProps {
   groupId?: string;
   nextJourneyHref?: string;
   projectSections: GroupProjectSection[];
+  processPhotosCount: number;
+  repertoryItemsCount: number;
   studentName: string;
   studentsError?: string | null;
   groupsError?: string | null;
@@ -307,6 +310,8 @@ export function TcaStepsGuide({
   groupId,
   nextJourneyHref,
   projectSections,
+  processPhotosCount,
+  repertoryItemsCount,
   studentName,
   studentsError = null,
   groupsError = null,
@@ -323,7 +328,6 @@ export function TcaStepsGuide({
     missionStageLabel,
     achievements,
   } = getJourneySnapshot(hasGroup, group, groupId, nextJourneyHref, projectSections);
-  const unlockedAchievementsCount = achievements.filter((achievement) => achievement.variant === "green").length;
 
   useEffect(() => {
     const previousProgress = readStoredJourneyProgress();
@@ -361,8 +365,9 @@ export function TcaStepsGuide({
   }, [completedSteps, groupId, hasGroup]);
 
   return (
-    <Card>
-      <div className="flex flex-col gap-4">
+    <>
+      <Card>
+        <div className="flex flex-col gap-4">
         <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
           <div>
             <h2 className="text-xl font-bold text-[#1F2937]">Jornada do projeto</h2>
@@ -465,17 +470,11 @@ export function TcaStepsGuide({
         ) : null}
 
         <div id="conquistas-da-jornada" className="scroll-mt-24 rounded-xl border border-[#E5E7EB] bg-white px-4 py-4">
-          <div className="mb-3 flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
-            <div className="flex flex-col gap-1">
-              <h3 className="text-base font-semibold text-[#1F2937]">Conquistas da jornada</h3>
-              <p className="text-sm text-[#6B7280]">
-                As conquistas ficam na própria jornada para reforçar o que já foi desbloqueado sem fragmentar a navegação.
-              </p>
-            </div>
-
-            <Badge variant={unlockedAchievementsCount > 0 ? "green" : "gray"} className="w-fit">
-              {unlockedAchievementsCount} conquista{unlockedAchievementsCount === 1 ? "" : "s"} liberada{unlockedAchievementsCount === 1 ? "" : "s"}
-            </Badge>
+          <div className="flex flex-col gap-1 mb-3">
+            <h3 className="text-base font-semibold text-[#1F2937]">Conquistas da jornada</h3>
+            <p className="text-sm text-[#6B7280]">
+              Pequenos marcos para mostrar o que já foi desbloqueado e o que vem a seguir.
+            </p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -523,6 +522,14 @@ export function TcaStepsGuide({
           })()
         ))}
       </ol>
-    </Card>
+      </Card>
+
+      <StudentRewardsCard
+        group={group}
+        projectSections={projectSections}
+        processPhotosCount={processPhotosCount}
+        repertoryItemsCount={repertoryItemsCount}
+      />
+    </>
   );
 }

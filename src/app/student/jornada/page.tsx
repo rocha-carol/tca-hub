@@ -7,7 +7,9 @@ export default async function StudentJourneyPage() {
     hasGroup,
     context,
     nextJourneyHref,
+    processPhotosCount,
     projectSections,
+    repertoryItemsCount,
     studentName,
   } = await loadStudentPortalData();
 
@@ -23,8 +25,7 @@ export default async function StudentJourneyPage() {
       <Card className="border border-[#DCEBD5] bg-[#F8FBF6]">
         <p className="text-sm text-[#374151] leading-relaxed">
           Esta é a página de acompanhamento da jornada. Ela reúne as etapas do TCA, mostra o que já foi concluído,
-          indica o próximo passo do grupo e concentra as conquistas pedagógicas do percurso na mesma experiência,
-          sem precisar abrir uma página separada.
+          indica o próximo passo do grupo e concentra os reconhecimentos pedagógicos do percurso.
         </p>
       </Card>
 
@@ -34,6 +35,8 @@ export default async function StudentJourneyPage() {
         groupId={context.group?.id}
         nextJourneyHref={nextJourneyHref}
         projectSections={projectSections}
+        processPhotosCount={processPhotosCount}
+        repertoryItemsCount={repertoryItemsCount}
         studentName={studentName}
         studentsError={context.studentsError}
         groupsError={context.groupsError}

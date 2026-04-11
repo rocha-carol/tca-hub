@@ -3,6 +3,8 @@ import { getAuthenticatedProfile, getAuthenticatedUser } from "@/lib/auth/sessio
 import { ensureGroupProjectSectionsStructure } from "@/services/project-section-service";
 import { resolveStudentGroupContext } from "@/app/student/_lib/student-group-context";
 import { STUDENT_ROUTES } from "@/lib/utils/constants";
+import { fetchGroupProcessPhotos } from "@/services/group-process-photo-service";
+import { fetchGroupRepertoryItems } from "@/services/group-repertory-item-service";
 
 function getFirstName(nameOrEmail: string) {
   const baseName = nameOrEmail.includes("@") ? nameOrEmail.split("@")[0] : nameOrEmail;
@@ -37,6 +39,16 @@ export async function loadStudentPortalData() {
   const projectSections = context.group
     ? await ensureGroupProjectSectionsStructure(context.group.id).catch(() => [])
     : [];
+  const processPhotosCount = context.group
+    ? await fetchGroupProcessPhotos(context.group.id)
+        .then((photos) => photos.length)
+        .catch(() => 0)
+    : 0;
+  const repertoryItemsCount = context.group
+    ? await fetchGroupRepertoryItems(context.group.id)
+        .then((items) => items.length)
+        .catch(() => 0)
+    : 0;
 
   return {
     user,
@@ -47,5 +59,7 @@ export async function loadStudentPortalData() {
     firstName,
     nextJourneyHref,
     projectSections,
+    processPhotosCount,
+    repertoryItemsCount,
   };
 }
