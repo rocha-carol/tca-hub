@@ -1,9 +1,20 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { signIn } from "@/lib/auth/auth-service";
 import type { AuthError } from "@/types/auth";
+
+interface SignInFormProps {
+  title?: string;
+  description?: string;
+  submitLabel?: string;
+  initialEmail?: string;
+  initialPassword?: string;
+  storageKey?: string;
+  className?: string;
+  showSignUpLink?: boolean;
+}
 
 /**
  * Componente de formulário de login (sign in).
@@ -15,13 +26,22 @@ import type { AuthError } from "@/types/auth";
  * - Feedback visual: loading, erros, sucesso
  * - Redirecionamento para dashboard após sucesso
  */
-export default function SignInForm() {
+export default function SignInForm({
+  title = "Fazer Login",
+  description,
+  submitLabel = "Fazer Login",
+  initialEmail = "",
+  initialPassword = "",
+  storageKey,
+  className = "",
+  showSignUpLink = true,
+}: SignInFormProps) {
   const router = useRouter();
 
   // Estado dos inputs
   const [formData, setFormData] = useState({
-    email: "",
-    password: "",
+    email: initialEmail,
+    password: initialPassword,
   });
 
   // Estado de controle
@@ -29,6 +49,42 @@ export default function SignInForm() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+
+  useEffect(() => {
+    if (!storageKey || typeof window === "undefined") {
+      return;
+    }
+
+    const storedValue = window.localStorage.getItem(storageKey);
+    if (!storedValue) {
+      setFormData({
+        email: initialEmail,
+        password: initialPassword,
+      });
+      return;
+    }
+
+    try {
+      const parsed = JSON.parse(storedValue) as { email?: string; password?: string };
+      setFormData({
+        email: parsed.email ?? initialEmail,
+        password: initialPassword || parsed.password || "",
+      });
+    } catch {
+      setFormData({
+        email: initialEmail,
+        password: initialPassword,
+      });
+    }
+  }, [initialEmail, initialPassword, storageKey]);
+
+  useEffect(() => {
+    if (!storageKey || typeof window === "undefined") {
+      return;
+    }
+
+    window.localStorage.setItem(storageKey, JSON.stringify(formData));
+  }, [formData, storageKey]);
 
   /**
    * Validação básica do formulário
@@ -109,8 +165,13 @@ export default function SignInForm() {
   };
 
   return (
-    <div role="form" aria-label="Formulário de login" className="w-full max-w-md mx-auto p-6 bg-white border border-lime-200 rounded-xl shadow-md">
-      <h2 className="text-2xl font-bold mb-6 text-lime-800">Fazer Login</h2>
+    <div
+      role="form"
+      aria-label="Formulário de login"
+      className={`w-full max-w-md mx-auto p-6 bg-white border border-lime-200 rounded-xl shadow-md ${className}`.trim()}
+    >
+      <h2 className="text-2xl font-bold mb-2 text-lime-800">{title}</h2>
+      {description ? <p className="text-sm text-slate-700 mb-6">{description}</p> : <div className="mb-6" />}
 
       {/* Mensagem de erro */}
       {error && (
@@ -208,16 +269,18 @@ export default function SignInForm() {
         disabled={loading || success}
         className="w-full bg-lime-700 hover:bg-lime-800 disabled:bg-gray-400 text-white font-medium py-2 px-4 rounded-md transition"
       >
-        {loading ? "Fazendo login..." : success ? "✓ Login realizado!" : "Fazer Login"}
+        {loading ? "Fazendo login..." : success ? "✓ Login realizado!" : submitLabel}
       </button>
 
       {/* Link para cadastro */}
-      <p className="text-center mt-4 text-sm text-gray-600">
-        Não tem conta?{" "}
-        <a href="/auth/signup" className="text-lime-700 hover:text-lime-800 font-medium">
-          Crie uma agora
-        </a>
-      </p>
+      {showSignUpLink ? (
+        <p className="text-center mt-4 text-sm text-gray-600">
+          Não tem conta?{" "}
+          <a href="/auth/signup" className="text-lime-700 hover:text-lime-800 font-medium">
+            Crie uma agora
+          </a>
+        </p>
+      ) : null}
     </div>
   );
 }
