@@ -3,6 +3,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getAuthenticatedProfile, getAuthenticatedUser } from "@/lib/auth/session-service";
+import { STUDENT_ROUTES } from "@/lib/utils/constants";
 import { fetchAllGroups, updateGroupAdvisors } from "@/services/group-service";
 import { fetchAllAdvisors } from "@/services/advisor-service";
 import { fetchCoordinatorSummary } from "@/services/coordinator-summary-service";
@@ -137,7 +138,7 @@ export default async function CoordinatorDashboardPage({ searchParams }: Coordin
 
   // Apenas coordenadores acessam esta rota
   if (!isProvisionalMode && effectiveRole !== "coordinator") {
-    if (effectiveRole === "student") redirect("/meu-projeto");
+    if (effectiveRole === "student") redirect(STUDENT_ROUTES.HOME);
     else redirect("/advisor/dashboard");
   }
 

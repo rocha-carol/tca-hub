@@ -2,6 +2,8 @@
 
 import { useMemo, useState } from "react";
 
+const CLASS_OPTIONS = ["9ºA", "9ºB", "9ºC"];
+
 interface SearchableStudent {
   id: string | number;
   name: string;
@@ -17,6 +19,7 @@ interface AddedMember {
 }
 
 interface StudentGroupMembersBuilderProps {
+  representative?: SearchableStudent | null;
   students: SearchableStudent[];
   maxMembers: number;
 }
@@ -24,9 +27,10 @@ interface StudentGroupMembersBuilderProps {
 /**
  * Construtor visual de integrantes para criação de grupo.
  *
- * Permite adicionar, editar e excluir integrantes via RA ou nome completo + ano.
+ * Permite adicionar, editar e excluir integrantes via RA ou nome completo + turma.
  */
 export default function StudentGroupMembersBuilder({
+  representative = null,
   students,
   maxMembers,
 }: StudentGroupMembersBuilderProps) {
@@ -34,6 +38,7 @@ export default function StudentGroupMembersBuilder({
   const [year, setYear] = useState("");
   const [members, setMembers] = useState<AddedMember[]>([]);
   const [feedback, setFeedback] = useState<string | null>(null);
+  const additionalMembersLimit = representative ? Math.max(maxMembers - 1, 0) : maxMembers;
 
   const normalizedStudents = useMemo(
     () =>
@@ -73,7 +78,7 @@ export default function StudentGroupMembersBuilder({
       }) ?? null;
 
     if (!found) {
-      setFeedback("Integrante não encontrado. Verifique RA/nome completo e ano.");
+      setFeedback("Integrante não encontrado. Verifique RA/nome completo e turma.");
       return null;
     }
 
@@ -81,8 +86,12 @@ export default function StudentGroupMembersBuilder({
   };
 
   const handleAddMember = () => {
-    if (members.length >= maxMembers) {
-      setFeedback(`Você pode adicionar até ${maxMembers} integrantes.`);
+    if (members.length >= additionalMembersLimit) {
+      setFeedback(
+        representative
+          ? `Você pode adicionar até ${additionalMembersLimit} colegas além de você.`
+          : `Você pode adicionar até ${maxMembers} integrantes.`
+      );
       return;
     }
 
@@ -131,10 +140,18 @@ export default function StudentGroupMembersBuilder({
 
   return (
     <div className="rounded-lg border border-gray-200 p-4 space-y-4">
-      <h2 className="text-lg font-semibold text-gray-900">Adicionar integrantes</h2>
-      <p className="text-sm text-gray-600">
-        Você pode adicionar até {maxMembers} integrantes.
-      </p>
+      <div className="space-y-1">
+        <h2 className="text-lg font-semibold text-gray-900">Integrantes do grupo</h2>
+        {representative ? (
+          <p className="text-sm text-gray-600">
+            O Integrante 1 é preenchido automaticamente com o estudante logado. Agora dá para adicionar até {additionalMembersLimit} colega{additionalMembersLimit === 1 ? "" : "s"}.
+          </p>
+        ) : (
+          <p className="text-sm text-amber-800">
+            Não foi possível localizar seu cadastro de estudante. Confira seu perfil antes de salvar.
+          </p>
+        )}
+      </div>
 
       <div className="grid grid-cols-1 md:grid-cols-[1.7fr_1fr_auto] gap-3 items-end">
         <div>
@@ -149,14 +166,19 @@ export default function StudentGroupMembersBuilder({
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Ano</label>
-          <input
-            type="text"
+          <label className="block text-sm font-medium text-gray-700 mb-1">Turma</label>
+          <select
             value={year}
             onChange={(event) => setYear(event.target.value)}
-            placeholder="Ex.: 9º ano"
             className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-lime-500"
-          />
+          >
+            <option value="">Selecione</option>
+            {CLASS_OPTIONS.map((classOption) => (
+              <option key={classOption} value={classOption}>
+                {classOption}
+              </option>
+            ))}
+          </select>
         </div>
 
         <button
@@ -182,7 +204,7 @@ export default function StudentGroupMembersBuilder({
                 RA ou nome completo
               </th>
               <th className="text-left text-xs font-semibold uppercase tracking-[0.1em] text-gray-600 px-3 py-2">
-                Ano
+                Turma
               </th>
               <th className="text-right text-xs font-semibold uppercase tracking-[0.1em] text-gray-600 px-3 py-2">
                 Ações
@@ -191,10 +213,26 @@ export default function StudentGroupMembersBuilder({
           </thead>
 
           <tbody>
+            {representative && (
+              <tr className="border-t border-gray-100 bg-[#f8fbf6]">
+                <td className="px-3 py-3 text-sm text-gray-800">
+                  <p className="font-medium">{representative.name}</p>
+                  <p className="text-xs text-gray-500">
+                    RA: {representative.registration_code || "Não informado"}
+                  </p>
+                  <p className="text-xs text-lime-700 font-medium mt-1">Integrante 1 (representante)</p>
+                </td>
+                <td className="px-3 py-3 text-sm text-gray-700">{representative.grade || "Não informado"}</td>
+                <td className="px-3 py-3 text-right text-xs font-medium text-gray-400">Fixo</td>
+              </tr>
+            )}
+
             {members.length === 0 ? (
               <tr>
                 <td colSpan={3} className="px-3 py-3 text-sm text-gray-500">
-                  Nenhum integrante adicionado ainda.
+                  {representative
+                    ? "Nenhum colega adicionado ainda."
+                    : "Nenhum integrante adicionado ainda."}
                 </td>
               </tr>
             ) : (

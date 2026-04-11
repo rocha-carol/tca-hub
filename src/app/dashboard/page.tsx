@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { getAuthenticatedProfile, getAuthenticatedUser } from "@/lib/auth/session-service";
+import { STUDENT_ROUTES } from "@/lib/utils/constants";
 
 /**
  * Rota legada de compatibilidade (/dashboard).
@@ -7,7 +8,7 @@ import { getAuthenticatedProfile, getAuthenticatedUser } from "@/lib/auth/sessio
  * Etapa G da reorganização: esta rota NÃO renderiza mais conteúdo.
  * Redireciona para o dashboard correto conforme o perfil do usuário.
  *
- * - estudante   → /student/meu-projeto
+ * - estudante   → /estudante
  * - orientador  → /advisor/dashboard
  * - coordenador → /coordinator/dashboard
  *
@@ -28,7 +29,7 @@ export default async function LegacyDashboardPage({ searchParams }: LegacyDashbo
   // Modo provisório: redireciona usando o parâmetro de perfil
   if (isProvisionalMode && provisionalRole) {
     if (provisionalRole === "student") {
-      redirect("/student/meu-projeto?modo=provisorio");
+      redirect(`${STUDENT_ROUTES.HOME}?modo=provisorio`);
     }
     if (provisionalRole === "advisor") {
       redirect("/advisor/dashboard?modo=provisorio&perfil=advisor");
@@ -49,7 +50,7 @@ export default async function LegacyDashboardPage({ searchParams }: LegacyDashbo
   const role = profile?.role;
 
   if (role === "student") {
-    redirect("/student/meu-projeto");
+    redirect(STUDENT_ROUTES.HOME);
   }
 
   if (role === "coordinator") {

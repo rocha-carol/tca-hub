@@ -25,7 +25,7 @@ export default function Home() {
 
           <div className="grid gap-4 md:grid-cols-3">
             <Link
-              href="/student"
+              href="/estudante"
               className="rounded-xl border border-[#d9e7d4] bg-[#f8fbf6] px-4 py-5 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
             >
               <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#6B7280]">Perfil</p>

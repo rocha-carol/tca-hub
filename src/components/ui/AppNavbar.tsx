@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { getAuthenticatedProfile } from "@/lib/auth/session-service";
 
 /**
  * Navbar global da aplicação (MVP).
@@ -22,6 +23,7 @@ export default async function AppNavbar() {
   const {
     data: { user },
   } = await supabase.auth.getUser();
+  const profile = user ? await getAuthenticatedProfile() : null;
 
   return (
     <header className="bg-[#f8f8f2] border-b border-lime-200 sticky top-0 z-40 shadow-sm">
@@ -56,12 +58,14 @@ export default async function AppNavbar() {
               >
                 Dashboard
               </Link>
-              <Link
-                href="/groups"
-                className="text-sm font-medium text-slate-700 hover:text-lime-700"
-              >
-                Grupos
-              </Link>
+              {(profile?.role === "advisor" || profile?.role === "coordinator") && (
+                <Link
+                  href="/groups"
+                  className="text-sm font-medium text-slate-700 hover:text-lime-700"
+                >
+                  Grupos
+                </Link>
+              )}
               <Link
                 href="/advisors"
                 className="text-sm font-medium text-slate-700 hover:text-lime-700"

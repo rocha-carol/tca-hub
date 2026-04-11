@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Card } from "@/components/ui/Card";
 import type { Group } from "@/types/group";
+import { STUDENT_ROUTES } from "@/lib/utils/constants";
 
 interface StudentStatusProps {
   group: Group | null;
@@ -38,13 +39,13 @@ export function StudentStatus({
         </>
       ) : (
         <>
-          <p className="text-[#374151]">Você já está cadastrado no grupo:</p>
+          <p className="text-[#374151]">Você já está cadastrado no:</p>
           <p className="mt-2 font-semibold text-[#1F2937]">
-            Grupo: {group.theme || `Grupo ${String(group.id).slice(0, 8)}`}
+            {group.theme || `Grupo ${String(group.id).slice(0, 8)}`}
           </p>
 
           <Link
-            href={`/student/groups/${group.id}`}
+            href={`${STUDENT_ROUTES.GROUP}/${group.id}`}
             className="inline-flex mt-4 rounded-lg bg-lime-700 hover:bg-lime-800 text-white font-medium px-4 py-2"
           >
             Acessar meu grupo

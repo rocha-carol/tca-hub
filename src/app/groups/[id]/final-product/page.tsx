@@ -6,6 +6,7 @@ import { fetchGroupProcessPhotos } from "@/services/group-process-photo-service"
 import { fetchGroupRepertoryItems } from "@/services/group-repertory-item-service";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
+import { requireGroupAccess } from "@/services/group-access-service";
 
 interface FinalProductPageProps {
   params: Promise<{ id: string }>;
@@ -31,8 +32,7 @@ const RESOURCE_TYPE_COLORS: Record<string, string> = {
 
 export default async function FinalProductPage({ params }: FinalProductPageProps) {
   const { id } = await params;
-  const group = await fetchGroupById(id);
-  if (!group) notFound();
+  const { group } = await requireGroupAccess(id);
 
   let finalProduct: Awaited<ReturnType<typeof fetchGroupFinalProduct>> = null;
   let photos: Awaited<ReturnType<typeof fetchGroupProcessPhotos>> = [];

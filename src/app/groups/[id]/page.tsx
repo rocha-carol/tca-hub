@@ -2,19 +2,16 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { getAuthenticatedProfile } from "@/lib/auth/session-service";
+import { requireGroupAccess } from "@/services/group-access-service";
 import {
-  fetchGroupById,
-  initiateAdvisorIndication,
   respondAdvisorIndication,
   updateGroupAdvisors,
   updateGroupStatus,
 } from "@/services/group-service";
 import { fetchAllAdvisors } from "@/services/advisor-service";
 import { fetchAllStudents } from "@/services/student-service";
-import {
-  fetchGroupAdvisorPreferences,
-  replaceGroupAdvisorPreferences,
-} from "@/services/group-advisor-preference-service";
+import { fetchGroupAdvisorPreferences } from "@/services/group-advisor-preference-service";
 import { suggestPrimaryAdvisorByPreference } from "@/services/advisor-indication-service";
 import { ensureGroupProjectSectionsStructure } from "@/services/project-section-service";
 import type { Student } from "@/types/student";
@@ -30,16 +27,6 @@ function idsAreEqual(left: string | number | null | undefined, right: string | n
   return String(left ?? "") === String(right ?? "");
 }
 
-function normalizeSelectedAdvisorId(value: FormDataEntryValue | null) {
-  const rawValue = String(value ?? "").trim();
-
-  if (!rawValue) {
-    return null;
-  }
-
-  return /^\d+$/.test(rawValue) ? Number(rawValue) : rawValue;
-}
-
 function getProjectSectionStatusLabel(status: string) {
   if (status === "em_andamento") return "Em andamento";
   if (status === "concluido") return "Concluída";
@@ -47,25 +34,13 @@ function getProjectSectionStatusLabel(status: string) {
 }
 
 function renderMemberCard(
-  label: string,
   name: string,
-  series: string | null,
-  linkedStudent: Student | undefined
+  series: string | null
 ) {
   return (
-    <div className="flex items-center justify-between border border-lime-100 rounded-md px-4 py-3 bg-lime-50/40">
-      <div>
-        <p className="font-medium text-gray-900">{name}</p>
-        <p className="text-sm text-gray-600">{series || "Série não informada"}</p>
-        {linkedStudent && (
-          <p className="text-xs text-lime-700 mt-1">
-            Cadastro vinculado • Matrícula: {linkedStudent.registration_code || "Não informada"}
-          </p>
-        )}
-      </div>
-      <span className="text-xs text-lime-700 font-semibold bg-lime-100 px-2 py-1 rounded-full">
-        {label}
-      </span>
+    <div className="flex items-center justify-between gap-3 border border-lime-100 rounded-md px-3 py-2.5 bg-lime-50/40">
+      <p className="font-medium text-[15px] text-gray-900 leading-snug">{name}</p>
+      <p className="text-sm text-gray-600 whitespace-nowrap leading-snug">{series || "Série não informada"}</p>
     </div>
   );
 }
@@ -73,11 +48,8 @@ function renderMemberCard(
 interface GroupDetailPageProps {
   params: Promise<{ id: string }>;
   searchParams: Promise<{
-    indication?: string;
     indication_response?: string;
     advisor_error?: string;
-    pref_error?: string;
-    pref_success?: string;
   }>;
 }
 
@@ -89,10 +61,18 @@ interface GroupDetailPageProps {
  */
 export default async function GroupDetailPage({ params, searchParams }: GroupDetailPageProps) {
   const { id } = await params;
-  const { indication, indication_response, advisor_error, pref_error, pref_success } = await searchParams;
+  const { indication_response, advisor_error } = await searchParams;
+  const { group, profile } = await requireGroupAccess(id);
+  const isStudentView = profile?.role === "student";
+  const canManageStatuses = profile?.role === "advisor" || profile?.role === "coordinator";
 
   async function handleAssignAdvisors(formData: FormData) {
     "use server";
+
+    const { profile: authenticatedProfile } = await requireGroupAccess(id);
+    if (authenticatedProfile.role !== "advisor" && authenticatedProfile.role !== "coordinator") {
+      redirect(`/groups/${id}`);
+    }
 
     const primaryAdvisorId = String(formData.get("primary_advisor_id") ?? "").trim() || null;
     const coAdvisorId = String(formData.get("co_advisor_id") ?? "").trim() || null;
@@ -114,6 +94,11 @@ export default async function GroupDetailPage({ params, searchParams }: GroupDet
   async function handleUpdateStatus(formData: FormData) {
     "use server";
 
+    const authenticatedProfile = await getAuthenticatedProfile();
+    if (!authenticatedProfile || (authenticatedProfile.role !== "advisor" && authenticatedProfile.role !== "coordinator")) {
+      redirect(`/groups/${id}`);
+    }
+
     const rawStatus = String(formData.get("status") ?? "planejamento").trim();
     const validStatus: GroupStatus[] = ["planejamento", "em_andamento", "concluido"];
     const status = validStatus.includes(rawStatus as GroupStatus)
@@ -128,58 +113,13 @@ export default async function GroupDetailPage({ params, searchParams }: GroupDet
     redirect(`/groups/${id}`);
   }
 
-  async function handleUpdateAdvisorPreferences(formData: FormData) {
-    "use server";
-
-    const preference1 = normalizeSelectedAdvisorId(formData.get("preference_1"));
-    const preference2 = normalizeSelectedAdvisorId(formData.get("preference_2"));
-    const preference3 = normalizeSelectedAdvisorId(formData.get("preference_3"));
-
-    const orderedPreferences = [preference1, preference2, preference3].filter(
-      (value): value is string | number => value !== null
-    );
-
-    const uniqueIds = new Set(orderedPreferences.map((value) => String(value)));
-    if (uniqueIds.size !== orderedPreferences.length) {
-      redirect(`/groups/${id}?pref_error=duplicate`);
-    }
-
-    let saveFailed = false;
-    try {
-      await replaceGroupAdvisorPreferences(id, orderedPreferences);
-    } catch {
-      saveFailed = true;
-    }
-
-    if (saveFailed) {
-      redirect(`/groups/${id}?pref_error=save`);
-    }
-
-    revalidatePath(`/groups/${id}`);
-    revalidatePath("/groups");
-    revalidatePath("/dashboard");
-    redirect(`/groups/${id}?pref_success=1`);
-  }
-
-  async function handleIndicatePrimaryAdvisorByPreference() {
-    "use server";
-
-    const result = await suggestPrimaryAdvisorByPreference(id);
-
-    if (!result.suggested) {
-      redirect(`/groups/${id}?indication=unavailable`);
-    }
-
-    await initiateAdvisorIndication(id, String(result.suggested.id));
-
-    revalidatePath(`/groups/${id}`);
-    revalidatePath("/groups");
-    revalidatePath("/dashboard");
-    redirect(`/groups/${id}?indication=pending`);
-  }
-
   async function handleRespondAdvisorIndication(formData: FormData) {
     "use server";
+
+    const { profile: authenticatedProfile } = await requireGroupAccess(id);
+    if (authenticatedProfile.role !== "advisor" && authenticatedProfile.role !== "coordinator") {
+      redirect(`/groups/${id}`);
+    }
 
     const decision = String(formData.get("decision") ?? "").trim();
     const coAdvisorId = String(formData.get("co_advisor_id") ?? "").trim() || null;
@@ -205,31 +145,6 @@ export default async function GroupDetailPage({ params, searchParams }: GroupDet
     revalidatePath("/groups");
     revalidatePath("/dashboard");
     redirect(`/groups/${id}?indication_response=${decision}`);
-  }
-
-  let group;
-  try {
-    group = await fetchGroupById(id);
-  } catch {
-    return (
-      <main className="min-h-screen bg-transparent">
-        <section className="max-w-2xl mx-auto px-6 py-10">
-          <div className="bg-amber-50 border border-amber-300 rounded-lg p-4 mb-6">
-            <p className="text-amber-900 font-medium">Erro ao carregar o grupo.</p>
-            <p className="text-amber-800 text-sm mt-1">
-              Verifique se a tabela de grupos foi criada no Supabase.
-            </p>
-          </div>
-          <Link href="/groups" className="text-lime-700 hover:underline text-sm">
-            ← Voltar para grupos
-          </Link>
-        </section>
-      </main>
-    );
-  }
-
-  if (!group) {
-    notFound();
   }
 
   // Carrega orientadores para preencher o seletor — falha silenciosa se tabela não existir
@@ -278,9 +193,6 @@ export default async function GroupDetailPage({ params, searchParams }: GroupDet
   const primaryAdvisor = advisors.find((a) => a.id === group.primary_advisor_id);
   const coAdvisor = advisors.find((a) => a.id === group.co_advisor_id);
   const indicatedAdvisor = advisors.find((a) => idsAreEqual(a.id, group.indicated_advisor_id));
-  const linkedStudent1 = students.find((student) => idsAreEqual(student.id, group.student_1_id));
-  const linkedStudent2 = students.find((student) => idsAreEqual(student.id, group.student_2_id));
-  const linkedStudent3 = students.find((student) => idsAreEqual(student.id, group.student_3_id));
   const preferenceAdvisor1 = advisorPreferences.find((p) => p.preference_order === 1);
   const preferenceAdvisor2 = advisorPreferences.find((p) => p.preference_order === 2);
   const preferenceAdvisor3 = advisorPreferences.find((p) => p.preference_order === 3);
@@ -298,26 +210,35 @@ export default async function GroupDetailPage({ params, searchParams }: GroupDet
       <section className="max-w-2xl mx-auto px-6 py-10">
         <div className="tca-stripes h-1.5 w-full rounded-md mb-6" />
         <header className="mb-8">
-          <Link href="/groups" className="text-lime-700 hover:underline text-sm">
-            ← Voltar para grupos
-          </Link>
+          {!isStudentView && (
+            <Link href="/groups" className="text-lime-700 hover:underline text-sm">
+              ← Voltar para grupos
+            </Link>
+          )}
           <h1 className="text-3xl font-bold tca-title-guide mt-3">Detalhe do grupo</h1>
-          <p className="text-gray-500 text-sm mt-1">ID: {group.id}</p>
         </header>
 
         {/* Integrantes */}
-        <div className="tca-soft-surface rounded-lg p-6 shadow-sm mb-6">
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">Integrantes</h2>
+        <div className="tca-soft-surface rounded-lg p-4 shadow-sm mb-6">
+          <h2 className="text-lg font-semibold text-gray-900 mb-3">Integrantes do Grupo</h2>
 
-          <div className="space-y-3">
-            {renderMemberCard("Integrante 1", group.member_1_name, group.member_1_series, linkedStudent1)}
+          <div className="space-y-2">
+            {renderMemberCard(group.member_1_name, group.member_1_series)}
 
             {group.member_2_name && (
-              renderMemberCard("Integrante 2", group.member_2_name, group.member_2_series, linkedStudent2)
+              renderMemberCard(group.member_2_name, group.member_2_series)
             )}
 
             {group.member_3_name && (
-              renderMemberCard("Integrante 3", group.member_3_name, group.member_3_series, linkedStudent3)
+              renderMemberCard(group.member_3_name, group.member_3_series)
+            )}
+
+            {group.member_4_name && (
+              renderMemberCard(group.member_4_name, group.member_4_series ?? null)
+            )}
+
+            {group.member_5_name && (
+              renderMemberCard(group.member_5_name, group.member_5_series ?? null)
             )}
           </div>
         </div>
@@ -344,30 +265,36 @@ export default async function GroupDetailPage({ params, searchParams }: GroupDet
               <span className="font-medium">Status atual:</span> {getStatusLabel(currentStatus)}
             </p>
 
-            <form action={handleUpdateStatus} className="flex flex-col sm:flex-row sm:items-end gap-3">
-              <div className="flex-1">
-                <label htmlFor="status" className="block text-sm text-gray-600 mb-1">
-                  Atualizar status do grupo
-                </label>
-                <select
-                  id="status"
-                  name="status"
-                  defaultValue={currentStatus}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-lime-500"
-                >
-                  <option value="planejamento">Planejamento</option>
-                  <option value="em_andamento">Em andamento</option>
-                  <option value="concluido">Concluído</option>
-                </select>
-              </div>
+            {canManageStatuses ? (
+              <form action={handleUpdateStatus} className="flex flex-col sm:flex-row sm:items-end gap-3">
+                <div className="flex-1">
+                  <label htmlFor="status" className="block text-sm text-gray-600 mb-1">
+                    Atualizar status do grupo
+                  </label>
+                  <select
+                    id="status"
+                    name="status"
+                    defaultValue={currentStatus}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-lime-500"
+                  >
+                    <option value="planejamento">Planejamento</option>
+                    <option value="em_andamento">Em andamento</option>
+                    <option value="concluido">Concluído</option>
+                  </select>
+                </div>
 
-              <button
-                type="submit"
-                className="bg-lime-700 hover:bg-lime-800 text-white font-medium px-4 py-2 rounded-md text-sm"
-              >
-                Salvar status
-              </button>
-            </form>
+                <button
+                  type="submit"
+                  className="bg-lime-700 hover:bg-lime-800 text-white font-medium px-4 py-2 rounded-md text-sm"
+                >
+                  Salvar status
+                </button>
+              </form>
+            ) : (
+              <p className="text-sm text-gray-500">
+                A atualização de status do grupo fica disponível apenas para orientadores e coordenação.
+              </p>
+            )}
           </div>
 
           <div className="mt-5 pt-4 border-t border-gray-100">
@@ -451,7 +378,7 @@ export default async function GroupDetailPage({ params, searchParams }: GroupDet
               ) : group.indication_status === "aceita" ? (
                 <span className="text-green-700 font-medium">Aceita</span>
               ) : group.indication_status === "recusada" ? (
-                <span className="text-red-700 font-medium">Recusada</span>
+                <span className="text-red-700 font-medium">Indisponível</span>
               ) : (
                 <span className="text-gray-400 italic">Sem indicação ativa</span>
               )}
@@ -464,7 +391,7 @@ export default async function GroupDetailPage({ params, searchParams }: GroupDet
                 Indicação pendente para: {indicatedAdvisor.name}
               </p>
               <p className="text-xs text-amber-800 mt-1">
-                Registre abaixo se a indicação foi aceita ou recusada.
+                Registre abaixo se a indicação foi aceita ou se o orientador ficou indisponível.
               </p>
 
               {indication_response === "invalid_co" && (
@@ -512,7 +439,7 @@ export default async function GroupDetailPage({ params, searchParams }: GroupDet
                     type="submit"
                     className="bg-red-600 hover:bg-red-700 text-white text-xs font-medium px-3 py-1.5 rounded-md"
                   >
-                    Registrar recusa
+                    Marcar indisponível
                   </button>
                 </form>
               </div>
@@ -558,24 +485,20 @@ export default async function GroupDetailPage({ params, searchParams }: GroupDet
               <p className="text-xs text-amber-800 mt-2">{advisorPreferencesError}</p>
             )}
 
-            {/* Indicação sequencial */}
-            {advisorPreferences.length > 0 && (
+            {isStudentView ? (
+              <div className="mt-3 pt-3 border-t border-lime-200">
+                <Link
+                  href={`/estudante/groups/${id}/advisor-indication`}
+                  className="inline-flex rounded-md bg-lime-700 hover:bg-lime-800 text-white text-xs font-medium px-3 py-1.5"
+                >
+                  Abrir página de indicação de orientadores
+                </Link>
+                <p className="text-xs text-lime-900 mt-2">
+                  A definição da ordem de preferência e o envio da indicação agora ficam em uma página dedicada do estudante.
+                </p>
+              </div>
+            ) : advisorPreferences.length > 0 && (
               <div className="mt-3 pt-3 border-t border-blue-200">
-                {indication === "unavailable" && (
-                  <p className="text-xs text-red-700 mb-2 font-medium">
-                    Nenhum orientador da lista de preferências está disponível no momento.
-                  </p>
-                )}
-                {indication === "success" && (
-                  <p className="text-xs text-green-700 mb-2 font-medium">
-                    Orientador principal indicado com sucesso pela lista de preferências.
-                  </p>
-                )}
-                {indication === "pending" && (
-                  <p className="text-xs text-amber-700 mb-2 font-medium">
-                    Indicação enviada e marcada como pendente de aceite/recusa.
-                  </p>
-                )}
                 {indication_response === "aceita" && (
                   <p className="text-xs text-green-700 mb-2 font-medium">
                     Aceite registrado. O orientador foi definido como principal do grupo.
@@ -593,17 +516,12 @@ export default async function GroupDetailPage({ params, searchParams }: GroupDet
                 )}
                 {indication_response === "recusada" && (
                   <p className="text-xs text-red-700 mb-2 font-medium">
-                    Recusa registrada. A indicação foi removida para nova tentativa.
+                    Indisponibilidade registrada. A indicação foi removida para nova tentativa.
                   </p>
                 )}
-                <form action={handleIndicatePrimaryAdvisorByPreference}>
-                  <button
-                    type="submit"
-                    className="bg-lime-700 hover:bg-lime-800 text-white text-xs font-medium px-3 py-1.5 rounded-md"
-                  >
-                    Indicar orientador por preferência
-                  </button>
-                </form>
+                <p className="text-xs text-blue-900">
+                  O envio da indicação por preferência é realizado pela página dedicada do estudante. Nesta tela, a orientação e a coordenação acompanham o status e registram o aceite ou a indisponibilidade.
+                </p>
               </div>
             )}
           </div>
@@ -611,90 +529,7 @@ export default async function GroupDetailPage({ params, searchParams }: GroupDet
           {/* Formulário de associação */}
           {advisors.length > 0 ? (
             <>
-              <form action={handleUpdateAdvisorPreferences} className="space-y-4 border-t border-gray-100 pt-4 mb-6">
-                <p className="text-sm font-medium text-gray-700">Atualizar ordem de preferência:</p>
-
-                {pref_error === "duplicate" && (
-                  <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2">
-                    O mesmo orientador foi selecionado em mais de uma posição. Escolha orientadores distintos.
-                  </p>
-                )}
-                {pref_error === "save" && (
-                  <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2">
-                    Não foi possível salvar as preferências. Verifique se o banco de dados está configurado e tente novamente.
-                  </p>
-                )}
-                {pref_success === "1" && (
-                  <p className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-md px-3 py-2">
-                    Ordem de preferência salva com sucesso.
-                  </p>
-                )}
-
-                <div>
-                  <label htmlFor="preference_1" className="block text-sm text-gray-600 mb-1">
-                    1ª preferência
-                  </label>
-                  <select
-                    id="preference_1"
-                    name="preference_1"
-                    defaultValue={preferenceAdvisor1 ? String(preferenceAdvisor1.advisor_id) : ""}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-lime-500"
-                  >
-                    <option value="">— Nenhum —</option>
-                    {advisors.map((advisor) => (
-                      <option key={advisor.id} value={String(advisor.id)}>
-                        {advisor.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label htmlFor="preference_2" className="block text-sm text-gray-600 mb-1">
-                    2ª preferência
-                  </label>
-                  <select
-                    id="preference_2"
-                    name="preference_2"
-                    defaultValue={preferenceAdvisor2 ? String(preferenceAdvisor2.advisor_id) : ""}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-lime-500"
-                  >
-                    <option value="">— Nenhum —</option>
-                    {advisors.map((advisor) => (
-                      <option key={advisor.id} value={String(advisor.id)}>
-                        {advisor.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label htmlFor="preference_3" className="block text-sm text-gray-600 mb-1">
-                    3ª preferência
-                  </label>
-                  <select
-                    id="preference_3"
-                    name="preference_3"
-                    defaultValue={preferenceAdvisor3 ? String(preferenceAdvisor3.advisor_id) : ""}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="">— Nenhum —</option>
-                    {advisors.map((advisor) => (
-                      <option key={advisor.id} value={String(advisor.id)}>
-                        {advisor.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <button
-                  type="submit"
-                  className="bg-lime-700 hover:bg-lime-800 text-white font-medium px-4 py-2 rounded-md text-sm"
-                >
-                  Salvar ordem de preferência
-                </button>
-              </form>
-
+              {!isStudentView && (
               <form action={handleAssignAdvisors} className="space-y-4 border-t border-gray-100 pt-4">
                 <p className="text-sm font-medium text-gray-700">Atualizar orientadores:</p>
 
@@ -754,6 +589,7 @@ export default async function GroupDetailPage({ params, searchParams }: GroupDet
                   Salvar orientadores
                 </button>
               </form>
+              )}
             </>
           ) : (
             <p className="text-sm text-gray-500 border-t border-gray-100 pt-4">

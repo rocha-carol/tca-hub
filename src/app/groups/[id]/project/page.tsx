@@ -68,8 +68,7 @@ import {
   createProjectSectionAuthorshipIndicator,
   fetchProjectSectionAuthorshipIndicators,
 } from "@/services/project-section-authorship-indicator-service";
-import { fetchGroupById } from "@/services/group-service";
-import { getAuthenticatedProfile } from "@/lib/auth/session-service";
+import { requireGroupAccess } from "@/services/group-access-service";
 import { generatePedagogicalFeedbackWithAI } from "@/lib/ai/pedagogical-feedback-service";
 import { ProjectProgress } from "@/components/project/ProjectProgress";
 import { ProjectPreview } from "@/components/project/ProjectPreview";
@@ -136,6 +135,29 @@ function getStatusLabel(status: ProjectSectionStatus) {
 
 function getFinalProductStatusLabel(status: GroupFinalProductStatus | null | undefined) {
   return status === "finalizado" ? "Finalizado" : "Rascunho";
+}
+
+async function requireSharedProjectAccess(groupId: string) {
+  const access = await requireGroupAccess(groupId);
+  return access.profile;
+}
+
+async function requireAdvisorProjectAccess(groupId: string, forbiddenQuery: string) {
+  const authenticatedProfile = await requireSharedProjectAccess(groupId);
+  if (authenticatedProfile.role !== "advisor" && authenticatedProfile.role !== "coordinator") {
+    redirect(`/groups/${groupId}/project?${forbiddenQuery}`);
+  }
+
+  return authenticatedProfile;
+}
+
+async function requireStudentProjectAccess(groupId: string, forbiddenQuery: string) {
+  const authenticatedProfile = await requireSharedProjectAccess(groupId);
+  if (authenticatedProfile.role !== "student") {
+    redirect(`/groups/${groupId}/project?${forbiddenQuery}`);
+  }
+
+  return authenticatedProfile;
 }
 
 function getRepertoryTypeLabel(type: GroupRepertoryResourceType) {
@@ -363,11 +385,7 @@ function buildDefaultTCAInteractiveGuides(sections: ProjectSectionReference[]) {
 export default async function GroupProjectPage({ params, searchParams }: GroupProjectPageProps) {
   const { id } = await params;
   const query = searchParams ? await searchParams : {};
-  const profile = await getAuthenticatedProfile();
-
-  if (profile?.role === "student") {
-    redirect("/meu-projeto");
-  }
+  const { group, profile } = await requireGroupAccess(id);
 
   const canCommentAsAdvisor = profile?.role === "advisor" || profile?.role === "coordinator";
   const canAnswerAsAdvisor = profile?.role === "advisor" || profile?.role === "coordinator";
@@ -379,36 +397,33 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
   const canManageProcessPhotos = !!profile;
   const canManageRepertory = !!profile;
   const canManageInteractiveGuides = !!profile;
-  const canRespondInteractiveGuides = false;
+  const canRespondInteractiveGuides = profile?.role === "student";
   const canManageAIFeedback = profile?.role === "advisor" || profile?.role === "coordinator";
   const canManageAuthorshipIndicator = profile?.role === "advisor" || profile?.role === "coordinator";
-  const canAskAsStudent = false;
-
-  const group = await fetchGroupById(id);
-  if (!group) {
-    notFound();
-  }
+  const canAskAsStudent = profile?.role === "student";
 
   async function handleUpdateSection(formData: FormData) {
     "use server";
 
-    const authenticatedProfile = await getAuthenticatedProfile();
-    if (!authenticatedProfile) {
-      redirect(`/groups/${id}/project?section_status=forbidden`);
-    }
+    const authenticatedProfile = await requireSharedProjectAccess(id);
 
     const sectionId = String(formData.get("section_id") ?? "").trim();
     const content = String(formData.get("content") ?? "").trim();
-    const rawStatus = String(formData.get("status") ?? "nao_iniciado").trim();
-
-    const allowed: ProjectSectionStatus[] = ["nao_iniciado", "em_andamento", "concluido"];
-    const status = allowed.includes(rawStatus as ProjectSectionStatus)
-      ? (rawStatus as ProjectSectionStatus)
-      : "nao_iniciado";
 
     if (!sectionId) {
       redirect(`/groups/${id}/project?section_status=error`);
     }
+
+    const currentSections = await ensureGroupProjectSectionsStructure(id).catch(() => []);
+    const currentSection = currentSections.find((section) => String(section.id) === sectionId);
+    const rawStatus = String(formData.get("status") ?? currentSection?.status ?? "nao_iniciado").trim();
+    const allowed: ProjectSectionStatus[] = ["nao_iniciado", "em_andamento", "concluido"];
+    const canManageSectionStatus = authenticatedProfile.role === "advisor" || authenticatedProfile.role === "coordinator";
+    const status = canManageSectionStatus
+      ? (allowed.includes(rawStatus as ProjectSectionStatus)
+          ? (rawStatus as ProjectSectionStatus)
+          : (currentSection?.status ?? "nao_iniciado"))
+      : (currentSection?.status ?? "nao_iniciado");
 
     try {
       await updateGroupProjectSection(sectionId, {
@@ -438,10 +453,7 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
   async function handleAddSectionComment(formData: FormData) {
     "use server";
 
-    const authenticatedProfile = await getAuthenticatedProfile();
-    if (!authenticatedProfile || (authenticatedProfile.role !== "advisor" && authenticatedProfile.role !== "coordinator")) {
-      redirect(`/groups/${id}/project?comment_status=forbidden`);
-    }
+    const authenticatedProfile = await requireAdvisorProjectAccess(id, "comment_status=forbidden");
 
     const sectionId = String(formData.get("section_id") ?? "").trim();
     const comment = String(formData.get("comment") ?? "").trim();
@@ -470,10 +482,7 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
   async function handleAddSectionQuestion(formData: FormData) {
     "use server";
 
-    const authenticatedProfile = await getAuthenticatedProfile();
-    if (!authenticatedProfile || authenticatedProfile.role !== "student") {
-      redirect(`/groups/${id}/project?question_status=forbidden`);
-    }
+    const authenticatedProfile = await requireStudentProjectAccess(id, "question_status=forbidden");
 
     const sectionId = String(formData.get("section_id") ?? "").trim();
     const question = String(formData.get("question") ?? "").trim();
@@ -502,10 +511,7 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
   async function handleAddQuestionAnswer(formData: FormData) {
     "use server";
 
-    const authenticatedProfile = await getAuthenticatedProfile();
-    if (!authenticatedProfile || (authenticatedProfile.role !== "advisor" && authenticatedProfile.role !== "coordinator")) {
-      redirect(`/groups/${id}/project?answer_status=forbidden`);
-    }
+    const authenticatedProfile = await requireAdvisorProjectAccess(id, "answer_status=forbidden");
 
     const sectionId = String(formData.get("section_id") ?? "").trim();
     const questionId = String(formData.get("question_id") ?? "").trim();
@@ -536,10 +542,7 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
   async function handleAddSectionNextStep(formData: FormData) {
     "use server";
 
-    const authenticatedProfile = await getAuthenticatedProfile();
-    if (!authenticatedProfile || (authenticatedProfile.role !== "advisor" && authenticatedProfile.role !== "coordinator")) {
-      redirect(`/groups/${id}/project?next_step_status=forbidden`);
-    }
+    const authenticatedProfile = await requireAdvisorProjectAccess(id, "next_step_status=forbidden");
 
     const sectionId = String(formData.get("section_id") ?? "").trim();
     const nextSteps = String(formData.get("next_steps") ?? "").trim();
@@ -568,10 +571,7 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
   async function handleAddChecklistItem(formData: FormData) {
     "use server";
 
-    const authenticatedProfile = await getAuthenticatedProfile();
-    if (!authenticatedProfile || (authenticatedProfile.role !== "advisor" && authenticatedProfile.role !== "coordinator")) {
-      redirect(`/groups/${id}/project?checklist_status=forbidden&checklist_action=add`);
-    }
+    const authenticatedProfile = await requireAdvisorProjectAccess(id, "checklist_status=forbidden&checklist_action=add");
 
     const itemText = String(formData.get("item_text") ?? "").trim();
     const sectionIdRaw = String(formData.get("section_id") ?? "").trim();
@@ -601,10 +601,7 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
   async function handleToggleChecklistItemStatus(formData: FormData) {
     "use server";
 
-    const authenticatedProfile = await getAuthenticatedProfile();
-    if (!authenticatedProfile || (authenticatedProfile.role !== "advisor" && authenticatedProfile.role !== "coordinator")) {
-      redirect(`/groups/${id}/project?checklist_status=forbidden&checklist_action=toggle`);
-    }
+    const authenticatedProfile = await requireAdvisorProjectAccess(id, "checklist_status=forbidden&checklist_action=toggle");
 
     const itemId = String(formData.get("item_id") ?? "").trim();
     const rawStatus = String(formData.get("next_status") ?? "").trim();
@@ -630,10 +627,7 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
   async function handleUpsertSectionSchedule(formData: FormData) {
     "use server";
 
-    const authenticatedProfile = await getAuthenticatedProfile();
-    if (!authenticatedProfile || (authenticatedProfile.role !== "advisor" && authenticatedProfile.role !== "coordinator")) {
-      redirect(`/groups/${id}/project?schedule_status=forbidden`);
-    }
+    const authenticatedProfile = await requireAdvisorProjectAccess(id, "schedule_status=forbidden");
 
     const sectionId = String(formData.get("section_id") ?? "").trim();
     const dueDate = String(formData.get("due_date") ?? "").trim();
@@ -666,10 +660,7 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
   async function handleAddInPersonMeeting(formData: FormData) {
     "use server";
 
-    const authenticatedProfile = await getAuthenticatedProfile();
-    if (!authenticatedProfile || (authenticatedProfile.role !== "advisor" && authenticatedProfile.role !== "coordinator")) {
-      redirect(`/groups/${id}/project?meeting_status=forbidden&meeting_action=add`);
-    }
+    const authenticatedProfile = await requireAdvisorProjectAccess(id, "meeting_status=forbidden&meeting_action=add");
 
     const meetingDate = String(formData.get("meeting_date") ?? "").trim();
     const meetingTimeRaw = String(formData.get("meeting_time") ?? "").trim();
@@ -708,10 +699,7 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
   async function handleUpdateMeetingStatus(formData: FormData) {
     "use server";
 
-    const authenticatedProfile = await getAuthenticatedProfile();
-    if (!authenticatedProfile || (authenticatedProfile.role !== "advisor" && authenticatedProfile.role !== "coordinator")) {
-      redirect(`/groups/${id}/project?meeting_status=forbidden&meeting_action=status`);
-    }
+    const authenticatedProfile = await requireAdvisorProjectAccess(id, "meeting_status=forbidden&meeting_action=status");
 
     const meetingId = String(formData.get("meeting_id") ?? "").trim();
     const rawStatus = String(formData.get("next_status") ?? "").trim();
@@ -737,10 +725,7 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
   async function handleAddInternalNotification(formData: FormData) {
     "use server";
 
-    const authenticatedProfile = await getAuthenticatedProfile();
-    if (!authenticatedProfile || (authenticatedProfile.role !== "advisor" && authenticatedProfile.role !== "coordinator")) {
-      redirect(`/groups/${id}/project?notification_status=forbidden&notification_action=add`);
-    }
+    const authenticatedProfile = await requireAdvisorProjectAccess(id, "notification_status=forbidden&notification_action=add");
 
     const title = String(formData.get("title") ?? "").trim();
     const message = String(formData.get("message") ?? "").trim();
@@ -778,10 +763,7 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
   async function handleUpsertFinalProduct(formData: FormData) {
     "use server";
 
-    const authenticatedProfile = await getAuthenticatedProfile();
-    if (!authenticatedProfile) {
-      redirect(`/groups/${id}/project?final_product_status=forbidden`);
-    }
+    const authenticatedProfile = await requireSharedProjectAccess(id);
 
     const title = String(formData.get("title") ?? "").trim();
     const descriptionRaw = String(formData.get("description") ?? "").trim();
@@ -825,10 +807,7 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
   async function handleAddProcessPhoto(formData: FormData) {
     "use server";
 
-    const authenticatedProfile = await getAuthenticatedProfile();
-    if (!authenticatedProfile) {
-      redirect(`/groups/${id}/project?photo_status=forbidden&photo_action=add`);
-    }
+    const authenticatedProfile = await requireSharedProjectAccess(id);
 
     const photoUrl = String(formData.get("photo_url") ?? "").trim();
     const captionRaw = String(formData.get("caption") ?? "").trim();
@@ -865,10 +844,7 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
   async function handleAddRepertoryItem(formData: FormData) {
     "use server";
 
-    const authenticatedProfile = await getAuthenticatedProfile();
-    if (!authenticatedProfile) {
-      redirect(`/groups/${id}/project?repertory_status=forbidden&repertory_action=add`);
-    }
+    const authenticatedProfile = await requireSharedProjectAccess(id);
 
     const title = String(formData.get("title") ?? "").trim();
     const descriptionRaw = String(formData.get("description") ?? "").trim();
@@ -913,10 +889,7 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
   async function handleAddInteractiveGuide(formData: FormData) {
     "use server";
 
-    const authenticatedProfile = await getAuthenticatedProfile();
-    if (!authenticatedProfile) {
-      redirect(`/groups/${id}/project?guide_status=forbidden&guide_action=add`);
-    }
+    const authenticatedProfile = await requireSharedProjectAccess(id);
 
     const title = String(formData.get("title") ?? "").trim();
     const content = String(formData.get("content") ?? "").trim();
@@ -972,10 +945,7 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
   async function handleSeedDefaultInteractiveGuides() {
     "use server";
 
-    const authenticatedProfile = await getAuthenticatedProfile();
-    if (!authenticatedProfile) {
-      redirect(`/groups/${id}/project?guide_status=forbidden&guide_action=seed`);
-    }
+    const authenticatedProfile = await requireSharedProjectAccess(id);
 
     try {
       const currentSections = await ensureGroupProjectSectionsStructure(id);
@@ -1020,10 +990,7 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
   async function handleUpsertInteractiveGuideProgress(formData: FormData) {
     "use server";
 
-    const authenticatedProfile = await getAuthenticatedProfile();
-    if (!authenticatedProfile || authenticatedProfile.role !== "student") {
-      redirect(`/groups/${id}/project?guide_status=forbidden&guide_action=progress`);
-    }
+    const authenticatedProfile = await requireStudentProjectAccess(id, "guide_status=forbidden&guide_action=progress");
 
     const guideId = String(formData.get("guide_id") ?? "").trim();
     const responseTextRaw = String(formData.get("response_text") ?? "").trim();
@@ -1058,10 +1025,7 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
   async function handleGenerateAIFeedback(formData: FormData) {
     "use server";
 
-    const authenticatedProfile = await getAuthenticatedProfile();
-    if (!authenticatedProfile || (authenticatedProfile.role !== "advisor" && authenticatedProfile.role !== "coordinator")) {
-      redirect(`/groups/${id}/project?ai_feedback_status=forbidden&ai_feedback_action=generate`);
-    }
+    const authenticatedProfile = await requireAdvisorProjectAccess(id, "ai_feedback_status=forbidden&ai_feedback_action=generate");
 
     const sectionId = String(formData.get("section_id") ?? "").trim();
     const focusPromptRaw = String(formData.get("focus_prompt") ?? "").trim();
@@ -1109,10 +1073,7 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
   async function handleAddAuthorshipIndicator(formData: FormData) {
     "use server";
 
-    const authenticatedProfile = await getAuthenticatedProfile();
-    if (!authenticatedProfile || (authenticatedProfile.role !== "advisor" && authenticatedProfile.role !== "coordinator")) {
-      redirect(`/groups/${id}/project?authorship_status=forbidden&authorship_action=add`);
-    }
+    const authenticatedProfile = await requireAdvisorProjectAccess(id, "authorship_status=forbidden&authorship_action=add");
 
     const sectionId = String(formData.get("section_id") ?? "").trim();
     const studentPercent = Number(String(formData.get("student_percent") ?? "").trim());

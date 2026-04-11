@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getAuthenticatedProfile, getAuthenticatedUser } from "@/lib/auth/session-service";
 import { resolveStudentGroupContext } from "@/app/student/_lib/student-group-context";
+import { STUDENT_ROUTES } from "@/lib/utils/constants";
 
 interface StudentGroupStatusPageProps {
   searchParams?: Promise<{ created?: string }>;
@@ -46,13 +47,13 @@ export default async function StudentGroupStatusPage({ searchParams }: StudentGr
 
             <div className="flex flex-wrap gap-3">
               <Link
-                href="/student/groups/create"
+                href={STUDENT_ROUTES.GROUP_CREATE}
                 className="bg-lime-700 hover:bg-lime-800 text-white font-medium px-4 py-2 rounded-md"
               >
                 Começar um grupo
               </Link>
               <Link
-                href="/student"
+                href={STUDENT_ROUTES.HOME}
                 className="bg-gray-100 hover:bg-gray-200 text-gray-900 font-medium px-4 py-2 rounded-md"
               >
                 Voltar ao início
@@ -70,13 +71,13 @@ export default async function StudentGroupStatusPage({ searchParams }: StudentGr
 
             <div className="mt-5 flex flex-wrap gap-3">
               <Link
-                href={`/student/groups/${context.group.id}`}
+                href={`${STUDENT_ROUTES.GROUP}/${context.group.id}`}
                 className="bg-[#2F80ED] hover:bg-blue-700 text-white font-medium px-4 py-2 rounded-md"
               >
                 Ir para o grupo
               </Link>
               <Link
-                href="/student"
+                href={STUDENT_ROUTES.HOME}
                 className="bg-gray-100 hover:bg-gray-200 text-gray-900 font-medium px-4 py-2 rounded-md"
               >
                 Voltar ao início

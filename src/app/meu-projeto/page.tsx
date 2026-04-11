@@ -1,10 +1,11 @@
 import { redirect } from "next/navigation";
+import { STUDENT_ROUTES } from "@/lib/utils/constants";
 
 /**
  * Rota legada de compatibilidade.
  *
  * Mantida para não quebrar links antigos enquanto a navegação migra
- * para /student/meu-projeto.
+ * para a rota canônica /estudante.
  */
 interface LegacyMeuProjetoPageProps {
   searchParams?: Promise<{ modo?: string }>;
@@ -14,8 +15,8 @@ export default async function LegacyMeuProjetoPage({ searchParams }: LegacyMeuPr
   const params = searchParams ? await searchParams : {};
 
   if (params.modo) {
-    redirect(`/student/meu-projeto?modo=${encodeURIComponent(params.modo)}`);
+    redirect(`${STUDENT_ROUTES.HOME}?modo=${encodeURIComponent(params.modo)}`);
   }
 
-  redirect("/student/meu-projeto");
+  redirect(STUDENT_ROUTES.HOME);
 }

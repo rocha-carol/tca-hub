@@ -6,6 +6,7 @@ import { fetchGroupProjectSections } from "@/services/project-section-service";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { ProgressBar } from "@/components/ui/ProgressBar";
+import { requireGroupAccess } from "@/services/group-access-service";
 
 interface ChecklistPageProps {
   params: Promise<{ id: string }>;
@@ -13,9 +14,7 @@ interface ChecklistPageProps {
 
 export default async function ChecklistPage({ params }: ChecklistPageProps) {
   const { id } = await params;
-
-  const group = await fetchGroupById(id);
-  if (!group) notFound();
+  const { group } = await requireGroupAccess(id);
 
   let items: Awaited<ReturnType<typeof fetchGroupProjectDevelopmentChecklistItems>> = [];
   let sections: Awaited<ReturnType<typeof fetchGroupProjectSections>> = [];

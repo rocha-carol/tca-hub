@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { getAuthenticatedProfile } from "@/lib/auth/session-service";
+import { STUDENT_ROUTES } from "@/lib/utils/constants";
 import { createGroup, fetchAllGroups } from "@/services/group-service";
 import { fetchAllStudents } from "@/services/student-service";
 import type { Group, GroupStatus } from "@/types/group";
@@ -37,6 +39,16 @@ interface GroupsPageProps {
  * com estado vazio e CTA para criação futura de grupo.
  */
 export default async function GroupsPage({ searchParams }: GroupsPageProps) {
+  const profile = await getAuthenticatedProfile();
+
+  if (profile?.role === "student") {
+    redirect(STUDENT_ROUTES.HOME);
+  }
+
+  if (!profile) {
+    redirect("/auth/login");
+  }
+
   let groups: Group[] = [];
   let groupsError: string | null = null;
   let students: Student[] = [];

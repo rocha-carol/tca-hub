@@ -5,6 +5,7 @@ import { ensureGroupProjectSectionsStructure } from "@/services/project-section-
 import { fetchGroupFinalProduct } from "@/services/group-final-product-service";
 import { fetchGroupProcessPhotos } from "@/services/group-process-photo-service";
 import { fetchGroupRepertoryItems } from "@/services/group-repertory-item-service";
+import { requireGroupAccess } from "@/services/group-access-service";
 
 const RESOURCE_TYPE_LABELS: Record<string, string> = {
   artigo: "Artigo", livro: "Livro", site: "Site",
@@ -25,9 +26,7 @@ function toRoman(n: number): string {
 
 export default async function PreviewPage({ params }: PreviewPageProps) {
   const { id } = await params;
-
-  const group = await fetchGroupById(id);
-  if (!group) notFound();
+  const { group } = await requireGroupAccess(id);
 
   let sections: Awaited<ReturnType<typeof ensureGroupProjectSectionsStructure>> = [];
   let finalProduct: Awaited<ReturnType<typeof fetchGroupFinalProduct>> = null;

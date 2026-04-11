@@ -5,13 +5,15 @@ import { fetchGroupById } from "@/services/group-service";
 import { ensureGroupProjectSectionsStructure, updateGroupProjectSection } from "@/services/project-section-service";
 import { fetchGroupProjectSectionComments } from "@/services/project-section-comment-service";
 import { fetchGroupProjectSectionNextSteps } from "@/services/project-section-next-step-service";
-import { getAuthenticatedProfile } from "@/lib/auth/session-service";
+import { requireGroupAccess } from "@/services/group-access-service";
+import { STUDENT_ROUTES } from "@/lib/utils/constants";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import type { ProjectSectionStatus } from "@/types/project-section";
 
 interface SectionEditorPageProps {
   params: Promise<{ id: string; sectionId: string }>;
+  searchParams?: Promise<{ saved?: string }>;
 }
 
 type SectionGuidance = {
@@ -116,21 +118,21 @@ function formatDate(date?: string | null) {
   }
 }
 
-export default async function SectionEditorPage({ params }: SectionEditorPageProps) {
+export default async function SectionEditorPage({ params, searchParams }: SectionEditorPageProps) {
   const { id, sectionId } = await params;
+  const query = searchParams ? await searchParams : {};
+  const { group, profile } = await requireGroupAccess(id);
+  const canManageStatuses = profile?.role === "advisor" || profile?.role === "coordinator";
 
-  const [group, sections] = await Promise.all([
-    fetchGroupById(id),
-    ensureGroupProjectSectionsStructure(id).catch(() => []),
-  ]);
-
-  if (!group) notFound();
+  const sections = await ensureGroupProjectSectionsStructure(id).catch(() => []);
 
   const section = sections.find((s) => String(s.id) === sectionId);
   if (!section) notFound();
 
   const guidance = getSectionGuidance(section.section_key);
   const sl = statusLabel(section.status);
+  const isStudentView = profile?.role === "student";
+  const shouldShowThemeTitleGuidance = isStudentView && section.section_key === "tema_contexto";
 
   let comments: Awaited<ReturnType<typeof fetchGroupProjectSectionComments>> = [];
   let nextSteps: Awaited<ReturnType<typeof fetchGroupProjectSectionNextSteps>> = [];
@@ -147,22 +149,34 @@ export default async function SectionEditorPage({ params }: SectionEditorPagePro
 
   async function handleSave(formData: FormData) {
     "use server";
-    const profile = await getAuthenticatedProfile();
-    if (!profile) redirect(`/groups/${id}/project`);
+    const { profile } = await requireGroupAccess(id);
 
-    const rawStatus = String(formData.get("status") ?? "nao_iniciado");
+    const latestSections = await ensureGroupProjectSectionsStructure(id).catch(() => []);
+    const latestSection = latestSections.find((item) => String(item.id) === sectionId);
+    const rawStatus = String(formData.get("status") ?? latestSection?.status ?? "nao_iniciado");
     const allowed: ProjectSectionStatus[] = ["nao_iniciado", "em_andamento", "concluido"];
-    const status: ProjectSectionStatus = allowed.includes(rawStatus as ProjectSectionStatus)
-      ? (rawStatus as ProjectSectionStatus)
-      : "nao_iniciado";
+    const canManageSectionStatus = profile.role === "advisor" || profile.role === "coordinator";
+    const status: ProjectSectionStatus = canManageSectionStatus
+      ? (allowed.includes(rawStatus as ProjectSectionStatus)
+          ? (rawStatus as ProjectSectionStatus)
+          : (latestSection?.status ?? "nao_iniciado"))
+      : (latestSection?.status ?? "nao_iniciado");
 
     await updateGroupProjectSection(sectionId, {
       content: String(formData.get("content") ?? "").trim() || null,
       status,
     });
 
+    revalidatePath(STUDENT_ROUTES.HOME);
+    revalidatePath(STUDENT_ROUTES.LEGACY_NAMESPACE_HOME);
     revalidatePath(`/groups/${id}/project/sections/${sectionId}`);
     revalidatePath(`/groups/${id}/project`);
+
+    if (profile.role === "student") {
+      redirect(STUDENT_ROUTES.HOME);
+    }
+
+    redirect(`/groups/${id}/project/sections/${sectionId}?saved=1`);
   }
 
   const sectionIndex = sections.findIndex((s) => String(s.id) === sectionId);
@@ -235,6 +249,12 @@ export default async function SectionEditorPage({ params }: SectionEditorPagePro
 
           {/* Editor de texto */}
           <Card>
+            {query.saved === "1" && (
+              <div className="mb-4 rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
+                Texto da seção salvo com sucesso.
+              </div>
+            )}
+
             <form action={handleSave} className="space-y-4">
               <div className="flex items-center justify-between gap-3 mb-2 flex-wrap">
                 <label
@@ -243,15 +263,21 @@ export default async function SectionEditorPage({ params }: SectionEditorPagePro
                 >
                   Texto da seção
                 </label>
-                <select
-                  name="status"
-                  defaultValue={section.status}
-                  className="text-xs border border-gray-200 rounded-lg px-3 py-1.5 bg-white text-[#1F2937] focus:outline-none focus:ring-2 focus:ring-[#4CAF50]"
-                >
-                  <option value="nao_iniciado">Não iniciada</option>
-                  <option value="em_andamento">Em andamento</option>
-                  <option value="concluido">Concluída</option>
-                </select>
+                {canManageStatuses ? (
+                  <select
+                    name="status"
+                    defaultValue={section.status}
+                    className="text-xs border border-gray-200 rounded-lg px-3 py-1.5 bg-white text-[#1F2937] focus:outline-none focus:ring-2 focus:ring-[#4CAF50]"
+                  >
+                    <option value="nao_iniciado">Não iniciada</option>
+                    <option value="em_andamento">Em andamento</option>
+                    <option value="concluido">Concluída</option>
+                  </select>
+                ) : (
+                  <p className="text-xs text-[#6B7280]">
+                    Status definido por orientadores e coordenação.
+                  </p>
+                )}
               </div>
 
               <textarea
@@ -379,6 +405,31 @@ export default async function SectionEditorPage({ params }: SectionEditorPagePro
               </p>
             </div>
           </div>
+
+          {shouldShowThemeTitleGuidance ? (
+            <div className="rounded-2xl bg-[#F5F9FF] shadow-md border border-[#DBEAFE] overflow-hidden">
+              <div className="bg-[#2F80ED] px-4 py-3">
+                <p className="text-xs font-bold uppercase tracking-widest text-white">
+                  Dica
+                </p>
+              </div>
+              <div className="p-4 space-y-2 text-sm text-[#1F2937] leading-relaxed">
+                <p className="text-xs font-semibold text-[#2F80ED] uppercase tracking-widest">
+                  Tema primeiro, título depois
+                </p>
+                <p>
+                  <strong>Tema</strong> é o assunto ou a questão que o grupo quer investigar.
+                </p>
+                <p>
+                  <strong>Título</strong> é o nome que o projeto pode ganhar mais tarde, quando a ideia estiver mais clara.
+                </p>
+                <p className="text-[#4B5563]">
+                  Nesta etapa, o mais importante é entender sobre o que vocês querem pesquisar e por que isso importa.
+                  Não precisa sair daqui com o título pronto.
+                </p>
+              </div>
+            </div>
+          ) : null}
 
           {/* Link para todos os comentários */}
           <Link

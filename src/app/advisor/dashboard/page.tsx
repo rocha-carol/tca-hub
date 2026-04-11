@@ -3,6 +3,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getAuthenticatedProfile, getAuthenticatedUser } from "@/lib/auth/session-service";
+import { STUDENT_ROUTES } from "@/lib/utils/constants";
 import { fetchAllGroups } from "@/services/group-service";
 import { ensureGroupProjectSectionsStructure } from "@/services/project-section-service";
 import { fetchGroupProjectSectionStageSchedule } from "@/services/project-section-stage-schedule-service";
@@ -93,7 +94,7 @@ export default async function AdvisorDashboardPage({ searchParams }: AdvisorDash
   // Orientadores não devem acessar esta página como coordenadores;
   // coordenadores têm rota própria em /coordinator/dashboard.
   if (!isProvisionalMode && effectiveRole === "student") {
-    redirect("/meu-projeto");
+    redirect(STUDENT_ROUTES.HOME);
   }
   if (!isProvisionalMode && effectiveRole === "coordinator") {
     redirect("/coordinator/dashboard");

@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { STUDENT_ROUTES } from "@/lib/utils/constants";
 
 /**
  * Rota principal da experiência do estudante.
@@ -14,9 +15,9 @@ export default async function StudentMeuProjetoPage({ searchParams }: StudentMeu
 
   // Mantém comportamento antigo para navegação provisória.
   if (params.modo === "provisorio") {
-    redirect("/groups");
+    redirect(STUDENT_ROUTES.HOME);
   }
 
   // Compatibilidade: rota antiga passa a apontar para a nova entrada do estudante.
-  redirect("/student");
+  redirect(STUDENT_ROUTES.HOME);
 }

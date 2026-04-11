@@ -1,21 +1,38 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
+import type { ThemeGuideSuggestionResult } from "@/types/group-theme-guide-state";
 
 interface ThemeChoiceGuideProps {
   targetHref: string;
   suggestionsEndpoint: string;
+  saveEndpoint: string;
+  initialState?: ThemeChoiceGuideInitialState | null;
 }
 
-interface ThemeIdeaSuggestionResult {
-  interest_summary: string;
-  possible_paths: string[];
-  conversation_starters: string[];
-  model_name: string;
+interface ThemeChoiceGuideInitialState {
+  checks?: boolean[];
+  selectedCategory?: string;
+  selectedInterestTags?: string[];
+  draftNotes?: string;
+  aiSuggestions?: ThemeGuideSuggestionResult | null;
+}
+
+type SaveStatus = "idle" | "saving" | "saved" | "error";
+
+interface ThemeGuideStateResponse {
+  state?: {
+    checks?: boolean[];
+    selected_category?: string | null;
+    selected_interest_tags?: string[];
+    draft_notes?: string | null;
+    ai_suggestions?: ThemeGuideSuggestionResult | null;
+  } | null;
+  message?: string;
 }
 
 const inspirationCategories = [
@@ -134,16 +151,93 @@ const draftPrompts = [
   "Qual assunto parece mais a cara do grupo?",
 ];
 
-export function ThemeChoiceGuide({ targetHref, suggestionsEndpoint }: ThemeChoiceGuideProps) {
-  const [checks, setChecks] = useState<boolean[]>(() => readinessChecks.map(() => false));
-  const [selectedCategory, setSelectedCategory] = useState(inspirationCategories[0]?.title ?? "");
-  const [selectedInterestTags, setSelectedInterestTags] = useState<string[]>([]);
-  const [draftNotes, setDraftNotes] = useState("");
+function isThemeIdeaSuggestionResult(value: unknown): value is ThemeGuideSuggestionResult {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const candidate = value as ThemeGuideSuggestionResult;
+
+  return (
+    typeof candidate.interest_summary === "string" &&
+    Array.isArray(candidate.possible_paths) &&
+    Array.isArray(candidate.conversation_starters) &&
+    typeof candidate.model_name === "string"
+  );
+}
+
+function normalizeChecks(checks?: boolean[]) {
+  if (!Array.isArray(checks) || checks.length !== readinessChecks.length) {
+    return readinessChecks.map(() => false);
+  }
+
+  return checks.map((item) => Boolean(item));
+}
+
+function normalizeSelectedCategory(selectedCategory?: string) {
+  if (
+    typeof selectedCategory === "string" &&
+    inspirationCategories.some((category) => category.title === selectedCategory)
+  ) {
+    return selectedCategory;
+  }
+
+  return inspirationCategories[0]?.title ?? "";
+}
+
+function normalizeSelectedInterestTags(selectedInterestTags?: string[]) {
+  if (!Array.isArray(selectedInterestTags)) {
+    return [] as string[];
+  }
+
+  return selectedInterestTags.filter((tag): tag is string => typeof tag === "string" && aiInterestTags.includes(tag));
+}
+
+function normalizeDraftNotes(draftNotes?: string) {
+  return typeof draftNotes === "string" ? draftNotes : "";
+}
+
+function normalizeAiSuggestions(aiSuggestions?: ThemeGuideSuggestionResult | null) {
+  if (aiSuggestions === null) {
+    return null;
+  }
+
+  return isThemeIdeaSuggestionResult(aiSuggestions) ? aiSuggestions : null;
+}
+
+function buildShadowStorageKey(saveEndpoint: string) {
+  return `theme-guide-shadow:${saveEndpoint}`;
+}
+
+function normalizeInitialState(initialState?: ThemeChoiceGuideInitialState | null): ThemeChoiceGuideInitialState {
+  return {
+    checks: normalizeChecks(initialState?.checks),
+    selectedCategory: normalizeSelectedCategory(initialState?.selectedCategory),
+    selectedInterestTags: normalizeSelectedInterestTags(initialState?.selectedInterestTags),
+    draftNotes: normalizeDraftNotes(initialState?.draftNotes),
+    aiSuggestions: normalizeAiSuggestions(initialState?.aiSuggestions),
+  };
+}
+
+export function ThemeChoiceGuide({
+  targetHref,
+  suggestionsEndpoint,
+  saveEndpoint,
+  initialState,
+}: ThemeChoiceGuideProps) {
+  const normalizedInitialState = useMemo(() => normalizeInitialState(initialState), [initialState]);
+  const [checks, setChecks] = useState<boolean[]>(() => normalizedInitialState.checks ?? readinessChecks.map(() => false));
+  const [selectedCategory, setSelectedCategory] = useState(normalizedInitialState.selectedCategory ?? inspirationCategories[0]?.title ?? "");
+  const [selectedInterestTags, setSelectedInterestTags] = useState<string[]>(() => normalizedInitialState.selectedInterestTags ?? []);
+  const [draftNotes, setDraftNotes] = useState(() => normalizedInitialState.draftNotes ?? "");
   const [isGeneratingSuggestions, setIsGeneratingSuggestions] = useState(false);
   const [suggestionError, setSuggestionError] = useState<string | null>(null);
-  const [aiSuggestions, setAiSuggestions] = useState<ThemeIdeaSuggestionResult | null>(null);
-  // Estado local para respostas das perguntas norteadoras
-  const [conversationAnswers, setConversationAnswers] = useState<string[]>([]);
+  const [aiSuggestions, setAiSuggestions] = useState<ThemeGuideSuggestionResult | null>(() => normalizedInitialState.aiSuggestions ?? null);
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [isHydrated, setIsHydrated] = useState(false);
+  const hasMountedRef = useRef(false);
+  const shadowStorageKey = useMemo(() => buildShadowStorageKey(saveEndpoint), [saveEndpoint]);
 
   const selectedExamples = useMemo(
     () => inspirationCategories.find((category) => category.title === selectedCategory)?.examples ?? [],
@@ -151,6 +245,188 @@ export function ThemeChoiceGuide({ targetHref, suggestionsEndpoint }: ThemeChoic
   );
 
   const allChecked = checks.every(Boolean);
+
+  const stateToPersist = useMemo(
+    () => ({
+      checks,
+      selectedCategory,
+      selectedInterestTags,
+      draftNotes,
+      aiSuggestions,
+    }),
+    [aiSuggestions, checks, draftNotes, selectedCategory, selectedInterestTags]
+  );
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      setIsHydrated(true);
+      return;
+    }
+
+    let isCancelled = false;
+
+    try {
+      const rawShadowState = window.localStorage.getItem(shadowStorageKey);
+      if (rawShadowState) {
+        const parsedShadowState = JSON.parse(rawShadowState) as ThemeChoiceGuideInitialState;
+        const normalizedShadowState = normalizeInitialState(parsedShadowState);
+
+        setChecks(normalizedShadowState.checks ?? readinessChecks.map(() => false));
+        setSelectedCategory(normalizedShadowState.selectedCategory ?? inspirationCategories[0]?.title ?? "");
+        setSelectedInterestTags(normalizedShadowState.selectedInterestTags ?? []);
+        setDraftNotes(normalizedShadowState.draftNotes ?? "");
+        setAiSuggestions(normalizedShadowState.aiSuggestions ?? null);
+      }
+    } catch {
+      window.localStorage.removeItem(shadowStorageKey);
+    }
+
+    async function hydrateFromDatabase() {
+      try {
+        const response = await fetch(saveEndpoint, {
+          method: "GET",
+          cache: "no-store",
+        });
+
+        const payload = (await response.json().catch(() => null)) as ThemeGuideStateResponse | null;
+
+        if (!response.ok || !payload?.state || isCancelled) {
+          return;
+        }
+
+        const normalizedDatabaseState = normalizeInitialState({
+          checks: payload.state.checks,
+          selectedCategory: payload.state.selected_category ?? undefined,
+          selectedInterestTags: payload.state.selected_interest_tags,
+          draftNotes: payload.state.draft_notes ?? "",
+          aiSuggestions: payload.state.ai_suggestions ?? null,
+        });
+
+        setChecks(normalizedDatabaseState.checks ?? readinessChecks.map(() => false));
+        setSelectedCategory(normalizedDatabaseState.selectedCategory ?? inspirationCategories[0]?.title ?? "");
+        setSelectedInterestTags(normalizedDatabaseState.selectedInterestTags ?? []);
+        setDraftNotes(normalizedDatabaseState.draftNotes ?? "");
+        setAiSuggestions(normalizedDatabaseState.aiSuggestions ?? null);
+      } catch {
+        // Falha silenciosa: mantém o estado local/sombra para não bloquear a experiência.
+      } finally {
+        if (!isCancelled) {
+          setIsHydrated(true);
+        }
+      }
+    }
+
+    void hydrateFromDatabase();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [saveEndpoint, shadowStorageKey]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    window.localStorage.setItem(shadowStorageKey, JSON.stringify(stateToPersist));
+  }, [shadowStorageKey, stateToPersist]);
+
+  useEffect(() => {
+    if (!hasMountedRef.current) {
+      hasMountedRef.current = true;
+      return;
+    }
+
+    if (!isHydrated) {
+      return;
+    }
+
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(async () => {
+      try {
+        setSaveStatus("saving");
+        setSaveError(null);
+
+        const response = await fetch(saveEndpoint, {
+          method: "PUT",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(stateToPersist),
+          signal: controller.signal,
+          keepalive: true,
+        });
+
+        const payload = await response.json().catch(() => null);
+
+        if (!response.ok) {
+          throw new Error(
+            typeof payload?.message === "string"
+              ? payload.message
+              : "Não foi possível salvar o guia de tema do grupo agora."
+          );
+        }
+
+        setSaveStatus("saved");
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") {
+          return;
+        }
+
+        setSaveStatus("error");
+        setSaveError(
+          error instanceof Error ? error.message : "Não foi possível salvar o guia de tema do grupo agora."
+        );
+      }
+    }, 700);
+
+    return () => {
+      controller.abort();
+      window.clearTimeout(timeoutId);
+    };
+  }, [isHydrated, saveEndpoint, stateToPersist]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const flushPendingState = () => {
+      const payload = JSON.stringify(stateToPersist);
+
+      void fetch(saveEndpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: payload,
+        keepalive: true,
+      }).catch(() => {
+        // Mantém o shadow cache local como rede de segurança para a próxima abertura.
+      });
+    };
+
+    const handlePageHide = () => {
+      flushPendingState();
+    };
+
+    window.addEventListener("pagehide", handlePageHide);
+    window.addEventListener("beforeunload", handlePageHide);
+
+    return () => {
+      window.removeEventListener("pagehide", handlePageHide);
+      window.removeEventListener("beforeunload", handlePageHide);
+    };
+  }, [saveEndpoint, stateToPersist]);
+
+  const saveStatusMessage =
+    saveStatus === "saving"
+      ? "Salvando para todo o grupo..."
+      : saveStatus === "saved"
+        ? "Tudo salvo no banco para o grupo."
+        : saveStatus === "error"
+          ? saveError || "Não foi possível salvar no banco agora."
+          : "As alterações desta página ficam compartilhadas com todo o grupo.";
 
   function handleToggleCheck(index: number) {
     setChecks((current) => current.map((value, currentIndex) => (currentIndex === index ? !value : value)));
@@ -213,7 +489,7 @@ export function ThemeChoiceGuide({ targetHref, suggestionsEndpoint }: ThemeChoic
         );
       }
 
-      setAiSuggestions(payload as ThemeIdeaSuggestionResult);
+      setAiSuggestions(payload as ThemeGuideSuggestionResult);
     } catch (error) {
       setAiSuggestions(null);
       setSuggestionError(
@@ -239,11 +515,17 @@ export function ThemeChoiceGuide({ targetHref, suggestionsEndpoint }: ThemeChoic
           </div>
 
           <div className="rounded-xl bg-white/80 border border-[#E5E7EB] px-4 py-3 min-w-[220px]">
-            <p className="text-xs font-semibold uppercase tracking-wide text-[#6B7280]">Trilha rápida</p>
-            <p className="text-sm text-[#1F2937] mt-1">Passos curtos para chegar mais preparado na escolha do tema.</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-[#6B7280]">Estado do grupo</p>
+            <p className="text-sm text-[#1F2937] mt-1">{saveStatusMessage}</p>
           </div>
         </div>
       </Card>
+
+      {saveStatus === "error" ? (
+        <div className="rounded-xl border border-[#F5C2C7] bg-[#FFF5F5] px-4 py-3 text-sm text-[#9B1C1C]">
+          {saveError}
+        </div>
+      ) : null}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <Card accent="green" className="space-y-3">
@@ -443,25 +725,9 @@ export function ThemeChoiceGuide({ targetHref, suggestionsEndpoint }: ThemeChoic
 
             <div>
               <p className="text-sm font-semibold text-[#1D4ED8]">Perguntas para começar a conversa no grupo</p>
-              <ul className="mt-2 space-y-6 text-sm text-[#374151] list-disc list-inside">
-                {aiSuggestions.conversation_starters.map((question, idx) => (
-                  <li key={question} className="mb-2">
-                    <div>{question}</div>
-                    <textarea
-                      className="mt-2 w-full rounded-lg border border-[#DBEAFE] bg-[#F8FBFF] px-3 py-2 text-sm text-[#374151] focus:outline-none focus:ring-2 focus:ring-[#1D4ED8]"
-                      placeholder="(Opcional) Escreva aqui sua reflexão ou resposta para esta pergunta..."
-                      value={conversationAnswers[idx] || ""}
-                      onChange={e => {
-                        const value = e.target.value;
-                        setConversationAnswers(prev => {
-                          const next = [...prev];
-                          next[idx] = value;
-                          return next;
-                        });
-                      }}
-                      rows={2}
-                    />
-                  </li>
+              <ul className="mt-2 space-y-2 text-sm text-[#374151] list-disc list-inside">
+                {aiSuggestions.conversation_starters.map((question) => (
+                  <li key={question}>{question}</li>
                 ))}
               </ul>
             </div>

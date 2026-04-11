@@ -6,6 +6,7 @@ import { fetchGroupInPersonMeetings } from "@/services/group-in-person-meeting-s
 import { fetchGroupProjectSections } from "@/services/project-section-service";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
+import { requireGroupAccess } from "@/services/group-access-service";
 
 const TCA_STAGES = [
   { key: "tema", label: "Tema definido", icon: "🌱" },
@@ -47,9 +48,7 @@ function stageIndexFromSection(sectionOrder: number): number {
 
 export default async function TimelinePage({ params }: TimelinePageProps) {
   const { id } = await params;
-
-  const group = await fetchGroupById(id);
-  if (!group) notFound();
+  const { group } = await requireGroupAccess(id);
 
   let sections: Awaited<ReturnType<typeof fetchGroupProjectSections>> = [];
   let schedule: Awaited<ReturnType<typeof fetchGroupProjectSectionStageSchedule>> = [];

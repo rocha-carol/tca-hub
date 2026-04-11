@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { STUDENT_ROUTES } from "@/lib/utils/constants";
 
 interface StudentGroupByIdPageProps {
   params: Promise<{ id: string }>;
@@ -7,9 +8,10 @@ interface StudentGroupByIdPageProps {
 /**
  * Rota de conveniência para estudante.
  *
- * Mantém URL amigável no namespace /student sem duplicar a página de grupo.
+ * Mantém compatibilidade para o namespace legado /student,
+ * redirecionando para a URL canônica do estudante sem duplicar a página de grupo.
  */
 export default async function StudentGroupByIdPage({ params }: StudentGroupByIdPageProps) {
   const { id } = await params;
-  redirect(`/groups/${id}`);
+  redirect(`${STUDENT_ROUTES.GROUP}/${id}`);
 }

@@ -46,6 +46,7 @@ export async function proxy(request: NextRequest) {
   const isProfileSetupPage = pathname.startsWith("/profile/setup");
   const isProtectedPage =
     pathname.startsWith("/dashboard") ||
+    pathname.startsWith("/estudante") ||
     pathname.startsWith("/groups") ||
     pathname.startsWith("/advisors") ||
     pathname.startsWith("/students") ||
@@ -101,6 +102,7 @@ export const config = {
     "/profile/setup",
     "/profile/setup/:path*",
     "/dashboard/:path*",
+    "/estudante/:path*",
     "/groups/:path*",
     "/advisors/:path*",
     "/students/:path*",

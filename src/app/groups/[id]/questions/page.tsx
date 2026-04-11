@@ -6,6 +6,7 @@ import { fetchGroupProjectSectionQuestionAnswers } from "@/services/project-sect
 import { fetchGroupProjectSections } from "@/services/project-section-service";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
+import { requireGroupAccess } from "@/services/group-access-service";
 
 interface QuestionsPageProps {
   params: Promise<{ id: string }>;
@@ -22,9 +23,7 @@ function formatDate(iso?: string) {
 
 export default async function QuestionsPage({ params }: QuestionsPageProps) {
   const { id } = await params;
-
-  const group = await fetchGroupById(id);
-  if (!group) notFound();
+  const { group } = await requireGroupAccess(id);
 
   let questions: Awaited<ReturnType<typeof fetchGroupProjectSectionQuestions>> = [];
   let answers: Awaited<ReturnType<typeof fetchGroupProjectSectionQuestionAnswers>> = [];

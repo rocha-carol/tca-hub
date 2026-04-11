@@ -4,6 +4,7 @@ import { fetchGroupById } from "@/services/group-service";
 import { fetchGroupProjectSectionComments } from "@/services/project-section-comment-service";
 import { fetchGroupProjectSections } from "@/services/project-section-service";
 import { Card } from "@/components/ui/Card";
+import { requireGroupAccess } from "@/services/group-access-service";
 
 interface CommentsPageProps {
   params: Promise<{ id: string }>;
@@ -20,9 +21,7 @@ function formatDate(iso?: string) {
 
 export default async function CommentsPage({ params }: CommentsPageProps) {
   const { id } = await params;
-
-  const group = await fetchGroupById(id);
-  if (!group) notFound();
+  const { group } = await requireGroupAccess(id);
 
   let comments: Awaited<ReturnType<typeof fetchGroupProjectSectionComments>> = [];
   let sections: Awaited<ReturnType<typeof fetchGroupProjectSections>> = [];

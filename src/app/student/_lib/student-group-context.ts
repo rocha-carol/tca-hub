@@ -42,7 +42,9 @@ export async function resolveStudentGroupContext(profileId: string): Promise<Stu
           return (
             String(item.student_1_id ?? "") === studentId ||
             String(item.student_2_id ?? "") === studentId ||
-            String(item.student_3_id ?? "") === studentId
+            String(item.student_3_id ?? "") === studentId ||
+            String(item.student_4_id ?? "") === studentId ||
+            String(item.student_5_id ?? "") === studentId
           );
         }) ?? null
       : null;

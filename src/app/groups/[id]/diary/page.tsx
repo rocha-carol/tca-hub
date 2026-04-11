@@ -5,6 +5,7 @@ import { fetchGroupProcessPhotos } from "@/services/group-process-photo-service"
 import { fetchGroupProjectSections } from "@/services/project-section-service";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
+import { requireGroupAccess } from "@/services/group-access-service";
 
 interface DiaryPageProps {
   params: Promise<{ id: string }>;
@@ -39,11 +40,7 @@ function formatDate(date?: string | null) {
 
 export default async function DiaryPage({ params }: DiaryPageProps) {
   const { id } = await params;
-  const group = await fetchGroupById(id);
-
-  if (!group) {
-    notFound();
-  }
+  const { group } = await requireGroupAccess(id);
 
   let photos: Awaited<ReturnType<typeof fetchGroupProcessPhotos>> = [];
   let sections: Awaited<ReturnType<typeof fetchGroupProjectSections>> = [];

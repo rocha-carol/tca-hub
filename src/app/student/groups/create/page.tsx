@@ -5,6 +5,7 @@ import { getAuthenticatedProfile, getAuthenticatedUser } from "@/lib/auth/sessio
 import { createGroup, fetchAllGroups } from "@/services/group-service";
 import { fetchAllStudents } from "@/services/student-service";
 import StudentGroupMembersBuilder from "@/components/student/StudentGroupMembersBuilder";
+import { STUDENT_ROUTES } from "@/lib/utils/constants";
 
 function normalizeStudentId(value: string | number) {
   return typeof value === "number" ? value : /^\d+$/.test(value) ? Number(value) : value;
@@ -69,13 +70,13 @@ export default async function StudentCreateGroupPage({ searchParams }: StudentCr
       students = await fetchAllStudents();
       groups = await fetchAllGroups();
     } catch {
-      redirect("/student/groups/create?erro=students");
+      redirect(`${STUDENT_ROUTES.GROUP_CREATE}?erro=students`);
     }
 
     const loggedStudent = students.find((student) => student.profile_id === authenticatedUser.id);
 
     if (!loggedStudent) {
-      redirect("/student/groups/create?erro=perfil");
+      redirect(`${STUDENT_ROUTES.GROUP_CREATE}?erro=perfil`);
     }
 
     const rawPayload = String(formData.get("members_payload") ?? "[]");
@@ -85,16 +86,16 @@ export default async function StudentCreateGroupPage({ searchParams }: StudentCr
       const parsed = JSON.parse(rawPayload);
       parsedMembers = Array.isArray(parsed) ? parsed : [];
     } catch {
-      redirect("/student/groups/create?erro=formato");
+      redirect(`${STUDENT_ROUTES.GROUP_CREATE}?erro=formato`);
     }
 
     if (parsedMembers.length > 4) {
-      redirect("/student/groups/create?erro=limite");
+      redirect(`${STUDENT_ROUTES.GROUP_CREATE}?erro=limite`);
     }
 
     const selectedIds = [String(loggedStudent.id), ...parsedMembers.map((member) => String(member.id))];
     if (new Set(selectedIds).size !== selectedIds.length) {
-      redirect("/student/groups/create?erro=duplicado");
+      redirect(`${STUDENT_ROUTES.GROUP_CREATE}?erro=duplicado`);
     }
 
     const member2 = parsedMembers[0]
@@ -137,9 +138,11 @@ export default async function StudentCreateGroupPage({ searchParams }: StudentCr
     });
 
     revalidatePath("/groups");
-    revalidatePath("/student");
-    revalidatePath("/student/groups/status");
-    redirect("/student/groups/status?created=1");
+    revalidatePath(STUDENT_ROUTES.HOME);
+    revalidatePath(STUDENT_ROUTES.GROUP_STATUS);
+    revalidatePath(STUDENT_ROUTES.LEGACY_NAMESPACE_HOME);
+    revalidatePath(STUDENT_ROUTES.LEGACY_GROUP_STATUS);
+    redirect(`${STUDENT_ROUTES.GROUP_STATUS}?created=1`);
   }
 
   return (
@@ -156,25 +159,17 @@ export default async function StudentCreateGroupPage({ searchParams }: StudentCr
 
         <div className="tca-soft-surface rounded-lg p-6 shadow-sm">
           <form action={handleCreateStudentGroup} className="space-y-5">
-            <div className="rounded-lg border border-gray-200 p-4 bg-white/80">
-              <h2 className="text-lg font-semibold text-gray-900 mb-3">Integrante 1 (representante)</h2>
-              {currentStudent ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-                  <p className="text-gray-800">
-                    <span className="font-semibold">Nome:</span> {currentStudent.name}
-                  </p>
-                  <p className="text-gray-800">
-                    <span className="font-semibold">Ano:</span> {currentStudent.grade || "Não informado"}
-                  </p>
-                </div>
-              ) : (
-                <p className="text-sm text-amber-800">
-                  Não foi possível localizar seu cadastro de estudante. Confira seu perfil antes de salvar.
-                </p>
-              )}
-            </div>
-
             <StudentGroupMembersBuilder
+              representative={
+                currentStudent
+                  ? {
+                      id: currentStudent.id,
+                      name: currentStudent.name,
+                      registration_code: currentStudent.registration_code,
+                      grade: currentStudent.grade,
+                    }
+                  : null
+              }
               students={allStudents
                 .filter((student) => student.active !== false && student.profile_id !== user.id)
                 .map((student) => ({
@@ -195,7 +190,7 @@ export default async function StudentCreateGroupPage({ searchParams }: StudentCr
               </button>
 
               <Link
-                href="/student"
+                href={STUDENT_ROUTES.HOME}
                 className="bg-gray-100 hover:bg-gray-200 text-gray-900 font-medium px-4 py-2 rounded-md"
               >
                 Voltar para início do estudante
