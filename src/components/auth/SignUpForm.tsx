@@ -96,23 +96,13 @@ export default function SignUpForm() {
   /**
    * Handler para submissão do formulário
    */
-  const handleSubmit = async () => {
-    console.log("[SignUpForm] submit disparado");
-
-    console.log("[SignUpForm] dados atuais:", {
-      name: formData.name,
-      email: formData.email,
-      passwordLength: formData.password.length,
-      passwordConfirmLength: formData.passwordConfirm.length,
-    });
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
 
     // Validar antes de enviar
     if (!validateForm()) {
-      console.log("[SignUpForm] validação falhou");
       return;
     }
-
-    console.log("[SignUpForm] validação ok, iniciando signUp");
 
     try {
       setLoading(true);
@@ -125,8 +115,6 @@ export default function SignUpForm() {
         name: formData.name,
       });
 
-      console.log("[SignUpForm] signUp concluído com sucesso");
-
       // Se chegou aqui, cadastro foi bem-sucedido
       setSuccess(true);
 
@@ -136,19 +124,23 @@ export default function SignUpForm() {
         router.push("/dashboard");
       }, 1500);
     } catch (err) {
-      console.log("[SignUpForm] erro recebido no catch:", err);
       // Extrair mensagem de erro
       const authError = err as AuthError;
       const errorMessage = authError.message || "Erro ao criar conta. Tente novamente.";
       setError(errorMessage);
     } finally {
-      console.log("[SignUpForm] finalizando submit, loading=false");
       setLoading(false);
     }
   };
 
   return (
-    <div role="form" aria-label="Formulário de cadastro" className="w-full max-w-md mx-auto p-6 bg-white border border-lime-200 rounded-xl shadow-md">
+    <form
+      aria-label="Formulário de cadastro"
+      onSubmit={(event) => {
+        void handleSubmit(event);
+      }}
+      className="w-full max-w-md mx-auto p-6 bg-white border border-lime-200 rounded-xl shadow-md"
+    >
       <h2 className="text-2xl font-bold mb-6 text-lime-800">Criar Conta</h2>
 
       {/* Mensagem de erro */}
@@ -235,10 +227,7 @@ export default function SignUpForm() {
 
       {/* Botão de submissão */}
       <button
-        type="button"
-        onClick={() => {
-          void handleSubmit();
-        }}
+        type="submit"
         disabled={loading || success}
         className="w-full bg-lime-700 hover:bg-lime-800 disabled:bg-gray-400 text-white font-medium py-2 px-4 rounded-md transition"
       >
@@ -252,6 +241,6 @@ export default function SignUpForm() {
           Faça login
         </a>
       </p>
-    </div>
+    </form>
   );
 }
