@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getAuthenticatedProfile, getAuthenticatedUser } from "@/lib/auth/session-service";
 import { STUDENT_ROUTES } from "@/lib/utils/constants";
-import { fetchAllGroups } from "@/services/group-service";
+import { fetchGroupsVisibleToProfile } from "@/services/group-service";
 import { fetchGroupInternalNotificationsByGroupIds } from "@/services/group-internal-notification-service";
 import { ensureGroupProjectSectionsStructure } from "@/services/project-section-service";
 import { fetchGroupProjectSectionStageSchedule } from "@/services/project-section-stage-schedule-service";
@@ -36,17 +36,6 @@ function getStatusLabel(status: GroupStatus) {
 
 function idsAreEqual(left: string | number | null | undefined, right: string | number | null | undefined) {
   return String(left ?? "") === String(right ?? "");
-}
-
-function isAdvisorLinkedToGroup(
-  group: Awaited<ReturnType<typeof fetchAllGroups>>[number],
-  advisorId: string | number | null
-) {
-  if (advisorId === null) {
-    return false;
-  }
-
-  return idsAreEqual(group.primary_advisor_id, advisorId) || idsAreEqual(group.co_advisor_id, advisorId);
 }
 
 interface AdvisorDashboardPageProps {
@@ -144,19 +133,15 @@ export default async function AdvisorDashboardPage({ searchParams }: AdvisorDash
   }
 
   // Busca de dados — falhas silenciosas para não travar o dashboard
-  let groups: Awaited<ReturnType<typeof fetchAllGroups>> = [];
+  let groups: Awaited<ReturnType<typeof fetchGroupsVisibleToProfile>> = [];
 
   try {
-    groups = await fetchAllGroups();
+    groups = profile ? await fetchGroupsVisibleToProfile(profile) : [];
   } catch {
     // tabela ainda não existe
   }
 
-  const advisorGroups = authenticatedAdvisorId !== null
-    ? groups.filter((group) => isAdvisorLinkedToGroup(group, authenticatedAdvisorId))
-    : groups;
-
-  const recentGroups = advisorGroups.slice(0, 5);
+  const recentGroups = groups.slice(0, 5);
 
   if (authenticatedAdvisorId !== null) {
     const pendingIndicationGroups = groups.filter(
@@ -196,17 +181,17 @@ export default async function AdvisorDashboardPage({ searchParams }: AdvisorDash
   }
 
   const statusCount = {
-    planejamento: advisorGroups.filter((g) => !g.status || g.status === "planejamento").length,
-    em_andamento: advisorGroups.filter((g) => g.status === "em_andamento").length,
-    concluido: advisorGroups.filter((g) => g.status === "concluido").length,
+    planejamento: groups.filter((g) => !g.status || g.status === "planejamento").length,
+    em_andamento: groups.filter((g) => g.status === "em_andamento").length,
+    concluido: groups.filter((g) => g.status === "concluido").length,
   };
   const dashboardCompletedCount = statusCount.concluido;
-  const dashboardTotalCount = Math.max(advisorGroups.length, 1);
+  const dashboardTotalCount = Math.max(groups.length, 1);
 
   // Grupo em destaque: prefere "em andamento" para facilitar acompanhamento
   const featuredGroup =
-    advisorGroups.find((group) => group.status === "em_andamento") ||
-    advisorGroups.find((group) => group.status === "planejamento") ||
+    groups.find((group) => group.status === "em_andamento") ||
+    groups.find((group) => group.status === "planejamento") ||
     recentGroups[0] ||
     null;
 
@@ -265,7 +250,7 @@ export default async function AdvisorDashboardPage({ searchParams }: AdvisorDash
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-8">
           <InfoCard
             title="Grupos acompanhados"
-            value={advisorGroups.length}
+            value={groups.length}
             description="Grupos vinculados a você como orientador principal ou coorientador."
             href="/groups"
             linkLabel="Ver todos os grupos →"
@@ -281,45 +266,6 @@ export default async function AdvisorDashboardPage({ searchParams }: AdvisorDash
             accent="blue"
           />
         </div>
-
-        <Card className="mb-8 border border-[#E3EDE0] bg-[#FBFDF9]">
-          <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#6B7280]">Leitura rápida</p>
-              <h2 className="mt-2 text-xl font-semibold text-[#1F2937]">O que pede atenção agora</h2>
-              <p className="mt-1 text-sm text-[#6B7280] max-w-2xl">
-                Resumo do que já está em acompanhamento e do que ainda depende de resposta para o fluxo pedagógico seguir.
-              </p>
-            </div>
-
-            <Link
-              href={featuredGroup ? `/groups/${featuredGroup.id}/project` : "/groups"}
-              className="inline-flex rounded-lg border border-[#D9E8D2] bg-white px-4 py-2 text-sm font-medium text-[#2C5E31] transition-colors hover:border-[#C9DEC0] hover:bg-[#F3FBF1]"
-            >
-              {featuredGroup ? "Abrir projeto em destaque" : "Ver grupos"}
-            </Link>
-          </div>
-
-          <div className="mt-5 grid gap-3 sm:grid-cols-3">
-            <div className="rounded-2xl border border-[#E4ECDF] bg-white px-4 py-4">
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#6B7280]">Solicitações pendentes</p>
-              <p className="mt-2 text-2xl font-bold text-amber-700">{pendingIndicationNotifications.length}</p>
-              <p className="mt-1 text-sm text-[#6B7280]">Pedidos de orientação aguardando resposta.</p>
-            </div>
-
-            <div className="rounded-2xl border border-[#E4ECDF] bg-white px-4 py-4">
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#6B7280]">Projetos em planejamento</p>
-              <p className="mt-2 text-2xl font-bold text-[#1F2937]">{statusCount.planejamento}</p>
-              <p className="mt-1 text-sm text-[#6B7280]">Grupos que ainda precisam ganhar ritmo de desenvolvimento.</p>
-            </div>
-
-            <div className="rounded-2xl border border-[#E4ECDF] bg-white px-4 py-4">
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#6B7280]">Projetos acompanhados</p>
-              <p className="mt-2 text-2xl font-bold text-[#1F2937]">{advisorGroups.length}</p>
-              <p className="mt-1 text-sm text-[#6B7280]">Grupos já vinculados ao orientador para acompanhamento contínuo.</p>
-            </div>
-          </div>
-        </Card>
 
         {pendingIndicationNotifications.length > 0 && (
           <Card className="mb-8 border border-amber-200 bg-amber-50/70">
@@ -480,7 +426,7 @@ export default async function AdvisorDashboardPage({ searchParams }: AdvisorDash
 
           {recentGroups.length === 0 ? (
             <p className="text-gray-500 text-sm">
-              Nenhum grupo vinculado ao perfil de orientador ainda.{" "}
+              Nenhum grupo cadastrado ainda.{" "}
               <Link href="/groups" className="text-lime-700 hover:underline">
                 Ver grupos
               </Link>

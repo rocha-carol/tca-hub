@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import type { AdvisorIndicationStatus, Group, GroupStatus } from "@/types/group";
+import type { Profile } from "@/types/profile";
 import { fetchGroupAdvisorPreferences } from "@/services/group-advisor-preference-service";
 import { suggestPrimaryAdvisorByPreference } from "@/services/advisor-indication-service";
 import { createGroupInternalNotification } from "@/services/group-internal-notification-service";
@@ -301,6 +302,22 @@ export interface CreateGroupData {
 	status?: GroupStatus;
 }
 
+async function fetchAdvisorIdForProfileId(profileId: string): Promise<string | number | null> {
+	const supabase = await createClient();
+
+	const { data, error } = await supabase
+		.from("advisors")
+		.select("id")
+		.eq("profile_id", profileId)
+		.maybeSingle();
+
+	if (error) {
+		throw new Error(`Erro ao buscar orientador vinculado ao perfil: ${error.message}`);
+	}
+
+	return data?.id ?? null;
+}
+
 /**
  * Busca todos os grupos cadastrados.
  *
@@ -322,6 +339,50 @@ export async function fetchAllGroups(): Promise<Group[]> {
 		}
 
 		throw new Error(`Erro ao buscar grupos: ${error.message}`);
+	}
+
+	return (data || []) as Group[];
+}
+
+/**
+ * Busca os grupos visíveis para o perfil autenticado no contexto do MVP.
+ *
+ * Regras atuais:
+ * - coordenador vê todos os grupos;
+ * - orientador vê apenas grupos já aceitos/vinculados a ele;
+ * - estudante não usa esta listagem geral.
+ */
+export async function fetchGroupsVisibleToProfile(profile: Pick<Profile, "id" | "role">): Promise<Group[]> {
+	if (profile.role === "coordinator") {
+		return fetchAllGroups();
+	}
+
+	if (profile.role !== "advisor") {
+		return [];
+	}
+
+	const advisorId = await fetchAdvisorIdForProfileId(profile.id);
+	if (advisorId === null) {
+		return [];
+	}
+
+	const supabase = await createClient();
+	const advisorIdValue = String(advisorId);
+
+	const { data, error } = await supabase
+		.from("groups")
+		.select("*")
+		.or(`primary_advisor_id.eq.${advisorIdValue},co_advisor_id.eq.${advisorIdValue}`)
+		.order("created_at", { ascending: false });
+
+	if (error) {
+		if (isGroupsTableMissing(error.message)) {
+			throw new Error(
+				"Tabela groups ainda não existe no Supabase. Execute o script database/001_create_groups_table.sql no SQL Editor."
+			);
+		}
+
+		throw new Error(`Erro ao buscar grupos visíveis para o perfil: ${error.message}`);
 	}
 
 	return (data || []) as Group[];

@@ -7,7 +7,7 @@ import SignInForm from "@/components/auth/SignInForm";
  * pré-preenchidas e persistidas no navegador para agilizar a demonstração.
  */
 export default function Home() {
-  const sharedPassword = process.env.MVP_SHARED_PASSWORD ?? "";
+  const sharedPassword = process.env.MVP_SHARED_PASSWORD ?? "75077132";
 
   const loginProfiles = [
     {
@@ -55,6 +55,9 @@ export default function Home() {
             </p>
             <p className="mt-3 text-sm text-slate-600 max-w-3xl">
               As credenciais podem vir de variáveis locais do ambiente e também ficam salvas neste navegador quando forem ajustadas durante a apresentação.
+            </p>
+            <p className="mt-2 text-sm text-slate-700">
+              Senha padrão do MVP para contas ainda não configuradas: <span className="font-semibold">75077132</span>
             </p>
           </header>
 

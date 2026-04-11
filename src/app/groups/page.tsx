@@ -3,7 +3,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getAuthenticatedProfile } from "@/lib/auth/session-service";
 import { STUDENT_ROUTES } from "@/lib/utils/constants";
-import { createGroup, fetchAllGroups } from "@/services/group-service";
+import { createGroup, fetchAllGroups, fetchGroupsVisibleToProfile } from "@/services/group-service";
 import { fetchAllStudents } from "@/services/student-service";
 import type { Group, GroupStatus } from "@/types/group";
 import type { Student } from "@/types/student";
@@ -127,7 +127,9 @@ export default async function GroupsPage({ searchParams }: GroupsPageProps) {
   }
 
   try {
-    groups = await fetchAllGroups();
+    groups = profile.role === "coordinator"
+      ? await fetchAllGroups()
+      : await fetchGroupsVisibleToProfile(profile);
   } catch (error) {
     groupsError = error instanceof Error ? error.message : "Erro desconhecido ao carregar grupos.";
   }
