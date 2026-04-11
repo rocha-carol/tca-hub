@@ -19,14 +19,16 @@ export default async function StudentPage({ searchParams }: StudentPageProps) {
     hasGroup,
     nextJourneyHref,
     projectSections,
-    studentName,
   } = await loadStudentPortalData();
 
   return (
-    <section className="space-y-4">
-      <header>
-        <h1 className="text-3xl font-bold tca-title-guide">Área do estudante</h1>
-        <p className="text-gray-600 mt-1.5">Seu ponto de partida no TCA Hub.</p>
+    <section className="space-y-5">
+      <header className="rounded-2xl border border-[#E3EDE0] bg-white/90 px-5 py-5 shadow-[0_8px_24px_rgba(31,41,55,0.04)]">
+        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#7AA56F]">Área do estudante</p>
+        <h1 className="mt-2 text-3xl font-bold tca-title-guide">Seu espaço no TCA Hub</h1>
+        <p className="text-gray-600 mt-1.5 max-w-2xl">
+          Um ponto de partida mais leve para acompanhar o projeto, entender a etapa atual e seguir para a próxima ação.
+        </p>
       </header>
 
       <StudentHomeContent
@@ -36,9 +38,6 @@ export default async function StudentPage({ searchParams }: StudentPageProps) {
         groupId={context.group?.id}
         nextJourneyHref={nextJourneyHref}
         projectSections={projectSections}
-        studentName={studentName}
-        studentsError={context.studentsError}
-        groupsError={context.groupsError}
       />
     </section>
   );

@@ -14,6 +14,7 @@ interface StudentHomeContentProps {
   hasGroup: boolean;
   group: Group | null;
   groupId?: string;
+  nextJourneyHref?: string;
   projectSections: GroupProjectSection[];
 }
 
@@ -22,6 +23,7 @@ export function StudentHomeContent({
   hasGroup,
   group,
   groupId,
+  nextJourneyHref,
   projectSections,
 }: StudentHomeContentProps) {
   const [showDetails, setShowDetails] = useState(hasGroup);
@@ -32,6 +34,8 @@ export function StudentHomeContent({
   const problemSection = projectSections.find((section) => section.section_key === "problema_justificativa") ?? null;
   const objectivesSection = projectSections.find((section) => section.section_key === "objetivos") ?? null;
   const methodologySection = projectSections.find((section) => section.section_key === "metodologia_plano") ?? null;
+  const developmentSection = projectSections.find((section) => section.section_key === "desenvolvimento_registros") ?? null;
+  const resultSection = projectSections.find((section) => section.section_key === "resultado_produto_final") ?? null;
 
   const sectionHasProgress = (section: GroupProjectSection | null) => {
     if (!section) {
@@ -43,9 +47,14 @@ export function StudentHomeContent({
 
   const themeDone = sectionHasProgress(themeSection) || Boolean(group?.theme?.trim());
   const planningDone = [problemSection, objectivesSection, methodologySection].every(sectionHasProgress);
+  const developmentDone = sectionHasProgress(developmentSection);
+  const finalPresentationDone = sectionHasProgress(resultSection);
   const hasAdvisor = Boolean(group?.primary_advisor_id);
   const indicationPending = group?.indication_status === "pendente";
   const indicationRefused = group?.indication_status === "recusada";
+  const firstPlanningPendingSection = [problemSection, objectivesSection, methodologySection].find(
+    (section) => !sectionHasProgress(section)
+  );
 
   const homeSnapshot = !hasGroup
     ? {
@@ -63,8 +72,8 @@ export function StudentHomeContent({
           missionTitle: "Escolher o tema do projeto",
           missionDescription:
             "Com o grupo já criado, a missão mais importante agora é definir tema e contexto para iniciar a investigação com clareza.",
-          primaryActionLabel: "Abrir jornada do projeto",
-          primaryActionHref: journeyHref,
+          primaryActionLabel: "Escolher o tema",
+          primaryActionHref: nextJourneyHref || (groupId ? `${STUDENT_ROUTES.GROUP}/${groupId}` : STUDENT_ROUTES.HOME),
           secondaryActionLabel: "Rever visão da jornada",
         }
       : !hasAdvisor
@@ -80,8 +89,8 @@ export function StudentHomeContent({
               : indicationRefused
                 ? "A indicação anterior não avançou. O próximo passo é revisar preferências e tentar uma nova indicação de orientador."
                 : "Com o tema definido, o próximo avanço do projeto é indicar orientadores para garantir acompanhamento da investigação.",
-            primaryActionLabel: indicationPending ? "Acompanhar jornada" : "Ir para a jornada",
-            primaryActionHref: journeyHref,
+            primaryActionLabel: indicationPending ? "Acompanhar a indicação" : "Indicar orientadores",
+            primaryActionHref: groupId ? `/estudante/groups/${groupId}/advisor-indication` : STUDENT_ROUTES.HOME,
             secondaryActionLabel: "Rever visão da jornada",
           }
         : !planningDone
@@ -90,17 +99,43 @@ export function StudentHomeContent({
               missionTitle: "Estruturar o planejamento",
               missionDescription:
                 "Agora o foco é fortalecer problema, objetivos e metodologia para deixar a investigação mais consistente antes do desenvolvimento.",
-              primaryActionLabel: "Continuar na jornada",
-              primaryActionHref: journeyHref,
+              primaryActionLabel: "Planejar investigação",
+              primaryActionHref: firstPlanningPendingSection && groupId
+                ? `/groups/${groupId}/project/sections/${firstPlanningPendingSection.id}`
+                : (groupId ? `/groups/${groupId}/project` : STUDENT_ROUTES.HOME),
               secondaryActionLabel: "Rever visão da jornada",
             }
-          : {
+          : !developmentDone
+            ? {
               statusLabel: "Projeto em andamento com base já estruturada.",
               missionTitle: "Avançar na produção do projeto",
               missionDescription:
                 "A etapa seguinte é registrar desenvolvimento, consolidar evidências e preparar os resultados que irão sustentar a apresentação final.",
-              primaryActionLabel: "Continuar na jornada",
-              primaryActionHref: journeyHref,
+              primaryActionLabel: "Registrar desenvolvimento",
+              primaryActionHref: developmentSection && groupId
+                ? `/groups/${groupId}/project/sections/${developmentSection.id}`
+                : (groupId ? `/groups/${groupId}/project` : STUDENT_ROUTES.HOME),
+              secondaryActionLabel: "Rever visão da jornada",
+            }
+            : !finalPresentationDone
+              ? {
+              statusLabel: "Projeto em andamento com base já estruturada.",
+              missionTitle: "Concluir resultados e apresentação",
+              missionDescription:
+                "O desenvolvimento já foi registrado. Agora a missão é consolidar os resultados e preparar a apresentação final do trabalho.",
+              primaryActionLabel: "Concluir resultados",
+              primaryActionHref: resultSection && groupId
+                ? `/groups/${groupId}/project/sections/${resultSection.id}`
+                : (groupId ? `/groups/${groupId}/project/preview` : STUDENT_ROUTES.HOME),
+              secondaryActionLabel: "Rever visão da jornada",
+            }
+            : {
+              statusLabel: "Jornada principal concluída.",
+              missionTitle: "Revisar o projeto final",
+              missionDescription:
+                "As etapas principais já foram preenchidas. Agora vale revisar o conjunto, fortalecer a autoria e preparar a socialização final.",
+              primaryActionLabel: "Revisar projeto",
+              primaryActionHref: groupId ? `/groups/${groupId}/project/preview` : STUDENT_ROUTES.HOME,
               secondaryActionLabel: "Rever visão da jornada",
             };
 
