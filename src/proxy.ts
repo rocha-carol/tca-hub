@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { MVP_SESSION_COOKIE, parseMvpSessionCookieValue } from "@/lib/auth/mvp-session";
 
 /**
  * Proxy (Next.js 16): proteção de rotas para autenticação.
@@ -40,6 +41,8 @@ export async function proxy(request: NextRequest) {
   const {
     data: { user },
   } = await supabase.auth.getUser();
+  const mvpSession = parseMvpSessionCookieValue(request.cookies.get(MVP_SESSION_COOKIE)?.value);
+  const hasMvpSession = Boolean(mvpSession);
 
   const { pathname } = request.nextUrl;
   const isAuthPage = pathname === "/auth/login" || pathname === "/auth/signup";
@@ -65,7 +68,7 @@ export async function proxy(request: NextRequest) {
   }
 
   // Não autenticado tentando acessar rota protegida
-  if (!user && isProtectedPage) {
+  if (!user && !hasMvpSession && isProtectedPage) {
     const url = request.nextUrl.clone();
     url.pathname = "/auth/login";
     return NextResponse.redirect(url);
