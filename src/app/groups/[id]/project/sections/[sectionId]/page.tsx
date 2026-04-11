@@ -173,7 +173,7 @@ export default async function SectionEditorPage({ params, searchParams }: Sectio
     revalidatePath(`/groups/${id}/project`);
 
     if (profile.role === "student") {
-      redirect(STUDENT_ROUTES.HOME);
+      redirect(STUDENT_ROUTES.JOURNEY);
     }
 
     redirect(`/groups/${id}/project/sections/${sectionId}?saved=1`);
