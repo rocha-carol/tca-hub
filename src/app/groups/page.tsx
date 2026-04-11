@@ -28,6 +28,70 @@ function idsAreEqual(left: string | number | null | undefined, right: string | n
   return String(left ?? "") === String(right ?? "");
 }
 
+interface MemberFormSectionProps {
+  index: 1 | 2 | 3;
+  required?: boolean;
+  students: Student[];
+}
+
+function MemberFormSection({ index, required = false, students }: MemberFormSectionProps) {
+  const studentFieldName = `student_${index}_id`;
+  const memberNameFieldName = `member_${index}_name`;
+  const memberSeriesFieldName = `member_${index}_series`;
+
+  return (
+    <div className="rounded-2xl border border-[#E3EDE0] bg-white px-4 py-4 shadow-sm">
+      <div className="mb-4 flex items-start justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold text-[#1F2937]">
+            {required ? "Integrante principal" : `Integrante opcional ${index}`}
+          </p>
+          <p className="text-xs text-[#6B7280] mt-1">
+            Selecione um estudante cadastrado ou preencha manualmente nome e série.
+          </p>
+        </div>
+
+        <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${required ? "bg-lime-100 text-lime-800" : "bg-gray-100 text-gray-600"}`}>
+          {required ? "Obrigatório" : "Opcional"}
+        </span>
+      </div>
+
+      <div className="space-y-3">
+        <select
+          id={studentFieldName}
+          name={studentFieldName}
+          defaultValue=""
+          className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-lime-500"
+        >
+          <option value="">{required ? "— Selecionar estudante cadastrado —" : "— Nenhum estudante vinculado —"}</option>
+          {students.map((student) => (
+            <option key={student.id} value={String(student.id)}>
+              {student.name} {student.grade ? `— ${student.grade}` : "— Série não informada"}
+            </option>
+          ))}
+        </select>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <input
+            id={memberNameFieldName}
+            name={memberNameFieldName}
+            type="text"
+            placeholder={`Nome do integrante ${index}`}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-lime-500"
+          />
+          <input
+            id={memberSeriesFieldName}
+            name={memberSeriesFieldName}
+            type="text"
+            placeholder={`Série do integrante ${index}`}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-lime-500"
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 interface GroupsPageProps {
   searchParams?: Promise<{ status?: string; from?: string }>;
 }
@@ -184,174 +248,6 @@ export default async function GroupsPage({ searchParams }: GroupsPageProps) {
           </div>
         )}
 
-        <div className="tca-soft-surface rounded-lg p-6 shadow-sm mb-8">
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">Integrantes do grupo e série</h2>
-
-          <form action={handleCreateGroup} className="space-y-3">
-            <div>
-              <label htmlFor="member_1_name" className="block text-sm font-medium text-gray-700 mb-1">
-                Integrante 1 *
-              </label>
-              <div className="mb-3">
-                <label htmlFor="student_1_id" className="block text-sm font-medium text-gray-700 mb-1">
-                  Vincular estudante cadastrado
-                </label>
-                <select
-                  id="student_1_id"
-                  name="student_1_id"
-                  defaultValue=""
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-lime-500"
-                >
-                  <option value="">— Selecionar estudante cadastrado —</option>
-                  {activeStudents.map((student) => (
-                    <option key={student.id} value={String(student.id)}>
-                      {student.name} {student.grade ? `— ${student.grade}` : "— Série não informada"}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <input
-                  id="member_1_name"
-                  name="member_1_name"
-                  type="text"
-                  placeholder="Nome do integrante 1 (ou preenchimento manual)"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-lime-500"
-                />
-                <input
-                  id="member_1_series"
-                  name="member_1_series"
-                  type="text"
-                  placeholder="Série do integrante 1 (ou preenchimento manual)"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-lime-500"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label htmlFor="member_2_name" className="block text-sm font-medium text-gray-700 mb-1">
-                Integrante 2
-              </label>
-              <div className="mb-3">
-                <label htmlFor="student_2_id" className="block text-sm font-medium text-gray-700 mb-1">
-                  Vincular estudante cadastrado
-                </label>
-                <select
-                  id="student_2_id"
-                  name="student_2_id"
-                  defaultValue=""
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-lime-500"
-                >
-                  <option value="">— Opcional —</option>
-                  {activeStudents.map((student) => (
-                    <option key={student.id} value={String(student.id)}>
-                      {student.name} {student.grade ? `— ${student.grade}` : "— Série não informada"}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <input
-                  id="member_2_name"
-                  name="member_2_name"
-                  type="text"
-                  placeholder="Nome do integrante 2 (ou preenchimento manual)"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-lime-500"
-                />
-                <input
-                  id="member_2_series"
-                  name="member_2_series"
-                  type="text"
-                  placeholder="Série do integrante 2 (ou preenchimento manual)"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-lime-500"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label htmlFor="member_3_name" className="block text-sm font-medium text-gray-700 mb-1">
-                Integrante 3
-              </label>
-              <div className="mb-3">
-                <label htmlFor="student_3_id" className="block text-sm font-medium text-gray-700 mb-1">
-                  Vincular estudante cadastrado
-                </label>
-                <select
-                  id="student_3_id"
-                  name="student_3_id"
-                  defaultValue=""
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-lime-500"
-                >
-                  <option value="">— Opcional —</option>
-                  {activeStudents.map((student) => (
-                    <option key={student.id} value={String(student.id)}>
-                      {student.name} {student.grade ? `— ${student.grade}` : "— Série não informada"}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <input
-                  id="member_3_name"
-                  name="member_3_name"
-                  type="text"
-                  placeholder="Nome do integrante 3 (ou preenchimento manual)"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-lime-500"
-                />
-                <input
-                  id="member_3_series"
-                  name="member_3_series"
-                  type="text"
-                  placeholder="Série do integrante 3 (ou preenchimento manual)"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-lime-500"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label htmlFor="theme" className="block text-sm font-medium text-gray-700 mb-1">
-                Tema do projeto
-              </label>
-              <input
-                id="theme"
-                name="theme"
-                type="text"
-                placeholder="Ex.: Sustentabilidade na escola"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-lime-500"
-              />
-            </div>
-
-            <div>
-              <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-1">
-                Descrição do projeto
-              </label>
-              <textarea
-                id="description"
-                name="description"
-                rows={3}
-                placeholder="Descreva brevemente o projeto do grupo"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-lime-500"
-              />
-            </div>
-
-            <div className="flex flex-wrap gap-3">
-              <button
-                type="submit"
-                className="bg-lime-700 hover:bg-lime-800 text-white font-medium px-4 py-2 rounded-md"
-              >
-                Criar grupo
-              </button>
-
-              <Link
-                href="/dashboard"
-                className="bg-gray-100 hover:bg-gray-200 text-gray-900 font-medium px-4 py-2 rounded-md"
-              >
-                Voltar ao dashboard
-              </Link>
-            </div>
-          </form>
-        </div>
-
         <div className="tca-soft-surface rounded-lg p-6 shadow-sm">
           <h2 className="text-xl font-semibold text-gray-900 mb-4">Grupos cadastrados</h2>
 
@@ -435,6 +331,101 @@ export default async function GroupsPage({ searchParams }: GroupsPageProps) {
               ))}
             </div>
           )}
+        </div>
+
+        <div className="tca-soft-surface rounded-lg p-6 shadow-sm mt-8">
+          <div className="mb-5 space-y-4">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-lime-700">Novo grupo</p>
+              <h2 className="text-xl font-semibold text-gray-900 mt-1">Criar grupo manualmente</h2>
+              <p className="text-sm text-gray-600 leading-relaxed mt-2">
+                Comece pelo integrante principal e pelos dados iniciais do projeto. Os demais integrantes podem ser adicionados aqui sem deixar o formulário mais pesado do que precisa.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+              <div className="rounded-2xl border border-[#DCEBD5] bg-white px-4 py-3 shadow-sm">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#6B7280]">Estrutura</p>
+                <p className="text-sm font-semibold text-[#1F2937] mt-2">1 integrante obrigatório</p>
+              </div>
+              <div className="rounded-2xl border border-[#DCEBD5] bg-white px-4 py-3 shadow-sm">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#6B7280]">Composição</p>
+                <p className="text-sm font-semibold text-[#1F2937] mt-2">Até 3 integrantes neste formulário</p>
+              </div>
+              <div className="rounded-2xl border border-[#DCEBD5] bg-white px-4 py-3 shadow-sm">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#6B7280]">Projeto</p>
+                <p className="text-sm font-semibold text-[#1F2937] mt-2">Tema e descrição iniciais</p>
+              </div>
+            </div>
+          </div>
+
+          <form action={handleCreateGroup} className="space-y-4">
+            <MemberFormSection index={1} required students={activeStudents} />
+
+            <details className="rounded-2xl border border-[#DCEBD5] bg-white px-4 py-4 shadow-sm">
+              <summary className="cursor-pointer list-none">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold text-[#1F2937]">Adicionar integrantes opcionais</p>
+                    <p className="text-xs text-[#6B7280] mt-1">
+                      Abra este bloco apenas se o grupo já tiver mais participantes definidos.
+                    </p>
+                  </div>
+                  <span className="inline-flex rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-600">
+                    Até 2 extras
+                  </span>
+                </div>
+              </summary>
+
+              <div className="mt-4 space-y-4">
+                <MemberFormSection index={2} students={activeStudents} />
+                <MemberFormSection index={3} students={activeStudents} />
+              </div>
+            </details>
+
+            <div className="rounded-2xl border border-[#E3EDE0] bg-white px-4 py-4 shadow-sm">
+              <div className="mb-4">
+                <p className="text-sm font-semibold text-[#1F2937]">Dados iniciais do projeto</p>
+                <p className="text-xs text-[#6B7280] mt-1">
+                  Estes campos ajudam a identificar rapidamente o grupo na organização do TCA.
+                </p>
+              </div>
+
+              <div className="space-y-3">
+                <input
+                  id="theme"
+                  name="theme"
+                  type="text"
+                  placeholder="Tema do projeto — ex.: Sustentabilidade na escola"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-lime-500"
+                />
+
+                <textarea
+                  id="description"
+                  name="description"
+                  rows={3}
+                  placeholder="Descrição breve do projeto"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-lime-500"
+                />
+              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-3">
+              <button
+                type="submit"
+                className="bg-lime-700 hover:bg-lime-800 text-white font-medium px-4 py-2 rounded-md"
+              >
+                Criar novo grupo
+              </button>
+
+              <Link
+                href="/dashboard"
+                className="bg-gray-100 hover:bg-gray-200 text-gray-900 font-medium px-4 py-2 rounded-md"
+              >
+                Voltar ao dashboard
+              </Link>
+            </div>
+          </form>
         </div>
       </section>
     </main>
