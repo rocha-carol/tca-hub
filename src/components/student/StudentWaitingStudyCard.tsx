@@ -1,9 +1,14 @@
 "use client";
 
-import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
+import {
+  STUDENT_JOURNEY_EVENTS,
+  STUDENT_JOURNEY_SECTION_IDS,
+  STUDENT_JOURNEY_STORAGE_KEYS,
+} from "@/lib/utils/constants";
+import type { AcademicReferenceResult } from "@/types/academic-reference";
 import type { ThemeGuideSuggestionResult } from "@/types/group-theme-guide-state";
 
 interface StudentWaitingStudyCardProps {
@@ -44,7 +49,7 @@ interface ExerciseStep {
   explanation: string;
   source: string;
   prompt: string;
-  referenceText: string;
+  fallbackReferenceText: string;
   placeholder: string;
 }
 
@@ -98,12 +103,68 @@ function normalizeText(value: string | null | undefined) {
   return value.replace(/\s+/g, " ").trim();
 }
 
+function readStoredBoolean(storageKey: string) {
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  return window.localStorage.getItem(storageKey) === "true";
+}
+
+function writeStoredBoolean(storageKey: string, value: boolean) {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.localStorage.setItem(storageKey, value ? "true" : "false");
+}
+
 function shortenText(value: string, maxLength: number) {
   if (value.length <= maxLength) {
     return value;
   }
 
   return `${value.slice(0, Math.max(0, maxLength - 3)).trimEnd()}...`;
+}
+
+function getShortReferenceLinkLabel(url: string) {
+  try {
+    const parsedUrl = new URL(url);
+
+    if (parsedUrl.hostname.includes("scholar.google")) {
+      return "Google Acadêmico";
+    }
+
+    return parsedUrl.hostname.replace(/^www\./, "");
+  } catch {
+    return "link";
+  }
+}
+
+function renderCitationWithShortLink(citation: string) {
+  const match = citation.match(/^(.*)<(https?:\/\/[^>]+)>(.*)$/);
+
+  if (!match) {
+    return citation;
+  }
+
+  const [, before, url, after] = match;
+  const linkLabel = getShortReferenceLinkLabel(url);
+
+  return (
+    <>
+      {before}
+      <a
+        href={url}
+        target="_blank"
+        rel="noreferrer"
+        className="font-medium text-[#1D4ED8] underline underline-offset-2 transition-colors hover:text-[#1E40AF]"
+      >
+        {linkLabel}
+      </a>
+      {after}
+    </>
+  );
 }
 
 function resolveThemeReference(themeText: string | null, themeGuideSuggestions: ThemeGuideSuggestionResult | null) {
@@ -130,13 +191,8 @@ function tokenizeRelevantWords(value: string) {
     .filter((item) => item.length >= 4 && !STOP_WORDS.has(item));
 }
 
-function buildExerciseSourceText(themeReference: string, themeGuideSuggestions: ThemeGuideSuggestionResult | null) {
-  const summary = normalizeText(themeGuideSuggestions?.interest_summary);
-
-  return (
-    summary ||
-    `Pesquisar sobre ${themeReference} exige comparar fontes confiáveis, anotar referências, compreender as ideias principais e reescrever o que foi aprendido com palavras do próprio grupo.`
-  );
+function buildExerciseSourceText(themeReference: string) {
+  return `O texto salvo pelo grupo indica um interesse de pesquisa relacionado a ${themeReference}. Para escrever com autoria, vale comparar referências confiáveis, compreender a ideia principal de cada leitura e só então reescrever o que foi aprendido com linguagem própria.`;
 }
 
 function evaluateRewriting(sourceText: string, rewrittenText: string): QuizFeedback {
@@ -184,7 +240,7 @@ function evaluateRewriting(sourceText: string, rewrittenText: string): QuizFeedb
 }
 
 function buildStudySteps(themeReference: string, themeGuideSuggestions: ThemeGuideSuggestionResult | null): StudyStep[] {
-  const exerciseSourceText = buildExerciseSourceText(themeReference, themeGuideSuggestions);
+  const exerciseSourceText = buildExerciseSourceText(themeReference);
 
   return [
     {
@@ -362,7 +418,7 @@ function buildStudySteps(themeReference: string, themeGuideSuggestions: ThemeGui
         "Agora é hora de praticar. Leia o texto-base abaixo e reescreva a ideia com palavras do próprio grupo, mostrando compreensão sem copiar a estrutura original.",
       source: "Fonte usada: síntese pedagógica simulada do TCA Hub para treino final de reescrita autoral.",
       prompt: "Reescreva a ideia abaixo com linguagem própria do grupo.",
-      referenceText: exerciseSourceText,
+      fallbackReferenceText: exerciseSourceText,
       placeholder:
         "Exemplo: nosso grupo entendeu que pesquisar bem sobre esse tema exige comparar fontes, identificar ideias principais e transformar a leitura em um texto próprio...",
     },
@@ -374,11 +430,20 @@ export function StudentWaitingStudyCard({
   themeText,
   themeGuideSuggestions,
 }: StudentWaitingStudyCardProps) {
+  const completionStorageKey = useMemo(
+    () => `${STUDENT_JOURNEY_STORAGE_KEYS.WAITING_STUDY_COMPLETED}:${groupId ?? "sem-grupo"}`,
+    [groupId]
+  );
   const [hasStartedStudySupport, setHasStartedStudySupport] = useState(false);
+  const [isCompleted, setIsCompleted] = useState(false);
+  const [showRewardUnlockedMessage, setShowRewardUnlockedMessage] = useState(false);
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [selectedOptionId, setSelectedOptionId] = useState<string | null>(null);
   const [rewrittenText, setRewrittenText] = useState("");
   const [activeFeedback, setActiveFeedback] = useState<QuizFeedback | null>(null);
+  const [academicReference, setAcademicReference] = useState<AcademicReferenceResult | null>(null);
+  const [academicReferenceError, setAcademicReferenceError] = useState<string | null>(null);
+  const [academicReferenceLoading, setAcademicReferenceLoading] = useState(false);
   const themeReference = resolveThemeReference(themeText, themeGuideSuggestions);
   const themePreview = shortenText(themeReference, 170);
   const studySteps = buildStudySteps(themePreview, themeGuideSuggestions);
@@ -387,7 +452,66 @@ export function StudentWaitingStudyCard({
     ? currentStep.options.find((option) => option.id === selectedOptionId) ?? null
     : null;
   const isLastStep = currentStepIndex === studySteps.length - 1;
-  const themeGuideHref = groupId ? `/estudante/groups/${groupId}/theme-guide` : null;
+  const exerciseReferenceText = useMemo(() => {
+    if (currentStep.type !== "exercise") {
+      return null;
+    }
+
+    return academicReference?.excerpt || currentStep.fallbackReferenceText;
+  }, [academicReference?.excerpt, currentStep]);
+  const displayedExerciseText = currentStep.type === "exercise"
+    ? (academicReferenceLoading && !academicReference
+        ? "A IA simulada está interpretando o texto salvo em 'Tema e contexto' para localizar uma referência acadêmica relacionada ao tema descrito pelo grupo."
+        : exerciseReferenceText)
+    : null;
+
+  useEffect(() => {
+    const storedCompleted = readStoredBoolean(completionStorageKey);
+
+    setIsCompleted(storedCompleted);
+    setShowRewardUnlockedMessage(false);
+
+    if (storedCompleted) {
+      setHasStartedStudySupport(false);
+    }
+  }, [completionStorageKey]);
+
+  useEffect(() => {
+    async function loadAcademicReference() {
+      if (!groupId || !hasStartedStudySupport || currentStep.type !== "exercise" || academicReferenceLoading || academicReference) {
+        return;
+      }
+
+      try {
+        setAcademicReferenceLoading(true);
+        setAcademicReferenceError(null);
+
+        const response = await fetch(`/student/groups/${groupId}/academic-reference`, {
+          method: "GET",
+          cache: "no-store",
+        });
+
+        const payload = (await response.json().catch(() => null)) as AcademicReferenceResult | { message?: string } | null;
+
+        if (!response.ok) {
+          const message = payload && "message" in payload && typeof payload.message === "string"
+            ? payload.message
+            : "Não foi possível carregar uma fonte acadêmica agora.";
+          throw new Error(message);
+        }
+
+        setAcademicReference(payload as AcademicReferenceResult);
+      } catch (error) {
+        setAcademicReferenceError(
+          error instanceof Error ? error.message : "Não foi possível carregar uma fonte acadêmica agora."
+        );
+      } finally {
+        setAcademicReferenceLoading(false);
+      }
+    }
+
+    void loadAcademicReference();
+  }, [academicReference, academicReferenceLoading, currentStep, groupId, hasStartedStudySupport]);
 
   function handleChooseOption(optionId: string) {
     if (currentStep.type !== "quiz") {
@@ -425,50 +549,79 @@ export function StudentWaitingStudyCard({
       return;
     }
 
-    setActiveFeedback(evaluateRewriting(currentStep.referenceText, rewrittenText));
+    setActiveFeedback(evaluateRewriting(exerciseReferenceText || currentStep.fallbackReferenceText, rewrittenText));
+  }
+
+  function handleCompleteStudyStep() {
+    writeStoredBoolean(completionStorageKey, true);
+    setIsCompleted(true);
+    setShowRewardUnlockedMessage(true);
+    setHasStartedStudySupport(false);
+    setActiveFeedback(null);
+
+    window.dispatchEvent(
+      new CustomEvent(STUDENT_JOURNEY_EVENTS.WAITING_STUDY_COMPLETED, {
+        detail: { storageKey: completionStorageKey },
+      })
+    );
   }
 
   return (
-    <Card className="mt-4 border border-[#D7E6FF] bg-[linear-gradient(180deg,#F8FBFF_0%,#EEF5FF_100%)]">
-      <div className="space-y-4">
-        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-          <div className="max-w-3xl">
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge variant="blue">Apoio de IA simulada</Badge>
-              <Badge variant="yellow">Enquanto a resposta não chega</Badge>
-            </div>
-
-            <h3 className="mt-3 text-lg font-semibold text-[#1F2937]">
-              Enquanto você aguarda a próxima etapa, que tal aprender a pesquisar melhor sobre seu tema?
-            </h3>
-
-            <p className="mt-2 text-sm leading-relaxed text-[#374151]">
-              A plataforma aproveitou o tema já registrado pelo grupo para reunir fontes de partida, orientações
-              sobre autoria e dicas de escrita que ajudam a transformar pesquisa em construção real de conhecimento.
-            </p>
-
-            {!hasStartedStudySupport ? (
-              <button
-                type="button"
-                onClick={() => setHasStartedStudySupport(true)}
-                className="mt-4 inline-flex rounded-lg bg-[#1D4ED8] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#1E40AF]"
-              >
-                Vamos lá
-              </button>
-            ) : null}
+    <div id={STUDENT_JOURNEY_SECTION_IDS.WAITING_STUDY} className="scroll-mt-24">
+      <Card className="mt-4 border border-[#D7E6FF] bg-[linear-gradient(180deg,#F8FBFF_0%,#EEF5FF_100%)]">
+        <div className="space-y-4">
+        {showRewardUnlockedMessage ? (
+          <div className="rounded-xl border border-[#CFE8C8] bg-[#F6FBF4] px-4 py-3">
+            <p className="text-sm font-semibold text-[#2F6F35]">Parabéns, você desbloqueou uma nova recompensa.</p>
           </div>
+        ) : null}
 
-          {themeGuideHref ? (
-            <Link
-              href={themeGuideHref}
-              className="inline-flex rounded-lg border border-[#BFDBFE] bg-white px-4 py-2 text-sm font-medium text-[#1D4ED8] transition-colors hover:border-[#93C5FD] hover:bg-[#F8FBFF]"
-            >
-              Revisar escolha do tema
-            </Link>
-          ) : null}
-        </div>
+        {isCompleted ? (
+          <div className="flex flex-col gap-3 rounded-xl border border-[#D7E6FF] bg-white/85 px-4 py-4 md:flex-row md:items-start md:justify-between">
+            <div className="max-w-3xl">
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant="blue">Apoio de IA simulada</Badge>
+                <Badge variant="green">Etapa concluída</Badge>
+              </div>
 
-        {hasStartedStudySupport ? (
+              <h3 className="mt-3 text-base font-semibold text-[#1F2937]">Pesquisa em espera finalizada</h3>
+
+              <p className="mt-2 text-sm leading-relaxed text-[#374151]">
+                Tema trabalhado: <span className="font-medium text-[#1F2937]">{themePreview}</span>
+              </p>
+            </div>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+            <div className="max-w-3xl">
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant="blue">Apoio de IA simulada</Badge>
+                <Badge variant="yellow">Enquanto a resposta não chega</Badge>
+              </div>
+
+              <h3 className="mt-3 text-lg font-semibold text-[#1F2937]">
+                Enquanto você aguarda a próxima etapa, que tal aprender a pesquisar melhor sobre seu tema?
+              </h3>
+
+              <p className="mt-2 text-sm leading-relaxed text-[#374151]">
+                A plataforma aproveitou o tema já registrado pelo grupo para reunir fontes de partida, orientações
+                sobre autoria e dicas de escrita que ajudam a transformar pesquisa em construção real de conhecimento.
+              </p>
+
+              {!hasStartedStudySupport ? (
+                <button
+                  type="button"
+                  onClick={() => setHasStartedStudySupport(true)}
+                  className="mt-4 inline-flex rounded-lg bg-[#1D4ED8] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#1E40AF]"
+                >
+                  Vamos lá
+                </button>
+              ) : null}
+            </div>
+          </div>
+        )}
+
+        {!isCompleted && hasStartedStudySupport ? (
           <div className="rounded-xl border border-[#D7E6FF] bg-white/80 px-4 py-4">
             <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
               <div className="max-w-3xl">
@@ -519,8 +672,28 @@ export function StudentWaitingStudyCard({
                 <p className="text-sm font-semibold text-[#1F2937]">{currentStep.prompt}</p>
 
                 <div className="mt-4 rounded-xl border border-[#CFE8C8] bg-white px-4 py-3">
-                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#2F6F35]">Texto-base para reescrever</p>
-                  <p className="mt-2 text-sm leading-relaxed text-[#374151]">{currentStep.referenceText}</p>
+                  <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+                    <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#2F6F35]">Texto-base para reescrever</p>
+                    {academicReferenceLoading ? <Badge variant="blue">Buscando fonte acadêmica...</Badge> : null}
+                  </div>
+
+                  <p className="mt-2 text-sm leading-relaxed text-[#374151]">
+                    {displayedExerciseText}
+                  </p>
+
+                  {academicReference ? (
+                    <div className="mt-4 rounded-lg border border-[#D7E6FF] bg-[#F8FBFF] px-3 py-3">
+                      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#1D4ED8]">Referências</p>
+                      <p className="mt-2 text-sm font-medium text-[#1F2937]">{academicReference.title}</p>
+                      <p className="mt-1 text-xs leading-relaxed text-[#4B5563]">{renderCitationWithShortLink(academicReference.citation)}</p>
+                    </div>
+                  ) : null}
+
+                  {academicReferenceError ? (
+                    <p className="mt-3 text-xs leading-relaxed text-[#92400E]">
+                      Não foi possível localizar uma fonte acadêmica agora. O treino continua com um texto-base pedagógico de apoio. Detalhe: {academicReferenceError}
+                    </p>
+                  ) : null}
                 </div>
 
                 <label className="mt-4 block text-sm font-medium text-[#1F2937]" htmlFor="simulador-reescrita">
@@ -595,13 +768,23 @@ export function StudentWaitingStudyCard({
                       </button>
                     )
                   ) : (
-                    <button
-                      type="button"
-                      disabled
-                      className="inline-flex rounded-lg bg-[#2F6F35] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#275B2C] disabled:cursor-default disabled:bg-[#9BC79F]"
-                    >
-                      Sequência concluída
-                    </button>
+                    activeFeedback.badgeVariant === "green" ? (
+                      <button
+                        type="button"
+                        onClick={handleCompleteStudyStep}
+                        className="inline-flex rounded-lg bg-[#2F6F35] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#275B2C]"
+                      >
+                        Concluir etapa
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        disabled
+                        className="inline-flex rounded-lg bg-[#2F6F35] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#275B2C] disabled:cursor-default disabled:bg-[#9BC79F]"
+                      >
+                        Sequência concluída
+                      </button>
+                    )
                   )}
                 </div>
               </div>
@@ -617,7 +800,8 @@ export function StudentWaitingStudyCard({
             </div>
           </div>
         ) : null}
-      </div>
-    </Card>
+        </div>
+      </Card>
+    </div>
   );
 }

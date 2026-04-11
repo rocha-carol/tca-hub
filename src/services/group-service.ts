@@ -1,5 +1,8 @@
 import { createClient } from "@/lib/supabase/server";
 import type { AdvisorIndicationStatus, Group, GroupStatus } from "@/types/group";
+import { fetchGroupAdvisorPreferences } from "@/services/group-advisor-preference-service";
+import { suggestPrimaryAdvisorByPreference } from "@/services/advisor-indication-service";
+import { createGroupInternalNotification } from "@/services/group-internal-notification-service";
 
 function isGroupsTableMissing(message: string) {
 	return message.includes("Could not find the table 'public.groups'");
@@ -33,6 +36,39 @@ function mapSupabaseErrorToIndicationMessage(message: string) {
 	}
 
 	return null;
+}
+
+function getGroupDisplayLabel(group: Pick<Group, "id" | "theme">) {
+	return group.theme?.trim() || `Grupo ${String(group.id).slice(0, 8)}`;
+}
+
+async function createAdvisorIndicationSystemNotification(params: {
+	group: Group;
+	preferenceOrder: number;
+	isAutomaticForward?: boolean;
+}): Promise<void> {
+	const { group, preferenceOrder, isAutomaticForward = false } = params;
+	const groupLabel = getGroupDisplayLabel(group);
+	const preferenceLabel = `${preferenceOrder}ª preferência`;
+
+	const title = isAutomaticForward
+		? "Nova solicitação automática de orientação"
+		: "Nova solicitação de orientação";
+
+	const message = isAutomaticForward
+		? `O grupo ${groupLabel} avançou automaticamente para ${preferenceLabel} e agora aguarda sua resposta como orientador indicado.`
+		: `O grupo ${groupLabel} enviou uma solicitação de orientação para ${preferenceLabel} e aguarda sua resposta.`;
+
+	await createGroupInternalNotification({
+		group_id: String(group.id),
+		section_id: null,
+		title,
+		message,
+		notification_type: "orientacao",
+		author_profile_id: null,
+		author_role: "coordinator",
+		author_name: "TCA Hub",
+	});
 }
 
 async function recalculateAdvisorIndicationQueue(excludedGroupId?: string): Promise<void> {
@@ -91,7 +127,7 @@ async function recalculateAdvisorIndicationQueue(excludedGroupId?: string): Prom
 
 	const { data: preferencesRows, error: preferencesError } = await supabase
 		.from("group_advisor_preferences")
-		.select("group_id, advisor_id, preference_order")
+		.select("group_id, advisor_id, preference_order, indication_status")
 		.order("group_id", { ascending: true })
 		.order("preference_order", { ascending: true });
 
@@ -102,6 +138,10 @@ async function recalculateAdvisorIndicationQueue(excludedGroupId?: string): Prom
 	const preferencesMap = new Map<string, Array<{ advisor_id: string }>>();
 	for (const row of preferencesRows || []) {
 		const groupId = String(row.group_id);
+		if (String(row.indication_status ?? "") === "recusada") {
+			continue;
+		}
+
 		const list = preferencesMap.get(groupId) ?? [];
 		list.push({ advisor_id: String(row.advisor_id) });
 		preferencesMap.set(groupId, list);
@@ -199,6 +239,44 @@ async function ensureAdvisorAvailableForPrimaryAssignment(
 		throw new Error(
 			`Orientador indisponível: limite de orientações atingido (${currentCount}/${maxOrientacoes}).`
 		);
+	}
+}
+
+async function clearPendingAdvisorPreferenceStatuses(groupId: string): Promise<void> {
+	const supabase = await createClient();
+
+	const { error } = await supabase
+		.from("group_advisor_preferences")
+		.update({
+			indication_status: null,
+			indication_updated_at: new Date().toISOString(),
+		})
+		.eq("group_id", groupId)
+		.eq("indication_status", "pendente");
+
+	if (error) {
+		throw new Error(`Erro ao limpar status pendente das preferências: ${error.message}`);
+	}
+}
+
+async function updateAdvisorPreferenceIndicationStatus(
+	groupId: string,
+	advisorId: string,
+	status: Exclude<AdvisorIndicationStatus, null>
+): Promise<void> {
+	const supabase = await createClient();
+
+	const { error } = await supabase
+		.from("group_advisor_preferences")
+		.update({
+			indication_status: status,
+			indication_updated_at: new Date().toISOString(),
+		})
+		.eq("group_id", groupId)
+		.eq("advisor_id", advisorId);
+
+	if (error) {
+		throw new Error(`Erro ao atualizar status da preferência de orientador: ${error.message}`);
 	}
 }
 
@@ -396,7 +474,14 @@ export async function initiateAdvisorIndication(
 	groupId: string,
 	indicatedAdvisorId: string
 ): Promise<void> {
+	const group = await fetchGroupById(groupId);
+	if (!group) {
+		throw new Error("Grupo não encontrado para iniciar indicação.");
+	}
+
 	const supabase = await createClient();
+
+	await clearPendingAdvisorPreferenceStatuses(groupId);
 
 	const { error } = await supabase
 		.from("groups")
@@ -415,6 +500,12 @@ export async function initiateAdvisorIndication(
 
 		throw new Error(`Erro ao iniciar indicação de orientador: ${error.message}`);
 	}
+
+	await updateAdvisorPreferenceIndicationStatus(groupId, indicatedAdvisorId, "pendente");
+	await createAdvisorIndicationSystemNotification({
+		group,
+		preferenceOrder: 1,
+	});
 }
 
 /**
@@ -443,25 +534,56 @@ export async function respondAdvisorIndication(
 		await ensureAdvisorAvailableForPrimaryAssignment(group.indicated_advisor_id, groupId);
 	}
 
+	const indicatedAdvisorId = String(group.indicated_advisor_id);
+	const preferences = await fetchGroupAdvisorPreferences(groupId);
+	const currentPreference = preferences.find((preference) => String(preference.advisor_id) === indicatedAdvisorId) ?? null;
+
 	const supabase = await createClient();
 
-	const updatePayload =
-		decision === "aceita"
-			? {
+	if (decision === "aceita") {
+		const { error } = await supabase
+			.from("groups")
+			.update({
 				primary_advisor_id: group.indicated_advisor_id,
 				co_advisor_id: normalizedCoAdvisorId,
 				indication_status: "aceita",
 				indication_updated_at: new Date().toISOString(),
-			}
-			: {
-				indicated_advisor_id: null,
-				indication_status: "recusada",
-				indication_updated_at: new Date().toISOString(),
-			};
+			})
+			.eq("id", groupId);
 
+		if (error) {
+			const indicationMessage = mapSupabaseErrorToIndicationMessage(error.message);
+			if (indicationMessage) {
+				throw new Error(indicationMessage);
+			}
+
+			throw new Error(`Erro ao registrar resposta da indicação: ${error.message}`);
+		}
+
+		await clearPendingAdvisorPreferenceStatuses(groupId);
+		await updateAdvisorPreferenceIndicationStatus(groupId, indicatedAdvisorId, "aceita");
+		await recalculateAdvisorIndicationQueue(groupId);
+		return;
+	}
+
+	await clearPendingAdvisorPreferenceStatuses(groupId);
+	await updateAdvisorPreferenceIndicationStatus(groupId, indicatedAdvisorId, "recusada");
+
+	const nextPreferenceStartOrder = currentPreference ? currentPreference.preference_order + 1 : 1;
+	const nextAdvisor = await suggestPrimaryAdvisorByPreference(groupId, {
+		minimumPreferenceOrder: nextPreferenceStartOrder,
+		skipAdvisorIds: [indicatedAdvisorId],
+		skipRefusedPreferences: true,
+	});
+
+	const nextAdvisorId = nextAdvisor.suggested ? String(nextAdvisor.suggested.id) : null;
 	const { error } = await supabase
 		.from("groups")
-		.update(updatePayload)
+		.update({
+			indicated_advisor_id: nextAdvisorId,
+			indication_status: nextAdvisorId ? "pendente" : "recusada",
+			indication_updated_at: new Date().toISOString(),
+		})
 		.eq("id", groupId);
 
 	if (error) {
@@ -473,8 +595,14 @@ export async function respondAdvisorIndication(
 		throw new Error(`Erro ao registrar resposta da indicação: ${error.message}`);
 	}
 
-	if (decision === "aceita") {
-		await recalculateAdvisorIndicationQueue(groupId);
+	if (nextAdvisorId) {
+		await updateAdvisorPreferenceIndicationStatus(groupId, nextAdvisorId, "pendente");
+		const nextPreference = preferences.find((preference) => String(preference.advisor_id) === nextAdvisorId) ?? null;
+		await createAdvisorIndicationSystemNotification({
+			group,
+			preferenceOrder: nextPreference?.preference_order ?? nextPreferenceStartOrder,
+			isAutomaticForward: true,
+		});
 	}
 }
 

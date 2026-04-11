@@ -17,6 +17,12 @@ export interface AdvisorIndicationResult {
   checked: AdvisorIndicationCheck[];
 }
 
+interface SuggestPrimaryAdvisorOptions {
+  minimumPreferenceOrder?: number;
+  skipAdvisorIds?: string[];
+  skipRefusedPreferences?: boolean;
+}
+
 /**
  * Percorre a lista ordenada de preferências de orientadores do grupo e retorna
  * o primeiro orientador que ainda tem vagas disponíveis (count < max_orientacoes).
@@ -24,9 +30,12 @@ export interface AdvisorIndicationResult {
  * Ignora orientadores inativos.
  */
 export async function suggestPrimaryAdvisorByPreference(
-  groupId: string
+  groupId: string,
+  options: SuggestPrimaryAdvisorOptions = {}
 ): Promise<AdvisorIndicationResult> {
   const supabase = await createClient();
+  const minimumPreferenceOrder = options.minimumPreferenceOrder ?? 1;
+  const skippedAdvisorIds = new Set((options.skipAdvisorIds ?? []).map((id) => String(id)));
 
   const preferences = await fetchGroupAdvisorPreferences(groupId);
 
@@ -40,6 +49,18 @@ export async function suggestPrimaryAdvisorByPreference(
   const checked: AdvisorIndicationCheck[] = [];
 
   for (const pref of preferences) {
+    if (pref.preference_order < minimumPreferenceOrder) {
+      continue;
+    }
+
+    if (options.skipRefusedPreferences && pref.indication_status === "recusada") {
+      continue;
+    }
+
+    if (skippedAdvisorIds.has(String(pref.advisor_id))) {
+      continue;
+    }
+
     const advisor = advisorMap.get(String(pref.advisor_id));
 
     if (!advisor || advisor.active === false) {

@@ -10,6 +10,7 @@ import { fetchGroupAdvisorPreferences, replaceGroupAdvisorPreferences } from "@/
 import { suggestPrimaryAdvisorByPreference } from "@/services/advisor-indication-service";
 import { initiateAdvisorIndication } from "@/services/group-service";
 import { STUDENT_ROUTES } from "@/lib/utils/constants";
+import type { GroupAdvisorPreference } from "@/types/group-advisor-preference";
 
 interface StudentAdvisorIndicationPageProps {
   params: Promise<{ id: string }>;
@@ -47,6 +48,7 @@ function getAdvisorOptionLabel(name: string, roleTitle: string | null | undefine
 function getAdvisorAvailabilityMeta(
   advisor: Awaited<ReturnType<typeof fetchAllAdvisors>>[number] | undefined,
   group: NonNullable<Awaited<ReturnType<typeof resolveStudentGroupContext>>["group"]>,
+  preference: GroupAdvisorPreference | undefined,
   preferenceOrder: number
 ) {
   if (!advisor) {
@@ -57,15 +59,15 @@ function getAdvisorAvailabilityMeta(
     };
   }
 
-  if (group.indication_status === "pendente" && idsAreEqual(group.indicated_advisor_id, advisor.id)) {
+  if (preference?.indication_status === "pendente") {
     return {
       label: "Aguardando confirmação do orientador",
-      helper: "A solicitação já foi enviada para este orientador.",
+      helper: "A solicitação de orientação já foi enviada para este orientador.",
       badgeVariant: "yellow" as const,
     };
   }
 
-  if (group.indication_status === "aceita" && idsAreEqual(group.primary_advisor_id, advisor.id)) {
+  if (preference?.indication_status === "aceita" || (group.indication_status === "aceita" && idsAreEqual(group.primary_advisor_id, advisor.id))) {
     return {
       label: "Aceite confirmado",
       helper: "Este orientador confirmou o acompanhamento do grupo.",
@@ -73,10 +75,10 @@ function getAdvisorAvailabilityMeta(
     };
   }
 
-  if (group.indication_status === "recusada" && preferenceOrder === 1) {
+  if (preference?.indication_status === "recusada") {
     return {
       label: "Orientador indisponível",
-      helper: "A primeira solicitação não pôde seguir para esta orientação.",
+      helper: `A ${preferenceOrder}ª solicitação não pôde seguir para esta orientação.`,
       badgeVariant: "gray" as const,
     };
   }
@@ -319,11 +321,12 @@ export default async function StudentAdvisorIndicationPage({
                   </thead>
                   <tbody className="divide-y divide-[#EEF2E8]">
                     {[
-                      { order: 1, fieldName: "preference_1", advisor: preferredAdvisor1 },
-                      { order: 2, fieldName: "preference_2", advisor: preferredAdvisor2 },
-                      { order: 3, fieldName: "preference_3", advisor: preferredAdvisor3 },
+                      { order: 1, fieldName: "preference_1", advisor: preferredAdvisor1, preference: preferenceAdvisor1 },
+                      { order: 2, fieldName: "preference_2", advisor: preferredAdvisor2, preference: preferenceAdvisor2 },
+                      { order: 3, fieldName: "preference_3", advisor: preferredAdvisor3, preference: preferenceAdvisor3 },
                     ].map(({ order, fieldName, advisor }) => {
-                      const availability = getAdvisorAvailabilityMeta(advisor, group, order);
+                      const preference = order === 1 ? preferenceAdvisor1 : order === 2 ? preferenceAdvisor2 : preferenceAdvisor3;
+                      const availability = getAdvisorAvailabilityMeta(advisor, group, preference, order);
 
                       return (
                         <tr key={fieldName} className="align-top">

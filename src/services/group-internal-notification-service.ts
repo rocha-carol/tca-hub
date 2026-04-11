@@ -50,6 +50,33 @@ export async function fetchGroupInternalNotifications(groupId: string): Promise<
   return (data || []) as GroupInternalNotification[];
 }
 
+export async function fetchGroupInternalNotificationsByGroupIds(
+  groupIds: string[]
+): Promise<GroupInternalNotification[]> {
+  if (groupIds.length === 0) {
+    return [];
+  }
+
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("group_internal_notifications")
+    .select("*")
+    .in("group_id", groupIds)
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    const mapped = mapNotificationsError(error.message, error.code);
+    if (mapped) {
+      throw new Error(mapped);
+    }
+
+    throw new Error(`Erro ao buscar notificações internas por grupos: ${error.message}`);
+  }
+
+  return (data || []) as GroupInternalNotification[];
+}
+
 export async function createGroupInternalNotification(
   data: CreateGroupInternalNotificationData
 ): Promise<void> {

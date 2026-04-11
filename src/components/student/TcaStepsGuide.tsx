@@ -8,7 +8,12 @@ import { ProgressBar } from "@/components/ui/ProgressBar";
 import type { Group } from "@/types/group";
 import type { ThemeGuideSuggestionResult } from "@/types/group-theme-guide-state";
 import type { GroupProjectSection } from "@/types/project-section";
-import { STUDENT_ROUTES } from "@/lib/utils/constants";
+import {
+  STUDENT_JOURNEY_EVENTS,
+  STUDENT_JOURNEY_SECTION_IDS,
+  STUDENT_JOURNEY_STORAGE_KEYS,
+  STUDENT_ROUTES,
+} from "@/lib/utils/constants";
 import { StudentRewardsCard } from "@/components/student/StudentRewardsCard";
 import { StudentWaitingStudyCard } from "@/components/student/StudentWaitingStudyCard";
 
@@ -104,6 +109,14 @@ function writeStoredJourneyProgress(progress: StoredJourneyProgress) {
   }
 
   window.sessionStorage.setItem(JOURNEY_PROGRESS_STORAGE_KEY, JSON.stringify(progress));
+}
+
+function readStoredBoolean(storageKey: string) {
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  return window.localStorage.getItem(storageKey) === "true";
 }
 
 function sectionHasProgress(section?: GroupProjectSection | null) {
@@ -322,6 +335,9 @@ export function TcaStepsGuide({
 }: TcaStepsGuideProps) {
   const hasDataWarning = Boolean(studentsError || groupsError);
   const [activeRecognition, setActiveRecognition] = useState<ActiveRecognition | null>(null);
+  const [waitingStudyCompleted, setWaitingStudyCompleted] = useState(false);
+  const [waitingStudyVisible, setWaitingStudyVisible] = useState(false);
+  const [waitingStudyCompletionNotice, setWaitingStudyCompletionNotice] = useState(false);
   const {
     completedSteps,
     currentStepIndex,
@@ -334,6 +350,68 @@ export function TcaStepsGuide({
   } = getJourneySnapshot(hasGroup, group, groupId, nextJourneyHref, projectSections);
   const themeSection = findSection(projectSections, "tema_contexto");
   const shouldShowWaitingStudyCard = Boolean(group && group.indication_status === "pendente");
+  const waitingStudyStorageKey = `${STUDENT_JOURNEY_STORAGE_KEYS.WAITING_STUDY_COMPLETED}:${group?.id ?? "sem-grupo"}`;
+
+  useEffect(() => {
+    function syncWaitingStudyState(showCompletionNotice = false) {
+      if (!shouldShowWaitingStudyCard) {
+        setWaitingStudyCompleted(false);
+        setWaitingStudyVisible(false);
+        setWaitingStudyCompletionNotice(false);
+        return;
+      }
+
+      const completed = readStoredBoolean(waitingStudyStorageKey);
+      const openedFromSidebar = window.location.hash === `#${STUDENT_JOURNEY_SECTION_IDS.WAITING_STUDY}`;
+
+      setWaitingStudyCompleted(completed);
+      setWaitingStudyVisible(!completed || openedFromSidebar);
+      setWaitingStudyCompletionNotice(showCompletionNotice && completed && !openedFromSidebar);
+
+      if (openedFromSidebar) {
+        requestAnimationFrame(() => {
+          document.getElementById(STUDENT_JOURNEY_SECTION_IDS.WAITING_STUDY)?.scrollIntoView({
+            behavior: "smooth",
+            block: "start",
+          });
+        });
+      }
+    }
+
+    syncWaitingStudyState();
+
+    function handleHashChange() {
+      syncWaitingStudyState();
+    }
+
+    function handleCompletedEvent(event: Event) {
+      const customEvent = event as CustomEvent<{ storageKey?: string }>;
+
+      if (customEvent.detail?.storageKey && customEvent.detail.storageKey !== waitingStudyStorageKey) {
+        return;
+      }
+
+      syncWaitingStudyState(true);
+    }
+
+    function handleStorage(event: StorageEvent) {
+      if (event.key !== waitingStudyStorageKey) {
+        return;
+      }
+
+      syncWaitingStudyState();
+    }
+
+    window.addEventListener("hashchange", handleHashChange);
+    window.addEventListener(STUDENT_JOURNEY_EVENTS.WAITING_STUDY_COMPLETED, handleCompletedEvent as EventListener);
+    window.addEventListener("storage", handleStorage);
+
+    return () => {
+      window.removeEventListener("hashchange", handleHashChange);
+      window.removeEventListener(STUDENT_JOURNEY_EVENTS.WAITING_STUDY_COMPLETED, handleCompletedEvent as EventListener);
+      window.removeEventListener("storage", handleStorage);
+    };
+  }, [shouldShowWaitingStudyCard, waitingStudyStorageKey]);
 
   useEffect(() => {
     const previousProgress = readStoredJourneyProgress();
@@ -389,43 +467,54 @@ export function TcaStepsGuide({
         </div>
 
         <div className="rounded-xl border border-[#DCEBD5] bg-[#F8FBF6] px-4 py-4">
-          <div className="space-y-3">
-            <div>
-              <p className="text-sm font-semibold text-[#1F2937]">Sua situação atual</p>
-              <p className="text-xs text-[#6B7280] mt-1">Estudante: {studentName}</p>
+          {hasDataWarning && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+              Não foi possível validar tudo agora. Você ainda pode seguir com as ações iniciais.
             </div>
+          )}
 
-            {hasDataWarning && (
-              <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-                Não foi possível validar tudo agora. Você ainda pode seguir com as ações iniciais.
-              </div>
-            )}
-
-            {!group ? (
-              <div className="space-y-2 text-sm text-[#374151]">
-                <p>Você ainda não participa de um grupo.</p>
-                <p>Para começar o projeto, é necessário formar um grupo com seus colegas.</p>
-              </div>
-            ) : (
-              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                <div className="space-y-1">
-                  <p className="text-sm text-[#374151]">Você já está cadastrado no:</p>
-                  <p className="font-semibold text-[#1F2937]">
-                    {group.theme || `Grupo ${String(group.id).slice(0, 8)}`}
+          {waitingStudyCompletionNotice ? (
+            <div className={`${hasDataWarning ? "mt-4 pt-4 border-t border-[#DCEBD5]" : ""} rounded-xl border border-[#CFE8C8] bg-[#F3FBF1] px-4 py-4`}>
+              <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+                <div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge variant="green">Apoio concluído</Badge>
+                    <p className="text-sm font-semibold text-[#1F2937]">O estudo em espera saiu da página principal.</p>
+                  </div>
+                  <p className="mt-2 text-sm leading-relaxed text-[#374151]">
+                    Para reabrir esse conteúdo quando quiser, basta usar o link disponível no sidebar da jornada.
                   </p>
                 </div>
 
-                <Link
-                  href={`${STUDENT_ROUTES.GROUP}/${group.id}`}
-                  className="inline-flex rounded-lg bg-white border border-lime-200 hover:border-lime-300 text-lime-800 font-medium px-4 py-2"
+                <button
+                  type="button"
+                  onClick={() => setWaitingStudyCompletionNotice(false)}
+                  className="text-xs font-medium text-[#2F6F35] hover:underline"
                 >
-                  Acessar meu grupo
-                </Link>
+                  Fechar
+                </button>
               </div>
-            )}
-          </div>
+            </div>
+          ) : null}
 
-          <div className="mt-4 pt-4 border-t border-[#DCEBD5] flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          {shouldShowWaitingStudyCard && waitingStudyVisible ? (
+            <StudentWaitingStudyCard
+              groupId={group?.id}
+              themeText={themeSection?.content ?? group?.theme ?? null}
+              themeGuideSuggestions={themeGuideSuggestions}
+            />
+          ) : null}
+        </div>
+
+        <ProgressBar
+          value={completedSteps}
+          max={steps.length}
+          label="Progresso da jornada"
+          colorClass="bg-[#4CAF50]"
+        />
+
+        <div className="rounded-xl border border-[#DCEBD5] bg-[#F8FBF6] px-4 py-4">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div>
               <p className="text-sm font-semibold text-[#2F6F35]">{currentMissionTitle}</p>
               <p className="text-sm text-[#374151] mt-1">{currentMission}</p>
@@ -444,22 +533,7 @@ export function TcaStepsGuide({
               </Link>
             </div>
           </div>
-
-          {shouldShowWaitingStudyCard ? (
-            <StudentWaitingStudyCard
-              groupId={group?.id}
-              themeText={themeSection?.content ?? group?.theme ?? null}
-              themeGuideSuggestions={themeGuideSuggestions}
-            />
-          ) : null}
         </div>
-
-        <ProgressBar
-          value={completedSteps}
-          max={steps.length}
-          label="Progresso da jornada"
-          colorClass="bg-[#4CAF50]"
-        />
 
         {activeRecognition ? (
           <div className="rounded-xl border border-[#CFE8C8] bg-[#F3FBF1] px-4 py-4">

@@ -3,6 +3,16 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
+import {
+  buildRewardStates,
+  buildRewardMetrics,
+  formatRewardPoints,
+  type RewardTier,
+} from "@/lib/student-rewards";
+import {
+  STUDENT_JOURNEY_EVENTS,
+  STUDENT_JOURNEY_STORAGE_KEYS,
+} from "@/lib/utils/constants";
 import type { Group } from "@/types/group";
 import type { GroupProjectSection } from "@/types/project-section";
 
@@ -13,42 +23,13 @@ interface StudentRewardsCardProps {
   repertoryItemsCount: number;
 }
 
-type RewardTier = "silver" | "gold" | "emerald" | "violet" | "ultra";
+function readStoredBoolean(storageKey: string) {
+  if (typeof window === "undefined") {
+    return false;
+  }
 
-interface RewardMetrics {
-  hasGroup: boolean;
-  memberCount: number;
-  totalWords: number;
-  themeWords: number;
-  processPhotosCount: number;
-  repertoryItemsCount: number;
-  activeMinutes: number;
-  themeStarted: boolean;
-  advisorRequested: boolean;
-  advisorConfirmed: boolean;
-  problemStarted: boolean;
-  objectivesStarted: boolean;
-  methodologyStarted: boolean;
-  planningCompleted: boolean;
-  developmentStarted: boolean;
-  resultStarted: boolean;
-  journeyCompleted: boolean;
-  platformCompleted: boolean;
+  return window.localStorage.getItem(storageKey) === "true";
 }
-
-interface RewardDefinition {
-  id: string;
-  title: string;
-  description: string;
-  flavor: string;
-  icon: string;
-  tier: RewardTier;
-  points: number;
-  unlocked: (metrics: RewardMetrics) => boolean;
-}
-
-const ACTIVE_TIME_STORAGE_KEY = "tca-hub:journey-active-minutes";
-const MAX_REWARD_POINTS = 2;
 
 function readStoredActiveMinutes(storageKey: string) {
   if (typeof window === "undefined") {
@@ -70,43 +51,6 @@ function writeStoredActiveMinutes(storageKey: string, value: number) {
   }
 
   window.localStorage.setItem(storageKey, String(Math.max(0, Math.floor(value))));
-}
-
-function findSection(projectSections: GroupProjectSection[], sectionKey: string) {
-  return projectSections.find((section) => section.section_key === sectionKey) ?? null;
-}
-
-function sectionHasProgress(section?: GroupProjectSection | null) {
-  if (!section) {
-    return false;
-  }
-
-  return section.status !== "nao_iniciado" || Boolean(section.content?.trim());
-}
-
-function countWords(value: string | null | undefined) {
-  if (!value) {
-    return 0;
-  }
-
-  return value
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean).length;
-}
-
-function countGroupMembers(group: Group | null) {
-  if (!group) {
-    return 0;
-  }
-
-  return [
-    group.member_1_name,
-    group.member_2_name,
-    group.member_3_name,
-    group.member_4_name,
-    group.member_5_name,
-  ].filter((memberName) => typeof memberName === "string" && memberName.trim().length > 0).length;
 }
 
 function getRewardToneClasses(tier: RewardTier, unlocked: boolean) {
@@ -197,225 +141,6 @@ function getRewardToneClasses(tier: RewardTier, unlocked: boolean) {
   };
 }
 
-function formatPoints(points: number) {
-  return points.toFixed(2).replace(".", ",");
-}
-
-function buildRewardDefinitions(): RewardDefinition[] {
-  return [
-    {
-      id: "first-visit",
-      title: "Primeiro passo",
-      description: "A área de jornada foi aberta e a aventura no TCA Hub começou oficialmente.",
-      flavor: "Toda coleção começa com a primeira carta descoberta.",
-      icon: "🌱",
-      tier: "silver",
-      points: 0.03,
-      unlocked: () => true,
-    },
-    {
-      id: "group-formed",
-      title: "Grupo formado",
-      description: "O grupo já existe e liberou a trilha principal do projeto.",
-      flavor: "Sem equipe não existe guilda, sem guilda não existe jornada.",
-      icon: "🤝",
-      tier: "silver",
-      points: 0.05,
-      unlocked: (metrics) => metrics.hasGroup,
-    },
-    {
-      id: "team-expanded",
-      title: "Equipe ampliada",
-      description: "Três ou mais integrantes já estão envolvidos na construção coletiva.",
-      flavor: "A carta ganha força quando a inteligência deixa de ser solitária.",
-      icon: "👥",
-      tier: "gold",
-      points: 0.07,
-      unlocked: (metrics) => metrics.memberCount >= 3,
-    },
-    {
-      id: "theme-started",
-      title: "Tema em construção",
-      description: "A seção de tema já ganhou os primeiros registros do grupo.",
-      flavor: "Toda grande investigação nasce de uma centelha bem guardada.",
-      icon: "💡",
-      tier: "silver",
-      points: 0.05,
-      unlocked: (metrics) => metrics.themeStarted,
-    },
-    {
-      id: "theme-deepened",
-      title: "Tema aprofundado",
-      description: "O grupo já escreveu um recorte mais consistente para o tema investigado.",
-      flavor: "Quando a ideia cria raízes, a carta muda de raridade.",
-      icon: "🧠",
-      tier: "gold",
-      points: 0.08,
-      unlocked: (metrics) => metrics.themeWords >= 120,
-    },
-    {
-      id: "advisor-requested",
-      title: "Orientação acionada",
-      description: "A indicação de orientação já foi iniciada pelo grupo.",
-      flavor: "Pedir orientação é ativar uma habilidade estratégica do time.",
-      icon: "📨",
-      tier: "silver",
-      points: 0.05,
-      unlocked: (metrics) => metrics.advisorRequested,
-    },
-    {
-      id: "advisor-confirmed",
-      title: "Orientação confirmada",
-      description: "Um orientador principal já está vinculado ao grupo.",
-      flavor: "A presença da orientação eleva a carta ao patamar de suporte lendário.",
-      icon: "🎓",
-      tier: "emerald",
-      points: 0.12,
-      unlocked: (metrics) => metrics.advisorConfirmed,
-    },
-    {
-      id: "problem-started",
-      title: "Problema investigado",
-      description: "A pergunta central do projeto já começou a ser construída.",
-      flavor: "Toda carta forte conhece exatamente o desafio que enfrenta.",
-      icon: "🔎",
-      tier: "gold",
-      points: 0.07,
-      unlocked: (metrics) => metrics.problemStarted,
-    },
-    {
-      id: "objectives-started",
-      title: "Objetivos definidos",
-      description: "Os objetivos da investigação já começaram a tomar forma.",
-      flavor: "Objetivos claros funcionam como atributos de precisão da missão.",
-      icon: "🎯",
-      tier: "gold",
-      points: 0.07,
-      unlocked: (metrics) => metrics.objectivesStarted,
-    },
-    {
-      id: "methodology-started",
-      title: "Metodologia estruturada",
-      description: "O grupo já registrou como pretende investigar e agir.",
-      flavor: "Estratégia registrada é o equivalente pedagógico de um deck bem montado.",
-      icon: "🗺️",
-      tier: "gold",
-      points: 0.07,
-      unlocked: (metrics) => metrics.methodologyStarted,
-    },
-    {
-      id: "planning-complete",
-      title: "Planejamento completo",
-      description: "Problema, objetivos e metodologia já foram iniciados como base do percurso.",
-      flavor: "Essa carta só aparece quando a base do projeto para de oscilar.",
-      icon: "🧩",
-      tier: "emerald",
-      points: 0.12,
-      unlocked: (metrics) => metrics.planningCompleted,
-    },
-    {
-      id: "development-started",
-      title: "Mão na massa",
-      description: "A etapa de desenvolvimento já começou a ser registrada pelo grupo.",
-      flavor: "A raridade sobe quando o projeto deixa de ser plano e vira ação.",
-      icon: "⚙️",
-      tier: "violet",
-      points: 0.12,
-      unlocked: (metrics) => metrics.developmentStarted,
-    },
-    {
-      id: "result-started",
-      title: "Síntese em andamento",
-      description: "Os resultados ou o produto final já começaram a ser consolidados.",
-      flavor: "Toda coleção respeita a carta que já mostra sinais concretos de conclusão.",
-      icon: "🏁",
-      tier: "violet",
-      points: 0.12,
-      unlocked: (metrics) => metrics.resultStarted,
-    },
-    {
-      id: "journey-complete",
-      title: "Jornada central concluída",
-      description: "As etapas principais da jornada do TCA já foram preenchidas.",
-      flavor: "Concluir o núcleo da jornada já coloca a carta no álbum das memoráveis.",
-      icon: "👑",
-      tier: "violet",
-      points: 0.18,
-      unlocked: (metrics) => metrics.journeyCompleted,
-    },
-    {
-      id: "wordsmith-300",
-      title: "Escrita consistente",
-      description: "O grupo já acumulou pelo menos 300 palavras no projeto.",
-      flavor: "Texto constante é poder silencioso que cresce linha por linha.",
-      icon: "✍️",
-      tier: "silver",
-      points: 0.07,
-      unlocked: (metrics) => metrics.totalWords >= 300,
-    },
-    {
-      id: "wordsmith-1200",
-      title: "Autoria robusta",
-      description: "O projeto já soma 1200 palavras ou mais em seus registros.",
-      flavor: "Uma carta de autoria forte sempre deixa rastros extensos no tabuleiro.",
-      icon: "📚",
-      tier: "emerald",
-      points: 0.13,
-      unlocked: (metrics) => metrics.totalWords >= 1200,
-    },
-    {
-      id: "photo-collector",
-      title: "Memória visual",
-      description: "O grupo já registrou pelo menos 3 fotos do processo.",
-      flavor: "Registrar o processo transforma experiência em evidência jogável.",
-      icon: "📸",
-      tier: "gold",
-      points: 0.12,
-      unlocked: (metrics) => metrics.processPhotosCount >= 3,
-    },
-    {
-      id: "source-curator",
-      title: "Curadoria inicial",
-      description: "O repertório do projeto já reúne pelo menos 3 fontes registradas.",
-      flavor: "Toda carta estratégica se fortalece quando o repertório vira base sólida.",
-      icon: "🧾",
-      tier: "gold",
-      points: 0.12,
-      unlocked: (metrics) => metrics.repertoryItemsCount >= 3,
-    },
-    {
-      id: "time-15",
-      title: "Presença ativa",
-      description: "Foram registrados pelo menos 15 minutos ativos nesta jornada neste navegador.",
-      flavor: "Tempo de foco também conta como atributo da coleção.",
-      icon: "⏱️",
-      tier: "silver",
-      points: 0.11,
-      unlocked: (metrics) => metrics.activeMinutes >= 15,
-    },
-    {
-      id: "time-45",
-      title: "Fôlego de maratona",
-      description: "Foram registrados pelo menos 45 minutos ativos nesta jornada neste navegador.",
-      flavor: "Persistência longa é o tipo de poder que muda a mesa inteira.",
-      icon: "🔥",
-      tier: "emerald",
-      points: 0.25,
-      unlocked: (metrics) => metrics.activeMinutes >= 45,
-    },
-    {
-      id: "platform-master",
-      title: "Lenda da plataforma",
-      description: "Concluir todas as etapas centrais da plataforma, com orientação confirmada, registros do processo e repertório ativo.",
-      flavor: "Ultrarrara: reservada para quem fecha o ciclo completo do TCA Hub.",
-      icon: "🏆",
-      tier: "ultra",
-      points: 0.35,
-      unlocked: (metrics) => metrics.platformCompleted,
-    },
-  ];
-}
-
 export function StudentRewardsCard({
   group,
   projectSections,
@@ -423,13 +148,52 @@ export function StudentRewardsCard({
   repertoryItemsCount,
 }: StudentRewardsCardProps) {
   const [activeMinutes, setActiveMinutes] = useState(0);
+  const [waitingStudyCompleted, setWaitingStudyCompleted] = useState(false);
   const totalStoredMinutesRef = useRef(0);
   const startedAtRef = useRef<number | null>(null);
 
   const storageKey = useMemo(
-    () => `${ACTIVE_TIME_STORAGE_KEY}:${group?.id ?? "sem-grupo"}`,
+    () => `${STUDENT_JOURNEY_STORAGE_KEYS.ACTIVE_MINUTES}:${group?.id ?? "sem-grupo"}`,
     [group?.id]
   );
+  const waitingStudyCompletedStorageKey = useMemo(
+    () => `${STUDENT_JOURNEY_STORAGE_KEYS.WAITING_STUDY_COMPLETED}:${group?.id ?? "sem-grupo"}`,
+    [group?.id]
+  );
+
+  useEffect(() => {
+    const syncCompletedState = () => {
+      setWaitingStudyCompleted(readStoredBoolean(waitingStudyCompletedStorageKey));
+    };
+
+    syncCompletedState();
+
+    function handleCompletedEvent(event: Event) {
+      const customEvent = event as CustomEvent<{ storageKey?: string }>;
+
+      if (customEvent.detail?.storageKey && customEvent.detail.storageKey !== waitingStudyCompletedStorageKey) {
+        return;
+      }
+
+      syncCompletedState();
+    }
+
+    function handleStorage(event: StorageEvent) {
+      if (event.key !== waitingStudyCompletedStorageKey) {
+        return;
+      }
+
+      syncCompletedState();
+    }
+
+    window.addEventListener(STUDENT_JOURNEY_EVENTS.WAITING_STUDY_COMPLETED, handleCompletedEvent as EventListener);
+    window.addEventListener("storage", handleStorage);
+
+    return () => {
+      window.removeEventListener(STUDENT_JOURNEY_EVENTS.WAITING_STUDY_COMPLETED, handleCompletedEvent as EventListener);
+      window.removeEventListener("storage", handleStorage);
+    };
+  }, [waitingStudyCompletedStorageKey]);
 
   useEffect(() => {
     const initialMinutes = readStoredActiveMinutes(storageKey);
@@ -481,80 +245,25 @@ export function StudentRewardsCard({
     };
   }, [storageKey]);
 
-  const metrics = useMemo<RewardMetrics>(() => {
-    const themeSection = findSection(projectSections, "tema_contexto");
-    const problemSection = findSection(projectSections, "problema_justificativa");
-    const objectivesSection = findSection(projectSections, "objetivos");
-    const methodologySection = findSection(projectSections, "metodologia_plano");
-    const developmentSection = findSection(projectSections, "desenvolvimento_registros");
-    const resultSection = findSection(projectSections, "resultado_produto_final");
-
-    const planningCompleted = [problemSection, objectivesSection, methodologySection].every(sectionHasProgress);
-    const developmentStarted = sectionHasProgress(developmentSection);
-    const resultStarted = sectionHasProgress(resultSection);
-    const advisorConfirmed = Boolean(group?.primary_advisor_id);
-    const journeyCompleted = Boolean(
-      sectionHasProgress(themeSection) &&
-      advisorConfirmed &&
-      planningCompleted &&
-      developmentStarted &&
-      resultStarted
-    );
-
-    return {
-      hasGroup: Boolean(group),
-      memberCount: countGroupMembers(group),
-      totalWords: projectSections.reduce((total, section) => total + countWords(section.content), 0),
-      themeWords: countWords(themeSection?.content),
+  const metrics = useMemo(
+    () => buildRewardMetrics({
+      group,
+      projectSections,
       processPhotosCount,
       repertoryItemsCount,
       activeMinutes,
-      themeStarted: sectionHasProgress(themeSection),
-      advisorRequested: Boolean(group?.indicated_advisor_id || group?.indication_status),
-      advisorConfirmed,
-      problemStarted: sectionHasProgress(problemSection),
-      objectivesStarted: sectionHasProgress(objectivesSection),
-      methodologyStarted: sectionHasProgress(methodologySection),
-      planningCompleted,
-      developmentStarted,
-      resultStarted,
-      journeyCompleted,
-      platformCompleted: Boolean(
-        group &&
-        sectionHasProgress(themeSection) &&
-        advisorConfirmed &&
-        planningCompleted &&
-        developmentStarted &&
-        resultStarted &&
-        processPhotosCount >= 3 &&
-        repertoryItemsCount >= 3
-      ),
-    };
-  }, [activeMinutes, group, processPhotosCount, projectSections, repertoryItemsCount]);
+      waitingStudyCompleted,
+    }),
+    [activeMinutes, group, processPhotosCount, projectSections, repertoryItemsCount, waitingStudyCompleted]
+  );
 
   const rewards = useMemo(
-    () => buildRewardDefinitions().map((reward) => ({
-      ...reward,
-      achieved: reward.unlocked(metrics),
-    })),
+    () => buildRewardStates(metrics),
     [metrics]
   );
 
-  const unlockedRewardsCount = rewards.filter((reward) => reward.achieved).length;
-  const unlockedRewardPoints = Math.min(
-    rewards.reduce((total, reward) => total + (reward.achieved ? reward.points : 0), 0),
-    MAX_REWARD_POINTS
-  );
-  const totalAvailableRewardPoints = Math.min(
-    rewards.reduce((total, reward) => total + reward.points, 0),
-    MAX_REWARD_POINTS
-  );
-
   return (
-    <div
-      id="minhas-recompensas"
-      className="scroll-mt-24 lg:-ml-6 lg:w-[calc(100%+1.5rem)] xl:-ml-10 xl:w-[calc(100%+2.5rem)] 2xl:-ml-12 2xl:w-[calc(100%+3rem)]"
-    >
+    <div id="minhas-recompensas" className="scroll-mt-24">
       <Card className="border border-[#DCEBD5] bg-white/95 px-4 py-5 md:px-5 xl:px-6">
         <div className="space-y-4">
         <div className="flex flex-col gap-3">
@@ -564,25 +273,6 @@ export function StudentRewardsCard({
               A coleção agora segue linguagem de carta rara: cada recompensa recebe cor, moldura e forma próprias
               conforme a raridade, com nome, arte, descrição da conquista e valor de poder.
             </p>
-            <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-stretch">
-              <div className="inline-flex min-h-[58px] items-center rounded-2xl border border-[#D7E7D0] bg-[#F4FAF1] px-3 py-2">
-                <Badge variant={unlockedRewardsCount > 0 ? "green" : "gray"}>
-                  {unlockedRewardsCount} de {rewards.length} recompensas conquistadas
-                </Badge>
-              </div>
-
-              <div className="inline-flex min-h-[58px] flex-col justify-center rounded-2xl border border-[#DCEBD5] bg-[#F8FBF6] px-3 py-2">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#6B7280]">
-                  Pontuação extra
-                </p>
-                <p className="text-sm font-black text-[#1F2937] leading-tight">
-                  {formatPoints(unlockedRewardPoints)} / {formatPoints(totalAvailableRewardPoints)}
-                </p>
-                <p className="text-[10px] text-[#6B7280] leading-tight">
-                  limite máximo de {formatPoints(MAX_REWARD_POINTS)} pontos na nota final
-                </p>
-              </div>
-            </div>
           </div>
         </div>
 
@@ -620,7 +310,7 @@ export function StudentRewardsCard({
                     {reward.achieved ? (
                       <div className={`inline-flex flex-col items-end rounded-2xl px-2.5 py-1 text-right ${tone.powerChipClassName}`}>
                         <span className="text-[9px] font-black uppercase tracking-[0.16em]">Poder</span>
-                        <span className="text-[13px] font-black leading-none">+{formatPoints(reward.points)}</span>
+                        <span className="text-[13px] font-black leading-none">+{formatRewardPoints(reward.points)}</span>
                       </div>
                     ) : null}
                   </div>

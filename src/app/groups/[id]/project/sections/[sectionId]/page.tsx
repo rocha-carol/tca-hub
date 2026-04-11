@@ -6,7 +6,9 @@ import { ensureGroupProjectSectionsStructure, updateGroupProjectSection } from "
 import { fetchGroupProjectSectionComments } from "@/services/project-section-comment-service";
 import { fetchGroupProjectSectionNextSteps } from "@/services/project-section-next-step-service";
 import { requireGroupAccess } from "@/services/group-access-service";
+import { fetchGroupThemeGuideState } from "@/services/group-theme-guide-state-service";
 import { STUDENT_ROUTES } from "@/lib/utils/constants";
+import { generateProblemJustificationGuidanceSimulated } from "@/lib/ai/project-section-simulated-guidance";
 import { Card } from "@/components/ui/Card";
 import { Badge } from "@/components/ui/Badge";
 import type { ProjectSectionStatus } from "@/types/project-section";
@@ -129,7 +131,31 @@ export default async function SectionEditorPage({ params, searchParams }: Sectio
   const section = sections.find((s) => String(s.id) === sectionId);
   if (!section) notFound();
 
-  const guidance = getSectionGuidance(section.section_key);
+  const themeSection = sections.find((candidate) => candidate.section_key === "tema_contexto") ?? null;
+  const shouldUseSimulatedProblemGuidance = section.section_key === "problema_justificativa";
+
+  let themeGuideState = null;
+
+  if (shouldUseSimulatedProblemGuidance) {
+    try {
+      themeGuideState = await fetchGroupThemeGuideState(id);
+    } catch {
+      themeGuideState = null;
+    }
+  }
+
+  const simulatedProblemGuidance = shouldUseSimulatedProblemGuidance
+    ? generateProblemJustificationGuidanceSimulated({
+        groupTheme: group.theme,
+        themeSectionContent: themeSection?.content ?? null,
+        currentSectionContent: section.content ?? null,
+        selectedInterestTags: themeGuideState?.selected_interest_tags ?? [],
+        themeGuideDraftNotes: themeGuideState?.draft_notes ?? null,
+        themeGuideSuggestions: themeGuideState?.ai_suggestions ?? null,
+      })
+    : null;
+
+  const guidance = simulatedProblemGuidance ?? getSectionGuidance(section.section_key);
   const sl = statusLabel(section.status);
   const isStudentView = profile?.role === "student";
   const shouldShowThemeTitleGuidance = isStudentView && section.section_key === "tema_contexto";
@@ -247,6 +273,41 @@ export default async function SectionEditorPage({ params, searchParams }: Sectio
             </ul>
           </Card>
 
+          {simulatedProblemGuidance ? (
+            <Card className="bg-[#F5F9FF] border border-[#DBEAFE]">
+              <div className="flex items-start justify-between gap-3 flex-wrap mb-3">
+                <div>
+                  <p className="text-xs font-semibold text-[#2F80ED] uppercase tracking-widest mb-1">
+                    {simulatedProblemGuidance.writingSupportTitle}
+                  </p>
+                  <p className="text-xs text-[#4B5563]">{simulatedProblemGuidance.themeReferenceLabel}</p>
+                </div>
+                <span className="rounded-full bg-[#DBEAFE] px-3 py-1 text-[11px] font-semibold text-[#1D4ED8]">
+                  Apoio contextual
+                </span>
+              </div>
+
+              <div className="rounded-xl bg-white/80 border border-[#DBEAFE] px-4 py-3 mb-4">
+                <p className="text-xs font-semibold text-[#1F2937] mb-2">Rascunho inicial sugerido</p>
+                <p className="text-sm text-[#374151] leading-relaxed">{simulatedProblemGuidance.starterText}</p>
+              </div>
+
+              <div>
+                <p className="text-xs font-semibold text-[#1F2937] uppercase tracking-widest mb-2">
+                  Como fortalecer a escrita
+                </p>
+                <ul className="space-y-2">
+                  {simulatedProblemGuidance.writingSupportTips.map((tip, index) => (
+                    <li key={index} className="flex gap-2 text-sm text-[#1F2937]">
+                      <span className="text-[#2F80ED] font-bold flex-shrink-0">{index + 1}.</span>
+                      <span>{tip}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </Card>
+          ) : null}
+
           {/* Editor de texto */}
           <Card>
             {query.saved === "1" && (
@@ -285,7 +346,7 @@ export default async function SectionEditorPage({ params, searchParams }: Sectio
                 name="content"
                 defaultValue={section.content ?? ""}
                 rows={18}
-                placeholder={`Escreva aqui o texto da seção "${section.section_title}"…\n\nDica: ${guidance.howToWrite}`}
+                placeholder={`Escreva aqui o texto da seção "${section.section_title}"…\n\n${simulatedProblemGuidance ? `Para começar, adapte esta ideia: ${simulatedProblemGuidance.starterText}\n\n` : ""}Dica: ${guidance.howToWrite}`}
                 className="w-full rounded-xl border border-gray-200 bg-[#fafaf9] px-4 py-3 text-sm text-[#1F2937] placeholder:text-gray-400 focus:border-[#4CAF50] focus:outline-none focus:ring-2 focus:ring-[#4CAF50]/30 leading-relaxed resize-y"
               />
 

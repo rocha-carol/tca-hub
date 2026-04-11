@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getAuthenticatedProfile, getAuthenticatedUser } from "@/lib/auth/session-service";
 import { STUDENT_ROUTES } from "@/lib/utils/constants";
 import { fetchAllGroups } from "@/services/group-service";
+import { fetchGroupInternalNotificationsByGroupIds } from "@/services/group-internal-notification-service";
 import { ensureGroupProjectSectionsStructure } from "@/services/project-section-service";
 import { fetchGroupProjectSectionStageSchedule } from "@/services/project-section-stage-schedule-service";
 import { fetchGroupProjectDevelopmentChecklistItems } from "@/services/project-development-checklist-service";
@@ -16,6 +17,7 @@ import { InfoCard } from "@/components/cards/InfoCard";
 import { ProgressCard } from "@/components/cards/ProgressCard";
 import { ActionCard } from "@/components/cards/ActionCard";
 import type { GroupStatus } from "@/types/group";
+import type { GroupInternalNotification } from "@/types/group-internal-notification";
 
 /**
  * Dashboard do orientador.
@@ -30,6 +32,10 @@ function getStatusLabel(status: GroupStatus) {
   if (status === "planejamento") return "Planejamento";
   if (status === "em_andamento") return "Em andamento";
   return "Concluído";
+}
+
+function idsAreEqual(left: string | number | null | undefined, right: string | number | null | undefined) {
+  return String(left ?? "") === String(right ?? "");
 }
 
 interface AdvisorDashboardPageProps {
@@ -106,6 +112,26 @@ export default async function AdvisorDashboardPage({ searchParams }: AdvisorDash
 
   const displayEmail = isProvisionalMode ? "modo.provisorio@local" : (user?.email || "-");
 
+  let authenticatedAdvisorId: string | number | null = null;
+  let pendingIndicationNotifications: Array<{
+    groupId: string;
+    groupLabel: string;
+    createdAt: string | null;
+    title: string;
+    message: string;
+  }> = [];
+
+  if (!isProvisionalMode && profile?.role === "advisor") {
+    const supabase = await createClient();
+    const { data: advisorRecord } = await supabase
+      .from("advisors")
+      .select("id")
+      .eq("profile_id", profile.id)
+      .maybeSingle();
+
+    authenticatedAdvisorId = advisorRecord?.id ?? null;
+  }
+
   // Busca de dados — falhas silenciosas para não travar o dashboard
   let groups: Awaited<ReturnType<typeof fetchAllGroups>> = [];
 
@@ -116,6 +142,44 @@ export default async function AdvisorDashboardPage({ searchParams }: AdvisorDash
   }
 
   const recentGroups = groups.slice(0, 5);
+
+  if (authenticatedAdvisorId !== null) {
+    const pendingIndicationGroups = groups.filter(
+      (group) =>
+        group.indication_status === "pendente" &&
+        idsAreEqual(group.indicated_advisor_id, authenticatedAdvisorId)
+    );
+
+    if (pendingIndicationGroups.length > 0) {
+      let internalNotifications: GroupInternalNotification[] = [];
+      try {
+        internalNotifications = await fetchGroupInternalNotificationsByGroupIds(
+          pendingIndicationGroups.map((group) => String(group.id))
+        );
+      } catch {
+        internalNotifications = [];
+      }
+
+      pendingIndicationNotifications = pendingIndicationGroups.map((group) => {
+        const latestNotification = internalNotifications.find(
+          (notification) =>
+            notification.group_id === String(group.id) &&
+            notification.notification_type === "orientacao"
+        );
+
+        return {
+          groupId: String(group.id),
+          groupLabel: group.theme || `Grupo ${String(group.id).slice(0, 8)}`,
+          createdAt: latestNotification?.created_at ?? null,
+          title: latestNotification?.title || "Solicitação de orientação pendente",
+          message:
+            latestNotification?.message ||
+            "Existe uma solicitação de orientação aguardando resposta neste grupo.",
+        };
+      });
+    }
+  }
+
   const statusCount = {
     planejamento: groups.filter((g) => !g.status || g.status === "planejamento").length,
     em_andamento: groups.filter((g) => g.status === "em_andamento").length,
@@ -202,6 +266,57 @@ export default async function AdvisorDashboardPage({ searchParams }: AdvisorDash
             accent="blue"
           />
         </div>
+
+        {pendingIndicationNotifications.length > 0 && (
+          <Card className="mb-8 border border-amber-200 bg-amber-50/70">
+            <div className="flex items-start justify-between gap-4 flex-wrap mb-4">
+              <div>
+                <h2 className="text-xl font-semibold text-amber-950">Solicitações de orientação aguardando resposta</h2>
+                <p className="text-sm text-amber-900 mt-1">
+                  Estas notificações foram registradas automaticamente quando um grupo indicou você como orientador atual.
+                </p>
+              </div>
+              <span className="inline-flex rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-900">
+                {pendingIndicationNotifications.length} pendente(s)
+              </span>
+            </div>
+
+            <div className="space-y-3">
+              {pendingIndicationNotifications.map((notification) => (
+                <div
+                  key={notification.groupId}
+                  className="rounded-2xl border border-amber-200 bg-white px-4 py-4 shadow-sm"
+                >
+                  <div className="flex items-start justify-between gap-3 flex-wrap">
+                    <div>
+                      <p className="text-sm font-semibold text-[#1F2937]">{notification.title}</p>
+                      <p className="text-sm text-[#4B5563] mt-1">{notification.message}</p>
+                      <p className="text-xs text-[#6B7280] mt-2">
+                        Grupo: {notification.groupLabel}
+                        {notification.createdAt
+                          ? ` • ${new Date(notification.createdAt).toLocaleString("pt-BR", {
+                              day: "2-digit",
+                              month: "2-digit",
+                              year: "numeric",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}`
+                          : ""}
+                      </p>
+                    </div>
+
+                    <Link
+                      href={`/groups/${notification.groupId}`}
+                      className="inline-flex rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-amber-700"
+                    >
+                      Responder solicitação
+                    </Link>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Card>
+        )}
 
         {/* Progresso geral + distribuição */}
         <div className="grid grid-cols-1 lg:grid-cols-[1.4fr_1fr] gap-6 mb-8">

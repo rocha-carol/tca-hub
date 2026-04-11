@@ -33,3 +33,18 @@ export const STUDENT_ROUTES = {
   LEGACY_ROOT_HOME: "/meu-projeto",
   LEGACY_GROUP_STATUS: "/student/groups/status",
 } as const;
+
+// Define chaves e eventos de persistência local usados na jornada do estudante.
+// Esses identificadores permitem sincronizar interações entre cards da mesma tela.
+export const STUDENT_JOURNEY_STORAGE_KEYS = {
+  ACTIVE_MINUTES: "tca-hub:journey-active-minutes",
+  WAITING_STUDY_COMPLETED: "tca-hub:waiting-study-completed",
+} as const;
+
+export const STUDENT_JOURNEY_EVENTS = {
+  WAITING_STUDY_COMPLETED: "tca-hub:waiting-study-completed",
+} as const;
+
+export const STUDENT_JOURNEY_SECTION_IDS = {
+  WAITING_STUDY: "apoio-pesquisa-em-espera",
+} as const;
