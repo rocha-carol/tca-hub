@@ -4,7 +4,6 @@ import GroupContextPanel from "@/components/layout/GroupContextPanel";
 import { getAuthenticatedProfile } from "@/lib/auth/session-service";
 import { loadStudentPortalData } from "@/app/student/_lib/student-portal-data";
 import { StudentPortalSidebar } from "@/components/student/StudentPortalSidebar";
-import { StudentProjectHeaderNav } from "@/components/student/StudentProjectHeaderNav";
 
 interface GroupLayoutProps {
   children: ReactNode;
@@ -36,13 +35,7 @@ export default async function GroupLayout({ children, params }: GroupLayoutProps
             studentName={studentName}
           />
           <div className="flex min-w-0 flex-1 gap-6 overflow-x-hidden">
-            <div className="min-w-0 flex-1 overflow-x-hidden space-y-4">
-              <StudentProjectHeaderNav
-                group={context.group}
-                projectSections={projectSections}
-              />
-              <div>{children}</div>
-            </div>
+            <div className="min-w-0 flex-1 overflow-x-hidden">{children}</div>
             <GroupContextPanel groupId={id} />
           </div>
         </div>

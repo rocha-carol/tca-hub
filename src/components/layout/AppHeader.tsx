@@ -2,6 +2,8 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getAuthenticatedProfile } from "@/lib/auth/session-service";
+import { resolveStudentGroupContext } from "@/app/student/_lib/student-group-context";
+import { ensureGroupProjectSectionsStructure } from "@/services/project-section-service";
 import type { UserRole } from "@/types/auth";
 import HeaderMainNav from "@/components/layout/HeaderMainNav";
 
@@ -24,6 +26,7 @@ export default async function AppHeader({ groupName }: AppHeaderProps) {
 
   const profile = user ? await getAuthenticatedProfile() : null;
   const role = profile?.role as UserRole | undefined;
+  let quickNavItems: Array<{ href: string; label: string }> = [];
 
   // Etapa 1 (mudança pequena e segura): navegação principal por perfil.
   // Não remove rotas existentes; apenas reorganiza os atalhos exibidos no topo.
@@ -63,6 +66,39 @@ export default async function AppHeader({ groupName }: AppHeaderProps) {
     ];
   })();
 
+  if (user && role === "student" && profile) {
+    try {
+      const context = await resolveStudentGroupContext(profile.id);
+
+      if (context.group) {
+        const sections = await ensureGroupProjectSectionsStructure(context.group.id);
+        const sectionByKey = new Map(sections.map((section) => [section.section_key, section]));
+
+        quickNavItems = [
+          { key: "tema_contexto", label: "Tema e contexto" },
+          { key: "problema_justificativa", label: "Problema e justificativa" },
+          { key: "objetivos", label: "Objetivos" },
+          { key: "metodologia_plano", label: "Metodologia" },
+          { key: "desenvolvimento_registros", label: "Desenvolvimento" },
+          { key: "resultado_produto_final", label: "Resultado final" },
+          { key: "resultado_produto_final", label: "Revisão geral" },
+        ]
+          .map((item) => {
+            const section = sectionByKey.get(item.key);
+            if (!section) return null;
+
+            return {
+              label: item.label,
+              href: `/groups/${context.group?.id}/project/sections/${section.id}`,
+            };
+          })
+          .filter((item): item is { href: string; label: string } => Boolean(item));
+      }
+    } catch {
+      quickNavItems = [];
+    }
+  }
+
   return (
     <header className="sticky top-0 z-50 border-b border-[#d9e7d4] bg-white/95 backdrop-blur shadow-sm">
       <div className="tca-stripes h-1 w-full" />
@@ -80,7 +116,7 @@ export default async function AppHeader({ groupName }: AppHeaderProps) {
           </div>
         </Link>
 
-        {user && <HeaderMainNav items={mainNavItems} />}
+        {user && <HeaderMainNav items={mainNavItems} quickItems={quickNavItems} />}
 
         <div className="flex items-center gap-3 shrink-0">
           {groupName && (
