@@ -12,6 +12,8 @@ import {
 import type { Group } from "@/types/group";
 import type { GroupProjectSection } from "@/types/project-section";
 
+const STUDENT_SIDEBAR_STORAGE_KEY = "tca:student-sidebar:open";
+
 interface StudentPortalSidebarProps {
   hasGroup: boolean;
   group: Group | null;
@@ -19,14 +21,6 @@ interface StudentPortalSidebarProps {
   processPhotosCount: number;
   repertoryItemsCount: number;
   studentName: string;
-}
-
-function getGroupLabel(group: Group | null) {
-  if (!group) {
-    return "Nenhum grupo vinculado";
-  }
-
-  return group.theme || `Grupo ${String(group.id).slice(0, 8)}`;
 }
 
 function getGroupStatusText(hasGroup: boolean, group: Group | null) {
@@ -50,7 +44,13 @@ export function StudentPortalSidebar({
   group,
 }: StudentPortalSidebarProps) {
   const pathname = usePathname();
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(() => {
+    if (typeof window === "undefined") {
+      return true;
+    }
+
+    return window.localStorage.getItem(STUDENT_SIDEBAR_STORAGE_KEY) !== "false";
+  });
   const groupStatusHref = STUDENT_ROUTES.GROUP_STATUS;
   const isStudentHomePage =
     pathname === STUDENT_ROUTES.HOME ||
@@ -120,18 +120,7 @@ export function StudentPortalSidebar({
       return;
     }
 
-    const storedState = window.localStorage.getItem("tca:student-sidebar:open");
-    if (storedState === "false") {
-      setIsSidebarOpen(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (typeof window === "undefined") {
-      return;
-    }
-
-    window.localStorage.setItem("tca:student-sidebar:open", String(isSidebarOpen));
+    window.localStorage.setItem(STUDENT_SIDEBAR_STORAGE_KEY, String(isSidebarOpen));
   }, [isSidebarOpen]);
 
   const groupStatusText = getGroupStatusText(hasGroup, group);
@@ -215,7 +204,7 @@ export function StudentPortalSidebar({
                   <div className="flex flex-wrap gap-2">
                     {links.map((link) => (
                       <Link
-                        key={link.href}
+                        key={`${link.href}-${link.label}`}
                         href={link.href}
                         className={`rounded-xl border px-3 py-2 text-sm font-semibold transition-colors ${getMobileLinkClass(link.href)}`}
                       >
@@ -288,7 +277,7 @@ export function StudentPortalSidebar({
 
                     return (
                       <Link
-                        key={link.href}
+                        key={`${link.href}-${link.label}`}
                         href={link.href}
                         className={`flex items-center justify-between rounded-xl border px-4 py-3 text-sm font-semibold transition-colors ${getDesktopLinkClass(link.href)}`}
                       >
@@ -327,7 +316,7 @@ export function StudentPortalSidebar({
 
                         return (
                           <Link
-                            key={link.href}
+                            key={`${link.href}-${link.label}`}
                             href={link.href}
                             className={`flex items-center justify-between rounded-xl border px-4 py-3 text-sm font-semibold transition-colors ${getDesktopLinkClass(link.href)}`}
                           >

@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { getAuthenticatedProfile, getAuthenticatedUser } from "@/lib/auth/session-service";
 import { getNextGeneratedGroupNumber } from "@/lib/utils/group-number";
 import { createGroup, fetchAllGroups } from "@/services/group-service";
-import { fetchAllStudents } from "@/services/student-service";
+import { fetchAllStudents, resolveStudentByAuthIdentity } from "@/services/student-service";
 import StudentGroupMembersBuilder from "@/components/student/StudentGroupMembersBuilder";
 import { STUDENT_ROUTES } from "@/lib/utils/constants";
 
@@ -51,7 +51,12 @@ export default async function StudentCreateGroupPage({ searchParams }: StudentCr
     allGroups = [];
   }
 
-  const currentStudent = allStudents.find((student) => student.profile_id === user.id) ?? null;
+  const currentStudent = await resolveStudentByAuthIdentity({
+    profileId: user.id,
+    email: user.email,
+    name: profile?.name || user.email,
+    allowCreateIfMissing: true,
+  }).catch(() => allStudents.find((student) => student.profile_id === user.id) ?? null);
   const nextGroupNumber = getNextGeneratedGroupNumber(allGroups);
 
   async function handleCreateStudentGroup(formData: FormData) {
@@ -74,7 +79,12 @@ export default async function StudentCreateGroupPage({ searchParams }: StudentCr
       redirect(`${STUDENT_ROUTES.GROUP_CREATE}?erro=students`);
     }
 
-    const loggedStudent = students.find((student) => student.profile_id === authenticatedUser.id);
+    const loggedStudent = await resolveStudentByAuthIdentity({
+      profileId: authenticatedUser.id,
+      email: authenticatedUser.email,
+      name: authenticatedProfile?.name || authenticatedUser.email,
+      allowCreateIfMissing: true,
+    });
 
     if (!loggedStudent) {
       redirect(`${STUDENT_ROUTES.GROUP_CREATE}?erro=perfil`);

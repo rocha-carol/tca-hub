@@ -16,11 +16,11 @@ function mapProfileSyncErrorMessage(error: unknown) {
 
   const message = error.message.toLowerCase();
 
-  if (!message.includes("profile") && !message.includes("advisor")) {
+  if (!message.includes("profile") && !message.includes("advisor") && !message.includes("student")) {
     return null;
   }
 
-  return `O usuário foi criado no Auth, mas não foi possível sincronizar o registro em public.profiles e o cadastro institucional em public.advisors. Execute o script local ${PROFILES_SYNC_SQL_FILE} no Supabase SQL Editor e tente novamente.`;
+  return `O usuário foi criado no Auth, mas não foi possível sincronizar o registro em public.profiles e os cadastros institucionais relacionados. Execute o script local ${PROFILES_SYNC_SQL_FILE} no Supabase SQL Editor e tente novamente.`;
 }
 
 function normalizeUserRole(value: unknown): UserRole {
@@ -262,6 +262,134 @@ async function ensureAdvisorDirectoryEntry(
   return createdAdvisor;
 }
 
+async function ensureStudentDirectoryEntry(
+  supabase: BrowserSupabaseClient,
+  authUser: {
+    id: string;
+    email?: string | null;
+    user_metadata?: {
+      name?: unknown;
+      role?: unknown;
+    };
+  },
+  preferredName?: string,
+  preferredRole?: UserRole
+) {
+  const normalizedRole = preferredRole || normalizeUserRole(authUser.user_metadata?.role);
+
+  if (normalizedRole !== "student") {
+    return null;
+  }
+
+  const normalizedNameFromArg = preferredName?.trim() || "";
+  const normalizedNameFromMetadata =
+    typeof authUser.user_metadata?.name === "string" ? authUser.user_metadata.name.trim() : "";
+
+  const fallbackName = normalizedNameFromArg || normalizedNameFromMetadata || "Usuário";
+  const fallbackEmail = authUser.email?.trim().toLowerCase() || "";
+
+  if (!fallbackEmail) {
+    throw new Error("Erro ao sincronizar student: email do usuário não disponível.");
+  }
+
+  const { data: linkedStudent, error: linkedStudentError } = await supabase
+    .from("students")
+    .select("*")
+    .eq("profile_id", authUser.id)
+    .maybeSingle();
+
+  if (linkedStudentError && linkedStudentError.code !== "PGRST116") {
+    throw new Error(`Erro ao verificar student vinculado ao profile: ${linkedStudentError.message}`);
+  }
+
+  if (linkedStudent) {
+    const patch: Record<string, unknown> = {};
+
+    if (!linkedStudent.name || linkedStudent.name.trim() === "") {
+      patch.name = fallbackName;
+    }
+
+    if (linkedStudent.email !== fallbackEmail) {
+      patch.email = fallbackEmail;
+    }
+
+    if (linkedStudent.active === false) {
+      patch.active = true;
+    }
+
+    if (Object.keys(patch).length === 0) {
+      return linkedStudent;
+    }
+
+    const { data: updatedStudent, error: updateStudentError } = await supabase
+      .from("students")
+      .update(patch)
+      .eq("id", linkedStudent.id)
+      .select("*")
+      .single();
+
+    if (updateStudentError) {
+      throw new Error(`Erro ao atualizar student vinculado ao profile: ${updateStudentError.message}`);
+    }
+
+    return updatedStudent;
+  }
+
+  const { data: studentByEmail, error: studentByEmailError } = await supabase
+    .from("students")
+    .select("*")
+    .eq("email", fallbackEmail)
+    .maybeSingle();
+
+  if (studentByEmailError && studentByEmailError.code !== "PGRST116") {
+    throw new Error(`Erro ao verificar student por email: ${studentByEmailError.message}`);
+  }
+
+  if (studentByEmail) {
+    const patch: Record<string, unknown> = {
+      profile_id: authUser.id,
+    };
+
+    if (!studentByEmail.name || studentByEmail.name.trim() === "") {
+      patch.name = fallbackName;
+    }
+
+    if (studentByEmail.active === false) {
+      patch.active = true;
+    }
+
+    const { data: updatedStudent, error: updateStudentError } = await supabase
+      .from("students")
+      .update(patch)
+      .eq("id", studentByEmail.id)
+      .select("*")
+      .single();
+
+    if (updateStudentError) {
+      throw new Error(`Erro ao vincular student existente ao profile: ${updateStudentError.message}`);
+    }
+
+    return updatedStudent;
+  }
+
+  const { data: createdStudent, error: createStudentError } = await supabase
+    .from("students")
+    .insert({
+      name: fallbackName,
+      email: fallbackEmail,
+      profile_id: authUser.id,
+      active: true,
+    })
+    .select("*")
+    .single();
+
+  if (createStudentError) {
+    throw new Error(`Erro ao criar student para o profile autenticado: ${createStudentError.message}`);
+  }
+
+  return createdStudent;
+}
+
 /**
  * Efetua cadastro (signup) de novo usuário no sistema.
  *
@@ -328,6 +456,10 @@ export async function signUp(data: SignUpData): Promise<AuthResponse> {
 
     if (authData.session && data.role === "advisor") {
       await ensureAdvisorDirectoryEntry(supabase, authData.user, data.name, data.role);
+    }
+
+    if (authData.session && data.role === "student") {
+      await ensureStudentDirectoryEntry(supabase, authData.user, data.name, data.role);
     }
 
     // 3) Retornar resposta com dados de autenticação e perfil
@@ -424,6 +556,10 @@ export async function signIn(data: SignInData): Promise<AuthResponse> {
 
     if (profileData?.role === "advisor") {
       await ensureAdvisorDirectoryEntry(supabase, authData.user, profileData.name, profileData.role);
+    }
+
+    if (profileData?.role === "student") {
+      await ensureStudentDirectoryEntry(supabase, authData.user, profileData.name, profileData.role);
     }
 
     // 3) Retornar resposta com dados de autenticação e perfil

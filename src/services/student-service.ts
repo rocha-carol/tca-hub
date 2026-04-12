@@ -92,6 +92,131 @@ export async function fetchAllStudents(): Promise<Student[]> {
 }
 
 /**
+ * Resolve um estudante a partir do profile autenticado.
+ *
+ * Estratégia:
+ * 1. tenta localizar pelo `profile_id`
+ * 2. se não encontrar, tenta localizar pelo email
+ * 3. se encontrar por email, sincroniza `profile_id` para evitar novas falhas
+ */
+export async function resolveStudentByAuthIdentity(params: {
+	profileId: string;
+	email?: string | null;
+	name?: string | null;
+	allowCreateIfMissing?: boolean;
+}): Promise<Student | null> {
+	const supabase = await createClient();
+	const normalizedEmail = params.email?.trim().toLowerCase() || "";
+	const normalizedName = params.name?.trim() || "Usuário";
+
+	const { data: linkedStudent, error: linkedStudentError } = await supabase
+		.from("students")
+		.select("*")
+		.eq("profile_id", params.profileId)
+		.maybeSingle();
+
+	if (linkedStudentError) {
+		if (isStudentsTableMissing(linkedStudentError.message)) {
+			throw new Error(
+				"Tabela students ainda não existe no Supabase. Estruture a tabela para o cadastro institucional antes de usar o módulo."
+			);
+		}
+
+		if (isStudentsPermissionDenied(linkedStudentError.message, linkedStudentError.code)) {
+			throw new Error(
+				"Leitura de students bloqueada por policy/RLS no Supabase. Garanta uma policy SELECT para usuários autenticados."
+			);
+		}
+
+		throw new Error(`Erro ao localizar estudante pelo profile autenticado: ${linkedStudentError.message}`);
+	}
+
+	if (linkedStudent) {
+		return linkedStudent as Student;
+	}
+
+	if (!normalizedEmail) {
+		return null;
+	}
+
+	const { data: studentByEmail, error: studentByEmailError } = await supabase
+		.from("students")
+		.select("*")
+		.eq("email", normalizedEmail)
+		.maybeSingle();
+
+	if (studentByEmailError) {
+		if (isStudentsTableMissing(studentByEmailError.message)) {
+			throw new Error(
+				"Tabela students ainda não existe no Supabase. Estruture a tabela para o cadastro institucional antes de usar o módulo."
+			);
+		}
+
+		if (isStudentsPermissionDenied(studentByEmailError.message, studentByEmailError.code)) {
+			throw new Error(
+				"Leitura de students bloqueada por policy/RLS no Supabase. Garanta uma policy SELECT para usuários autenticados."
+			);
+		}
+
+		throw new Error(`Erro ao localizar estudante pelo email autenticado: ${studentByEmailError.message}`);
+	}
+
+	if (!studentByEmail) {
+		if (!params.allowCreateIfMissing || !normalizedEmail) {
+			return null;
+		}
+
+		const { data: createdStudent, error: createStudentError } = await supabase
+			.from("students")
+			.insert({
+				name: normalizedName,
+				email: normalizedEmail,
+				profile_id: params.profileId,
+				active: true,
+			})
+			.select("*")
+			.single();
+
+		if (createStudentError) {
+			if (isStudentsPermissionDenied(createStudentError.message, createStudentError.code)) {
+				throw new Error(
+					"Criação automática do cadastro de estudante bloqueada por policy/RLS no Supabase. Garanta policies INSERT para usuários autenticados."
+				);
+			}
+
+			throw new Error(`Erro ao criar cadastro automático do estudante: ${createStudentError.message}`);
+		}
+
+		return createdStudent as Student;
+	}
+
+	if (studentByEmail.profile_id === params.profileId) {
+		return studentByEmail as Student;
+	}
+
+	const { data: updatedStudent, error: updateStudentError } = await supabase
+		.from("students")
+		.update({
+			profile_id: params.profileId,
+		})
+		.eq("id", normalizeStudentId(studentByEmail.id))
+		.select("*")
+		.single();
+
+	if (updateStudentError) {
+		if (isStudentsPermissionDenied(updateStudentError.message, updateStudentError.code)) {
+			throw new Error(
+				"Vinculação de students ao profile bloqueada por policy/RLS no Supabase. Garanta policies UPDATE para usuários autenticados."
+			);
+		}
+
+		throw new Error(`Erro ao sincronizar profile_id do estudante: ${updateStudentError.message}`);
+	}
+
+	return updatedStudent as Student;
+}
+
+/**
  * Cadastra um novo estudante.
  */
 export async function createStudent(data: CreateStudentData): Promise<Student> {

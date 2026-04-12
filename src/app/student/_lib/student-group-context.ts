@@ -1,5 +1,5 @@
 import { fetchAllGroups } from "@/services/group-service";
-import { fetchAllStudents } from "@/services/student-service";
+import { fetchAllStudents, resolveStudentByAuthIdentity } from "@/services/student-service";
 import type { Group } from "@/types/group";
 import type { Student } from "@/types/student";
 
@@ -26,7 +26,9 @@ export async function resolveStudentGroupContext(profileId: string): Promise<Stu
     studentsError = error instanceof Error ? error.message : "Não foi possível carregar estudantes.";
   }
 
-  const student = allStudents.find((item) => item.profile_id === profileId) ?? null;
+  const student = studentsError
+    ? null
+    : await resolveStudentByAuthIdentity({ profileId }).catch(() => allStudents.find((item) => item.profile_id === profileId) ?? null);
 
   let allGroups: Group[] = [];
   try {

@@ -2,6 +2,7 @@ import { notFound, redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getAuthenticatedProfile } from "@/lib/auth/session-service";
 import { fetchGroupById } from "@/services/group-service";
+import { resolveStudentByAuthIdentity } from "@/services/student-service";
 import type { Group } from "@/types/group";
 import type { Profile } from "@/types/profile";
 import { STUDENT_ROUTES } from "@/lib/utils/constants";
@@ -32,19 +33,8 @@ function isAdvisorLinkedToGroup(group: Group, advisorId: string | number) {
 }
 
 async function fetchStudentIdByProfileId(profileId: string): Promise<string | number | null> {
-  const supabase = await createClient();
-
-  const { data, error } = await supabase
-    .from("students")
-    .select("id")
-    .eq("profile_id", profileId)
-    .maybeSingle();
-
-  if (error) {
-    throw new Error(`Erro ao validar vínculo do estudante com o grupo: ${error.message}`);
-  }
-
-  return data?.id ?? null;
+  const student = await resolveStudentByAuthIdentity({ profileId });
+  return student?.id ?? null;
 }
 
 async function fetchAdvisorIdByProfileId(profileId: string): Promise<string | number | null> {
