@@ -6,6 +6,7 @@ import { fetchGroupFinalProduct } from "@/services/group-final-product-service";
 import { fetchGroupProcessPhotos } from "@/services/group-process-photo-service";
 import { fetchGroupRepertoryItems } from "@/services/group-repertory-item-service";
 import { requireGroupAccess } from "@/services/group-access-service";
+import { ProjectPreviewActions } from "@/components/project/ProjectPreviewActions";
 
 const RESOURCE_TYPE_LABELS: Record<string, string> = {
   artigo: "Artigo", livro: "Livro", site: "Site",
@@ -42,24 +43,34 @@ export default async function PreviewPage({ params }: PreviewPageProps) {
 
   const title = finalProduct?.title || group.theme || "Trabalho Colaborativo de Autoria";
   const summary = finalProduct?.description || group.description || "";
-  const members = [group.member_1_name, group.member_2_name, group.member_3_name].filter(Boolean);
+  const members = [
+    group.member_1_name,
+    group.member_2_name,
+    group.member_3_name,
+    group.member_4_name,
+    group.member_5_name,
+  ].filter(Boolean);
   const filledSections = sections.filter((s) => !!s.content?.trim());
+  const downloadFileName = title
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-zA-Z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .toLowerCase() || "projeto-tca";
 
   return (
-    <div className="max-w-3xl">
+    <div className="max-w-5xl mx-auto w-full">
       {/* Nav */}
       <div className="mb-6 no-print">
         <div className="tca-stripes h-1.5 w-full rounded-md mb-4" />
         <div className="flex items-center justify-between flex-wrap gap-3">
-          <Link href={`/groups/${id}/project`} className="text-sm text-[#4CAF50] hover:underline">
-            ← Projeto
-          </Link>
+          <ProjectPreviewActions fallbackHref={`/groups/${id}/project`} fileName={downloadFileName} />
           <span className="text-xs text-[#6B7280]">Visualização de artigo acadêmico</span>
         </div>
       </div>
 
       {/* Paper wrapper — styled like a printed academic sheet */}
-      <article className="bg-white shadow-lg rounded-2xl overflow-hidden">
+      <article id="project-preview-document" className="bg-white shadow-lg rounded-2xl overflow-hidden">
 
         {/* ── CAPA ── */}
         <div className="bg-[#F5F2E9] border-b-4 border-[#4CAF50] px-10 py-14 text-center">
@@ -221,6 +232,12 @@ export default async function PreviewPage({ params }: PreviewPageProps) {
           <p className="text-xs text-[#9CA3AF]">
             TCA Hub — Plataforma de Projeto Autoral Colaborativo
           </p>
+        </div>
+
+        <div className="px-10 py-6 border-t border-gray-100 bg-white no-print">
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            <ProjectPreviewActions fallbackHref={`/groups/${id}/project`} fileName={downloadFileName} />
+          </div>
         </div>
       </article>
     </div>
