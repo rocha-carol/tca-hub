@@ -29,11 +29,12 @@ export default function HeaderMainNav({ items, quickItems = [] }: HeaderMainNavP
   return (
     <div className="hidden md:flex flex-col items-center gap-2 rounded-2xl bg-[#f4f8f1] px-2 py-2 border border-[#e2ecdd]">
       {items.length > 0 ? (
-        <nav className="flex items-center gap-2 flex-wrap justify-center">
+        <nav className="flex items-center gap-2 flex-wrap justify-center" aria-label="Navegação principal da aplicação">
           {items.map((item) => (
             <Link
               key={item.href}
               href={item.href}
+              aria-current={pathname === item.href || pathname.startsWith(`${item.href}/`) ? "page" : undefined}
               className="rounded-xl px-4 py-2 text-sm font-medium text-[#1F2937] hover:bg-white hover:text-[#4CAF50] transition-colors"
             >
               {item.label}
@@ -43,7 +44,7 @@ export default function HeaderMainNav({ items, quickItems = [] }: HeaderMainNavP
       ) : null}
 
       {visibleQuickItems.length > 0 ? (
-        <nav className={`flex items-center gap-2 flex-wrap justify-center ${items.length > 0 ? "border-t border-[#dfe8d9] pt-2" : ""}`}>
+        <nav className={`flex items-center gap-2 flex-wrap justify-center ${items.length > 0 ? "border-t border-[#dfe8d9] pt-2" : ""}`} aria-label="Atalhos rápidos do projeto">
           {visibleQuickItems.map((item) => {
             const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
 
@@ -51,6 +52,7 @@ export default function HeaderMainNav({ items, quickItems = [] }: HeaderMainNavP
               <Link
                 key={`${item.label}-${item.href}`}
                 href={item.href}
+                aria-current={isActive ? "page" : undefined}
                 className={`rounded-xl px-3 py-1.5 text-xs font-semibold transition-colors ${
                   isActive
                     ? "bg-white text-[#2F6F35] shadow-sm"

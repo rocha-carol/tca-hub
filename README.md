@@ -370,7 +370,7 @@ Separação principal:
 
 ### 6. Links Úteis
 
-- **Repositório de código:** https://github.com/rocha-carol/tca-hub
+- **Repositório de código:** https://github.com/rocha-carol/tca-hub.git
 - **Documentação de contexto do projeto:** `docs/project-context.md`
 - **Documentação de arquitetura:** `docs/architecture.md`
 - **Roadmap do projeto:** `docs/roadmap.md`

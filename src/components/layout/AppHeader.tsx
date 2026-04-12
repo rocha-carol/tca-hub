@@ -114,14 +114,15 @@ export default async function AppHeader({ groupName }: AppHeaderProps) {
   }
 
   return (
-    <header className="sticky top-0 z-50 border-b border-[#d9e7d4] bg-white/95 backdrop-blur shadow-sm">
+    <header className="sticky top-0 z-50 border-b border-[#d9e7d4] bg-white/95 shadow-sm backdrop-blur" role="banner">
       <div className="tca-stripes h-1 w-full" />
       <div className="flex min-h-16 items-center justify-between gap-4 px-4 lg:px-6">
         <Link
           href={homeHref}
           className="flex items-center gap-3 font-bold text-lg tracking-tight text-[#4CAF50] shrink-0"
+          aria-label="Ir para a página inicial da área atual"
         >
-          <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#eef8ea] text-sm text-[#4CAF50] shadow-sm">
+          <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#eef8ea] text-sm text-[#4CAF50] shadow-sm" aria-hidden="true">
             T
           </span>
           <div className="flex flex-col leading-none">
@@ -174,6 +175,7 @@ export default async function AppHeader({ groupName }: AppHeaderProps) {
                 <button
                   type="submit"
                   className="text-sm font-semibold bg-[#EB5757] hover:bg-red-400 text-white px-3 py-1.5 rounded-xl transition-colors"
+                  aria-label="Encerrar sessão e sair da plataforma"
                 >
                   Sair
                 </button>

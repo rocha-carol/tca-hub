@@ -1,8 +1,13 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
+import { useRef } from "react";
 import { signIn } from "@/lib/auth/auth-service";
 import type { AuthError } from "@/types/auth";
+
+type SignInFieldName = "email" | "password";
+type SignInFieldErrors = Partial<Record<SignInFieldName, string>>;
 
 interface SignInFormProps {
   title?: string;
@@ -35,6 +40,10 @@ export default function SignInForm({
   className = "",
   showSignUpLink = true,
 }: SignInFormProps) {
+  const emailInputRef = useRef<HTMLInputElement>(null);
+  const passwordInputRef = useRef<HTMLInputElement>(null);
+  const feedbackRef = useRef<HTMLDivElement>(null);
+
   // Estado dos inputs
   const [formData, setFormData] = useState({
     email: initialEmail,
@@ -46,6 +55,7 @@ export default function SignInForm({
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<SignInFieldErrors>({});
 
   useEffect(() => {
     if (!storageKey || typeof window === "undefined") {
@@ -83,33 +93,44 @@ export default function SignInForm({
     window.localStorage.setItem(storageKey, JSON.stringify(formData));
   }, [formData, storageKey]);
 
+  useEffect(() => {
+    if (!error && !success) {
+      return;
+    }
+
+    feedbackRef.current?.focus();
+  }, [error, success]);
+
   /**
    * Validação básica do formulário
    */
-  const validateForm = (): boolean => {
-    // Limpar erros anteriores
-    setError(null);
+  const validateForm = (): SignInFieldErrors => {
+    const validationErrors: SignInFieldErrors = {};
 
-    // Validar email
     if (!formData.email.trim()) {
-      setError("Email é obrigatório");
-      return false;
+      validationErrors.email = "Email é obrigatório.";
+      return validationErrors;
     }
 
-    // Regex básico para validação de email
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(formData.email)) {
-      setError("Email inválido");
-      return false;
+      validationErrors.email = "Informe um email válido.";
     }
 
-    // Validar senha
     if (!formData.password) {
-      setError("Senha é obrigatória");
-      return false;
+      validationErrors.password = "Senha é obrigatória.";
     }
 
-    return true;
+    return validationErrors;
+  };
+
+  const getRefByFieldName = (fieldName: SignInFieldName) => {
+    const refs = {
+      email: emailInputRef,
+      password: passwordInputRef,
+    };
+
+    return refs[fieldName];
   };
 
   /**
@@ -117,6 +138,14 @@ export default function SignInForm({
    */
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
+
+    if (name === "email" || name === "password") {
+      setFieldErrors((prev) => ({
+        ...prev,
+        [name]: undefined,
+      }));
+    }
+
     setFormData((prev) => ({
       ...prev,
       [name]: value,
@@ -126,10 +155,21 @@ export default function SignInForm({
   /**
    * Handler para submissão do formulário
    */
-  const handleSubmit = async () => {
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
 
-    // Validar antes de enviar
-    if (!validateForm()) {
+    setError(null);
+    setSuccess(false);
+
+    const validationErrors = validateForm();
+    setFieldErrors(validationErrors);
+
+    const firstErrorField = Object.keys(validationErrors)[0] as SignInFieldName | undefined;
+
+    if (firstErrorField) {
+      const firstInvalidFieldRef = getRefByFieldName(firstErrorField);
+      setError(validationErrors[firstErrorField] ?? "Revise os campos destacados.");
+      firstInvalidFieldRef.current?.focus();
       return;
     }
 
@@ -166,29 +206,41 @@ export default function SignInForm({
   };
 
   return (
-    <div
-      role="form"
+    <form
+      noValidate
       aria-label="Formulário de login"
+      onSubmit={(event) => {
+        void handleSubmit(event);
+      }}
       className={`w-full max-w-md mx-auto p-6 bg-white border border-lime-200 rounded-xl shadow-md ${className}`.trim()}
     >
       <h2 className="text-2xl font-bold mb-2 text-lime-800">{title}</h2>
       {description ? <p className="text-sm text-slate-700 mb-6">{description}</p> : <div className="mb-6" />}
 
-      {/* Mensagem de erro */}
       {error && (
-        <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
+        <div
+          ref={feedbackRef}
+          tabIndex={-1}
+          className="mb-4 rounded border border-red-400 bg-red-100 p-3 text-red-700"
+          role="alert"
+          aria-live="assertive"
+        >
           {error}
         </div>
       )}
 
-      {/* Mensagem de sucesso */}
       {success && (
-        <div className="mb-4 p-3 bg-green-100 border border-green-400 text-green-700 rounded">
+        <div
+          ref={feedbackRef}
+          tabIndex={-1}
+          className="mb-4 rounded border border-green-400 bg-green-100 p-3 text-green-700"
+          role="status"
+          aria-live="polite"
+        >
           ✓ Login realizado com sucesso! Redirecionando...
         </div>
       )}
 
-      {/* Campo de email */}
       <div className="mb-4">
         <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
           Email
@@ -197,15 +249,23 @@ export default function SignInForm({
           id="email"
           type="email"
           name="email"
+          ref={emailInputRef}
           value={formData.email}
           onChange={handleChange}
+          autoComplete="email"
           disabled={loading || success}
+          aria-invalid={Boolean(fieldErrors.email)}
+          aria-describedby={fieldErrors.email ? "signin-email-error" : undefined}
           placeholder="seu.email@exemplo.com"
           className="w-full px-3 py-2 border border-slate-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-lime-500 disabled:bg-gray-100"
         />
+        {fieldErrors.email ? (
+          <p id="signin-email-error" className="mt-2 text-sm text-red-700">
+            {fieldErrors.email}
+          </p>
+        ) : null}
       </div>
 
-      {/* Campo de senha */}
       <div className="mb-6">
         <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
           Senha
@@ -215,9 +275,13 @@ export default function SignInForm({
             id="password"
             type={showPassword ? "text" : "password"}
             name="password"
+            ref={passwordInputRef}
             value={formData.password}
             onChange={handleChange}
+            autoComplete="current-password"
             disabled={loading || success}
+            aria-invalid={Boolean(fieldErrors.password)}
+            aria-describedby={fieldErrors.password ? "signin-password-error" : undefined}
             placeholder="••••••••"
             className="w-full px-3 py-2 pr-12 border border-slate-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-lime-500 disabled:bg-gray-100"
           />
@@ -259,29 +323,29 @@ export default function SignInForm({
             )}
           </button>
         </div>
+        {fieldErrors.password ? (
+          <p id="signin-password-error" className="mt-2 text-sm text-red-700">
+            {fieldErrors.password}
+          </p>
+        ) : null}
       </div>
 
-      {/* Botão de submissão */}
       <button
-        type="button"
-        onClick={() => {
-          void handleSubmit();
-        }}
+        type="submit"
         disabled={loading || success}
         className="w-full bg-lime-700 hover:bg-lime-800 disabled:bg-gray-400 text-white font-medium py-2 px-4 rounded-md transition"
       >
         {loading ? "Fazendo login..." : success ? "✓ Login realizado!" : submitLabel}
       </button>
 
-      {/* Link para cadastro */}
       {showSignUpLink ? (
         <p className="text-center mt-4 text-sm text-gray-600">
           Não tem conta?{" "}
-          <a href="/auth/signup" className="text-lime-700 hover:text-lime-800 font-medium">
+          <Link href="/auth/signup" className="text-lime-700 hover:text-lime-800 font-medium">
             Crie uma agora
-          </a>
+          </Link>
         </p>
       ) : null}
-    </div>
+    </form>
   );
 }

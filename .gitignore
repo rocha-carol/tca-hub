@@ -46,5 +46,9 @@ next-env.d.ts
 # documentação local do projeto
 /docs
 
+# instruções locais para agentes
+/agents.md
+/AGENTS.md
+
 # anotações locais de planejamento/pêndencias
 /PENDENCIAS.local.md

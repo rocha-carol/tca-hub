@@ -51,6 +51,7 @@ body {
   background: #fbfbf8;
   color: var(--foreground);
   font-family: "Inter", Arial, Helvetica, sans-serif;
+  line-height: 1.5;
 }
 
 a {
@@ -64,6 +65,50 @@ a:hover {
 ::selection {
   background: color-mix(in srgb, var(--tca-primary) 24%, white);
   color: var(--foreground);
+}
+
+.skip-link {
+  position: absolute;
+  left: 1rem;
+  top: -4rem;
+  z-index: 100;
+  border-radius: 0.75rem;
+  background: #16301A;
+  color: #ffffff;
+  padding: 0.75rem 1rem;
+  font-weight: 700;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.18);
+  transition: top 0.2s ease;
+}
+
+.skip-link:focus,
+.skip-link:focus-visible {
+  top: 1rem;
+}
+
+:where(a, button, input, select, textarea, summary, [role="button"], [tabindex]):focus-visible {
+  outline: 3px solid #0F766E;
+  outline-offset: 3px;
+  box-shadow: 0 0 0 4px color-mix(in srgb, #0F766E 18%, white);
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 .tca-stripes {

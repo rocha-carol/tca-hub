@@ -10,16 +10,19 @@ import SignInForm from "@/components/auth/SignInForm";
  */
 export default function SignInPage() {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#f7f6ee] via-[#fdfbf2] to-[#eef4df] flex items-center justify-center p-4">
+    <main
+      className="min-h-screen bg-gradient-to-br from-[#f7f6ee] via-[#fdfbf2] to-[#eef4df] flex items-center justify-center p-4"
+      aria-labelledby="login-page-title"
+    >
       <div className="w-full relative max-w-3xl">
         <div className="absolute inset-y-2 left-0 w-3 rounded-l-xl tca-stripes" aria-hidden="true" />
         <div className="text-center mb-8">
-          <h1 className="text-4xl font-extrabold tca-title-guide mb-2">TCA Hub</h1>
+          <h1 id="login-page-title" className="text-4xl font-extrabold tca-title-guide mb-2">TCA Hub</h1>
           <p className="text-slate-700">Plataforma de Trabalho Colaborativo de Autoria</p>
         </div>
 
         <SignInForm />
       </div>
-    </div>
+    </main>
   );
 }

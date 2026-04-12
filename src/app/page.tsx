@@ -93,7 +93,7 @@ export default function Home() {
   ];
 
   return (
-    <main className="min-h-screen bg-gradient-to-br from-[#f7f6ee] via-[#fdfbf2] to-[#eef4df]">
+    <main className="min-h-screen bg-gradient-to-br from-[#f7f6ee] via-[#fdfbf2] to-[#eef4df]" aria-labelledby="pagina-inicial-titulo">
       <section className="mx-auto max-w-7xl px-6 py-10 md:py-14">
         <div className="rounded-[28px] border border-[#d9e7d4] bg-white/95 p-6 shadow-[0_16px_40px_rgba(31,41,55,0.06)] md:p-8 lg:p-10">
           <div className="tca-stripes mb-6 h-1.5 w-full rounded-md" />
@@ -103,7 +103,7 @@ export default function Home() {
               <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#7AA56F]">
                 Visão do projeto
               </p>
-              <h1 className="mt-3 text-3xl font-extrabold leading-tight tca-title-guide md:text-5xl">
+              <h1 id="pagina-inicial-titulo" className="mt-3 text-3xl font-extrabold leading-tight tca-title-guide md:text-5xl">
                 TCA Hub
               </h1>
               <p className="mt-3 text-lg font-medium text-[#35523A] md:text-2xl">
@@ -120,14 +120,15 @@ export default function Home() {
                 <Link
                   href="/auth/login"
                   className={accessPlatformCtaClass}
+                  aria-label="Acessar a plataforma TCA Hub"
                 >
-                  <span className="text-base leading-none">↗</span>
+                  <span className="text-base leading-none" aria-hidden="true">↗</span>
                   Acessar a plataforma
                 </Link>
               </div>
             </div>
 
-            <aside className="rounded-2xl border border-[#E3EDE0] bg-[#FBFDF9] p-5 shadow-[0_8px_24px_rgba(31,41,55,0.04)]">
+            <aside className="rounded-2xl border border-[#E3EDE0] bg-[#FBFDF9] p-5 shadow-[0_8px_24px_rgba(31,41,55,0.04)]" aria-label="Resumo da proposta do projeto">
               <div className="grid gap-3">
                 <div className="rounded-xl border border-[#E7EFE4] bg-white px-4 py-3">
                   <p className="text-sm font-semibold text-[#16301A]">Problema real</p>

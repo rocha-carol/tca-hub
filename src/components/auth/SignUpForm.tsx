@@ -1,9 +1,14 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
+import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { signUp } from "@/lib/auth/auth-service";
 import type { AuthError, UserRole } from "@/types/auth";
+
+type SignUpFieldName = "name" | "email" | "role" | "password" | "passwordConfirm";
+type SignUpFieldErrors = Partial<Record<SignUpFieldName, string>>;
 
 const roleOptions: Array<{ value: UserRole; label: string; description: string }> = [
   {
@@ -35,8 +40,13 @@ const roleOptions: Array<{ value: UserRole; label: string; description: string }
  */
 export default function SignUpForm() {
   const router = useRouter();
+  const nameInputRef = useRef<HTMLInputElement>(null);
+  const emailInputRef = useRef<HTMLInputElement>(null);
+  const roleSelectRef = useRef<HTMLSelectElement>(null);
+  const passwordInputRef = useRef<HTMLInputElement>(null);
+  const passwordConfirmInputRef = useRef<HTMLInputElement>(null);
+  const feedbackRef = useRef<HTMLDivElement>(null);
 
-  // Estado dos inputs
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -45,10 +55,10 @@ export default function SignUpForm() {
     passwordConfirm: "",
   });
 
-  // Estado de controle
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<SignUpFieldErrors>({});
 
   const feedbackMessage = loading
     ? "Enviando cadastro..."
@@ -62,61 +72,68 @@ export default function SignUpForm() {
       ? "border-red-300 bg-red-50 text-red-700"
       : "border-green-300 bg-green-50 text-green-700";
 
+  useEffect(() => {
+    if (!feedbackMessage) {
+      return;
+    }
+
+    feedbackRef.current?.focus();
+  }, [feedbackMessage]);
+
   /**
    * Validação básica do formulário
    */
-  const validateForm = (): boolean => {
-    // Limpar erros anteriores
-    setError(null);
-    setSuccessMessage(null);
+  const validateForm = (): SignUpFieldErrors => {
+    const validationErrors: SignUpFieldErrors = {};
 
-    // Validar nome
     if (!formData.name.trim()) {
-      setError("Nome é obrigatório");
-      return false;
+      validationErrors.name = "Nome é obrigatório.";
+      return validationErrors;
     }
 
     if (formData.name.trim().length < 3) {
-      setError("Nome deve ter pelo menos 3 caracteres");
-      return false;
+      validationErrors.name = "Nome deve ter pelo menos 3 caracteres.";
     }
 
-    // Validar email
     if (!formData.email.trim()) {
-      setError("Email é obrigatório");
-      return false;
+      validationErrors.email = "Email é obrigatório.";
+      return validationErrors;
     }
 
     if (!formData.role) {
-      setError("Selecione se a conta será de estudante, orientador ou coordenador");
-      return false;
+      validationErrors.role = "Selecione o tipo de conta: estudante, orientador ou coordenador.";
     }
 
-    // Regex básico para validação de email
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(formData.email)) {
-      setError("Email inválido");
-      return false;
+      validationErrors.email = "Informe um email válido.";
     }
 
-    // Validar senha
     if (!formData.password) {
-      setError("Senha é obrigatória");
-      return false;
+      validationErrors.password = "Senha é obrigatória.";
     }
 
     if (formData.password.length < 8) {
-      setError("Senha deve ter pelo menos 8 caracteres");
-      return false;
+      validationErrors.password = "Senha deve ter pelo menos 8 caracteres.";
     }
 
-    // Validar confirmação de senha
     if (formData.password !== formData.passwordConfirm) {
-      setError("Senhas não conferem");
-      return false;
+      validationErrors.passwordConfirm = "As senhas não conferem.";
     }
 
-    return true;
+    return validationErrors;
+  };
+
+  const getRefByFieldName = (fieldName: SignUpFieldName) => {
+    const refs = {
+      name: nameInputRef,
+      email: emailInputRef,
+      role: roleSelectRef,
+      password: passwordInputRef,
+      passwordConfirm: passwordConfirmInputRef,
+    };
+
+    return refs[fieldName];
   };
 
   /**
@@ -124,6 +141,14 @@ export default function SignUpForm() {
    */
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
+
+    if (name === "name" || name === "email" || name === "role" || name === "password" || name === "passwordConfirm") {
+      setFieldErrors((prev) => ({
+        ...prev,
+        [name]: undefined,
+      }));
+    }
+
     setFormData((prev) => ({
       ...prev,
       [name]: value,
@@ -136,8 +161,18 @@ export default function SignUpForm() {
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    // Validar antes de enviar
-    if (!validateForm()) {
+    setError(null);
+    setSuccessMessage(null);
+
+    const validationErrors = validateForm();
+    setFieldErrors(validationErrors);
+
+    const firstErrorField = Object.keys(validationErrors)[0] as SignUpFieldName | undefined;
+
+    if (firstErrorField) {
+      const firstInvalidFieldRef = getRefByFieldName(firstErrorField);
+      setError(validationErrors[firstErrorField] ?? "Revise os campos destacados.");
+      firstInvalidFieldRef.current?.focus();
       return;
     }
 
@@ -186,6 +221,7 @@ export default function SignUpForm() {
   return (
     <form
       aria-label="Formulário de cadastro"
+      noValidate
       onSubmit={(event) => {
         void handleSubmit(event);
       }}
@@ -195,6 +231,8 @@ export default function SignUpForm() {
 
       {feedbackMessage ? (
         <div
+          ref={feedbackRef}
+          tabIndex={-1}
           className={`mb-4 rounded-xl border p-3 text-sm ${feedbackClassName}`}
           role={error ? "alert" : "status"}
           aria-live={error ? "assertive" : "polite"}
@@ -203,7 +241,6 @@ export default function SignUpForm() {
         </div>
       ) : null}
 
-      {/* Campo de nome */}
       <div className="mb-4">
         <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-2">
           Nome Completo
@@ -212,15 +249,23 @@ export default function SignUpForm() {
           id="name"
           type="text"
           name="name"
+          ref={nameInputRef}
           value={formData.name}
           onChange={handleChange}
+          autoComplete="name"
           disabled={loading || Boolean(successMessage)}
+          aria-invalid={Boolean(fieldErrors.name)}
+          aria-describedby={fieldErrors.name ? "signup-name-error" : undefined}
           placeholder="Seu nome completo"
           className="w-full px-3 py-2 border border-slate-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-lime-500 disabled:bg-gray-100"
         />
+        {fieldErrors.name ? (
+          <p id="signup-name-error" className="mt-2 text-sm text-red-700">
+            {fieldErrors.name}
+          </p>
+        ) : null}
       </div>
 
-      {/* Campo de email */}
       <div className="mb-4">
         <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
           Email
@@ -229,12 +274,21 @@ export default function SignUpForm() {
           id="email"
           type="email"
           name="email"
+          ref={emailInputRef}
           value={formData.email}
           onChange={handleChange}
+          autoComplete="email"
           disabled={loading || Boolean(successMessage)}
+          aria-invalid={Boolean(fieldErrors.email)}
+          aria-describedby={fieldErrors.email ? "signup-email-error" : undefined}
           placeholder="seu.email@exemplo.com"
           className="w-full px-3 py-2 border border-slate-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-lime-500 disabled:bg-gray-100"
         />
+        {fieldErrors.email ? (
+          <p id="signup-email-error" className="mt-2 text-sm text-red-700">
+            {fieldErrors.email}
+          </p>
+        ) : null}
       </div>
 
       <div className="mb-4">
@@ -244,9 +298,12 @@ export default function SignUpForm() {
         <select
           id="role"
           name="role"
+          ref={roleSelectRef}
           value={formData.role}
           onChange={handleChange}
           disabled={loading || Boolean(successMessage)}
+          aria-invalid={Boolean(fieldErrors.role)}
+          aria-describedby={fieldErrors.role ? "signup-role-error" : "signup-role-description"}
           className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-black focus:outline-none focus:ring-2 focus:ring-lime-500 disabled:bg-gray-100"
         >
           {roleOptions.map((roleOption) => (
@@ -255,12 +312,16 @@ export default function SignUpForm() {
             </option>
           ))}
         </select>
-        <p className="mt-2 text-sm text-slate-600">
+        <p id="signup-role-description" className="mt-2 text-sm text-slate-600">
           {roleOptions.find((roleOption) => roleOption.value === formData.role)?.description}
         </p>
+        {fieldErrors.role ? (
+          <p id="signup-role-error" className="mt-2 text-sm text-red-700">
+            {fieldErrors.role}
+          </p>
+        ) : null}
       </div>
 
-      {/* Campo de senha */}
       <div className="mb-4">
         <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
           Senha (mínimo 8 caracteres)
@@ -269,15 +330,23 @@ export default function SignUpForm() {
           id="password"
           type="password"
           name="password"
+          ref={passwordInputRef}
           value={formData.password}
           onChange={handleChange}
+          autoComplete="new-password"
           disabled={loading || Boolean(successMessage)}
+          aria-invalid={Boolean(fieldErrors.password)}
+          aria-describedby={fieldErrors.password ? "signup-password-error" : undefined}
           placeholder="••••••••"
           className="w-full px-3 py-2 border border-slate-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-lime-500 disabled:bg-gray-100"
         />
+        {fieldErrors.password ? (
+          <p id="signup-password-error" className="mt-2 text-sm text-red-700">
+            {fieldErrors.password}
+          </p>
+        ) : null}
       </div>
 
-      {/* Campo de confirmação de senha */}
       <div className="mb-6">
         <label htmlFor="passwordConfirm" className="block text-sm font-medium text-gray-700 mb-2">
           Confirmar Senha
@@ -286,15 +355,23 @@ export default function SignUpForm() {
           id="passwordConfirm"
           type="password"
           name="passwordConfirm"
+          ref={passwordConfirmInputRef}
           value={formData.passwordConfirm}
           onChange={handleChange}
+          autoComplete="new-password"
           disabled={loading || Boolean(successMessage)}
+          aria-invalid={Boolean(fieldErrors.passwordConfirm)}
+          aria-describedby={fieldErrors.passwordConfirm ? "signup-password-confirm-error" : undefined}
           placeholder="••••••••"
           className="w-full px-3 py-2 border border-slate-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-lime-500 disabled:bg-gray-100"
         />
+        {fieldErrors.passwordConfirm ? (
+          <p id="signup-password-confirm-error" className="mt-2 text-sm text-red-700">
+            {fieldErrors.passwordConfirm}
+          </p>
+        ) : null}
       </div>
 
-      {/* Botão de submissão */}
       <button
         type="submit"
         disabled={loading || Boolean(successMessage)}
@@ -303,12 +380,11 @@ export default function SignUpForm() {
         {loading ? "Criando conta..." : successMessage ? "✓ Cadastro enviado" : "Criar Conta"}
       </button>
 
-      {/* Link para login */}
       <p className="text-center mt-4 text-sm text-gray-600">
         Já tem conta?{" "}
-        <a href="/auth/login" className="text-lime-700 hover:text-lime-800 font-medium">
+        <Link href="/auth/login" className="text-lime-700 hover:text-lime-800 font-medium">
           Faça login
-        </a>
+        </Link>
       </p>
     </form>
   );

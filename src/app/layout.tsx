@@ -19,8 +19,13 @@ export default function RootLayout({
   return (
     <html lang="pt-BR">
       <body className="min-h-screen text-slate-800 antialiased">
+        <a href="#conteudo-principal" className="skip-link">
+          Pular para o conteúdo principal
+        </a>
         <AppHeader />
-        {children}
+        <div id="conteudo-principal" tabIndex={-1} role="main">
+          {children}
+        </div>
       </body>
     </html>
   );

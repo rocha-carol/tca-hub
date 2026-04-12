@@ -44,6 +44,8 @@ export function StudentPortalSidebar({
   group,
 }: StudentPortalSidebarProps) {
   const pathname = usePathname();
+  const mobileMenuId = "student-sidebar-mobile-panel";
+  const desktopMenuId = "student-sidebar-desktop-panel";
   const [isSidebarOpen, setIsSidebarOpen] = useState(() => {
     if (typeof window === "undefined") {
       return true;
@@ -168,15 +170,18 @@ export function StudentPortalSidebar({
             type="button"
             onClick={toggleSidebar}
             className="inline-flex items-center gap-2 rounded-xl border border-[#DCE8D6] bg-white/95 px-4 py-2.5 text-sm font-semibold text-[#17301C] shadow-[0_4px_14px_rgba(31,41,55,0.06)] transition-colors hover:bg-[#F8FBF6]"
+            aria-controls={mobileMenuId}
+            aria-expanded={isSidebarOpen}
           >
-            <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-[#F1F8ED] text-[#24532A]">
+            <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-[#F1F8ED] text-[#24532A]" aria-hidden="true">
               {isSidebarOpen ? "×" : "☰"}
             </span>
             {isSidebarOpen ? "Ocultar menu" : "Mostrar menu"}
           </button>
 
           {isSidebarOpen ? (
-            <Card className="border border-[#E3EDE0] bg-[#FBFDF9] p-4 shadow-[0_8px_24px_rgba(31,41,55,0.05)]">
+            <div id={mobileMenuId}>
+              <Card className="border border-[#E3EDE0] bg-[#FBFDF9] p-4 shadow-[0_8px_24px_rgba(31,41,55,0.05)]">
               <div className="flex items-center justify-between gap-3 mb-3">
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#6B7280]">
@@ -201,17 +206,18 @@ export function StudentPortalSidebar({
                     </p>
                   </div>
 
-                  <div className="flex flex-wrap gap-2">
+                  <nav className="flex flex-wrap gap-2" aria-label="Jornada do estudante no celular">
                     {links.map((link) => (
                       <Link
                         key={`${link.href}-${link.label}`}
                         href={link.href}
+                        aria-current={isActive(link.href) ? "page" : undefined}
                         className={`rounded-xl border px-3 py-2 text-sm font-semibold transition-colors ${getMobileLinkClass(link.href)}`}
                       >
                         {link.label}
                       </Link>
                     ))}
-                  </div>
+                  </nav>
                 </div>
 
                 {isGroupWorkspacePage ? (
@@ -225,27 +231,29 @@ export function StudentPortalSidebar({
                       </p>
                     </div>
 
-                    <div className="flex flex-wrap gap-2">
+                    <nav className="flex flex-wrap gap-2" aria-label="Ferramentas do projeto no celular">
                       {groupWorkspaceLinks.map((link) => (
                         <Link
                           key={link.href}
                           href={link.href}
+                          aria-current={isActive(link.href) ? "page" : undefined}
                           className={`rounded-xl border px-3 py-2 text-sm font-semibold transition-colors ${getMobileLinkClass(link.href)}`}
                         >
                           {link.label}
                         </Link>
                       ))}
-                    </div>
+                    </nav>
                   </div>
                 ) : null}
               </div>
-            </Card>
+              </Card>
+            </div>
           ) : null}
         </div>
       </div>
 
       <aside className={`hidden lg:block lg:shrink-0 ${isSidebarOpen ? "lg:w-72" : "lg:w-20"}`}>
-        <div className="sticky top-24 space-y-4">
+        <div className="sticky top-24 space-y-4" id={desktopMenuId}>
           {isSidebarOpen ? (
             <Card className="border border-[#E3EDE0] bg-[#FBFDF9] p-5 shadow-[0_10px_30px_rgba(31,41,55,0.05)]">
               <div className="space-y-4">
@@ -261,6 +269,8 @@ export function StudentPortalSidebar({
                     onClick={toggleSidebar}
                     className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-[#E3EDE0] bg-white text-[#24532A] transition-colors hover:bg-[#F8FBF6]"
                     aria-label="Ocultar sidebar"
+                    aria-controls={desktopMenuId}
+                    aria-expanded={isSidebarOpen}
                   >
                     ←
                   </button>
@@ -271,7 +281,7 @@ export function StudentPortalSidebar({
                     <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#6B7280]">Jornada do estudante</p>
                     <p className="mt-1 text-sm text-[#6B7280] leading-relaxed">Navegação principal do percurso e das próximas etapas.</p>
                   </div>
-                  <nav className="space-y-2">
+                  <nav className="space-y-2" aria-label="Jornada do estudante">
                   {links.map((link) => {
                     const active = isActive(link.href);
 
@@ -279,10 +289,11 @@ export function StudentPortalSidebar({
                       <Link
                         key={`${link.href}-${link.label}`}
                         href={link.href}
+                        aria-current={active ? "page" : undefined}
                         className={`flex items-center justify-between rounded-xl border px-4 py-3 text-sm font-semibold transition-colors ${getDesktopLinkClass(link.href)}`}
                       >
                         <span className="flex items-center gap-3">
-                          <span className={`inline-flex h-6 w-6 items-center justify-center rounded-md text-sm ${getDesktopIconClass(link.href)}`}>
+                          <span className={`inline-flex h-6 w-6 items-center justify-center rounded-md text-sm ${getDesktopIconClass(link.href)}`} aria-hidden="true">
                             {link.icon}
                           </span>
                           {link.label}
@@ -310,7 +321,7 @@ export function StudentPortalSidebar({
                       </p>
                     </div>
 
-                    <nav className="mt-3 space-y-2">
+                    <nav className="mt-3 space-y-2" aria-label="Ferramentas do projeto">
                       {groupWorkspaceLinks.map((link) => {
                         const active = isActive(link.href);
 
@@ -318,10 +329,11 @@ export function StudentPortalSidebar({
                           <Link
                             key={`${link.href}-${link.label}`}
                             href={link.href}
+                            aria-current={active ? "page" : undefined}
                             className={`flex items-center justify-between rounded-xl border px-4 py-3 text-sm font-semibold transition-colors ${getDesktopLinkClass(link.href)}`}
                           >
                             <span className="flex items-center gap-3">
-                              <span className={`inline-flex h-6 w-6 items-center justify-center rounded-md text-sm ${getDesktopIconClass(link.href)}`}>
+                              <span className={`inline-flex h-6 w-6 items-center justify-center rounded-md text-sm ${getDesktopIconClass(link.href)}`} aria-hidden="true">
                                 {link.icon}
                               </span>
                               {link.label}
@@ -344,8 +356,10 @@ export function StudentPortalSidebar({
                 onClick={toggleSidebar}
                 className="inline-flex items-center gap-2 rounded-2xl border border-[#E3EDE0] bg-white/95 px-4 py-3 text-sm font-semibold text-[#17301C] shadow-[0_6px_18px_rgba(31,41,55,0.05)] transition-colors hover:bg-[#F8FBF6]"
                 aria-label="Mostrar sidebar"
+                aria-controls={desktopMenuId}
+                aria-expanded={isSidebarOpen}
               >
-                <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-[#F1F8ED] text-[#24532A]">
+                <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-[#F1F8ED] text-[#24532A]" aria-hidden="true">
                   ☰
                 </span>
                 Menu
