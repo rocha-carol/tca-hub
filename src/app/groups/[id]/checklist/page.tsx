@@ -58,7 +58,7 @@ export default async function ChecklistPage({ params }: ChecklistPageProps) {
       {items.length === 0 ? (
         <Card>
           <p className="text-[#6B7280] text-sm">
-            Nenhum item no checklist ainda. O orientador pode adicionar itens de desenvolvimento pela página do projeto.
+            Nenhum item no checklist ainda. O orientador pode adicionar itens manualmente ou gerar sugestões com IA simulada pela página do projeto.
           </p>
         </Card>
       ) : (

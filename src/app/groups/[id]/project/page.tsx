@@ -69,10 +69,10 @@ import {
   fetchProjectSectionAuthorshipIndicators,
 } from "@/services/project-section-authorship-indicator-service";
 import { requireGroupAccess } from "@/services/group-access-service";
+import { generateProjectDevelopmentChecklistSimulated } from "@/lib/ai/project-development-checklist-simulated";
 import { generatePedagogicalFeedbackWithAI } from "@/lib/ai/pedagogical-feedback-service";
 import { ProjectProgress } from "@/components/project/ProjectProgress";
 import { ProjectPreview } from "@/components/project/ProjectPreview";
-import { ProjectSections } from "@/components/project/ProjectSections";
 import type { ProjectSectionStatus } from "@/types/project-section";
 import type { ProjectDevelopmentChecklistStatus } from "@/types/project-development-checklist-item";
 import type { GroupInPersonMeetingStatus } from "@/types/group-in-person-meeting";
@@ -102,6 +102,7 @@ interface GroupProjectPageProps {
     checklist_status?: string;
     checklist_action?: string;
     checklist_item?: string;
+    checklist_generated?: string;
     schedule_status?: string;
     schedule_section?: string;
     meeting_status?: string;
@@ -622,6 +623,46 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
 
     revalidatePath(`/groups/${id}/project`);
     redirect(`/groups/${id}/project?checklist_status=success&checklist_action=toggle&checklist_item=${itemId}`);
+  }
+
+  async function handleGenerateSimulatedChecklist() {
+    "use server";
+
+    const authenticatedProfile = await requireAdvisorProjectAccess(
+      id,
+      "checklist_status=forbidden&checklist_action=generate_ai"
+    );
+
+    try {
+      const currentSections = await ensureGroupProjectSectionsStructure(id);
+      const currentChecklistItems = await fetchGroupProjectDevelopmentChecklistItems(id);
+      const suggestions = generateProjectDevelopmentChecklistSimulated({
+        sections: currentSections,
+        existingItems: currentChecklistItems,
+      });
+
+      if (suggestions.length === 0) {
+        redirect(`/groups/${id}/project?checklist_status=noop&checklist_action=generate_ai`);
+      }
+
+      for (const suggestion of suggestions) {
+        await createProjectDevelopmentChecklistItem({
+          group_id: id,
+          section_id: suggestion.section_id,
+          item_text: suggestion.item_text,
+          created_by_profile_id: authenticatedProfile.id,
+          created_by_role: authenticatedProfile.role === "coordinator" ? "coordinator" : "advisor",
+          created_by_name: `${authenticatedProfile.name} • IA simulada`,
+        });
+      }
+
+      revalidatePath(`/groups/${id}/project`);
+      redirect(
+        `/groups/${id}/project?checklist_status=success&checklist_action=generate_ai&checklist_generated=${suggestions.length}`
+      );
+    } catch {
+      redirect(`/groups/${id}/project?checklist_status=error&checklist_action=generate_ai`);
+    }
   }
 
   async function handleUpsertSectionSchedule(formData: FormData) {
@@ -1370,6 +1411,10 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
     !!finalProduct ||
     previewRepertoryItems.length > 0 ||
     previewProcessPhotos.length > 0;
+  const simulatedChecklistSuggestions = generateProjectDevelopmentChecklistSimulated({
+    sections,
+    existingItems: checklistItems,
+  });
 
   return (
     <main className="min-h-screen bg-transparent">
@@ -1400,76 +1445,6 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
               A estrutura de seções ainda não está disponível para calcular o progresso geral deste projeto.
             </p>
           )}
-        </div>
-
-        <div className="tca-soft-surface rounded-lg p-6 shadow-sm mb-6 relative overflow-hidden">
-          <div className="absolute left-0 top-0 h-full w-2 tca-stripes" aria-hidden="true" />
-          <h2 className="text-lg font-semibold text-lime-900 mb-2">Sobre o TCA (Ciclo Autoral)</h2>
-
-          <p className="text-sm text-gray-700 leading-relaxed">
-            O Ciclo Autoral compreende os anos finais do Ensino Fundamental e fortalece a capacidade dos estudantes
-            de analisar a realidade, argumentar, sistematizar conhecimentos e propor caminhos de transformação social.
-            No TCA, os temas partem de problemas sociais e comunitários observados no território em que vivem e estudam.
-          </p>
-
-          <p className="text-sm text-gray-700 leading-relaxed mt-2">
-            Esse trabalho favorece o protagonismo estudantil, o reconhecimento das diferenças e a participação efetiva
-            na construção de propostas para melhorar o mundo em que vivem.
-          </p>
-
-          <details className="mt-3">
-            <summary className="cursor-pointer text-sm font-medium text-lime-800 hover:text-lime-900">
-              Objetivos pedagógicos do TCA
-            </summary>
-            <ul className="list-disc pl-5 mt-2 space-y-1 text-sm text-gray-700">
-              <li>
-                Apoiar a elaboração de projetos de transformação no ciclo autoral com materiais de apoio e atividades
-                prático-pedagógicas.
-              </li>
-              <li>Valorizar os TCAs desenvolvidos na rede.</li>
-              <li>
-                Fomentar experiências pedagógicas colaborativas que integrem saberes escolares e envolvam a comunidade.
-              </li>
-            </ul>
-          </details>
-
-          <p className="text-xs text-gray-500 mt-3">
-            Fonte oficial: 
-            <a
-              href="https://educacao.sme.prefeitura.sp.gov.br/ensino-fundamental/trabalho-colaborativo-de-autoria/"
-              target="_blank"
-              rel="noreferrer"
-              className="text-lime-700 hover:underline"
-            >
-              Secretaria Municipal de Educação de São Paulo — Trabalho Colaborativo de Autoria (TCA)
-            </a>
-          </p>
-
-          <div className="mt-2">
-            <p className="text-xs text-gray-500">Materiais prioritários para análise da IA:</p>
-            <ul className="list-disc pl-5 mt-1 space-y-1 text-xs text-lime-700">
-              <li>
-                <a
-                  href="https://drive.google.com/file/d/1mnQPWEKlz8y1ZwCX1atY-9B-nM4JyHgm/view?pli=1"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="hover:underline"
-                >
-                  Documento TCA (Google Drive)
-                </a>
-              </li>
-              <li>
-                <a
-                  href="https://drive.google.com/file/d/1S0uXh23jD7BWgZinsrnzMVaFRHubzzUs/view"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="hover:underline"
-                >
-                  Plano de Navegação do Autor (Google Drive)
-                </a>
-              </li>
-            </ul>
-          </div>
         </div>
 
         {sectionsError && (
@@ -1591,135 +1566,164 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
           </div>
         )}
 
-        <div className="tca-soft-surface rounded-lg p-6 shadow-sm mb-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-2">Módulo de produto final</h2>
+        <details className="tca-soft-surface rounded-lg p-6 shadow-sm mb-6" open={Boolean(query.final_product_status)}>
+          <summary className="flex cursor-pointer list-none items-start justify-between gap-4">
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900">Módulo de produto final</h2>
+              <p className="text-sm text-gray-600 mt-1">
+                {finalProduct?.title
+                  ? `Título atual: ${finalProduct.title}`
+                  : "Clique para expandir e registrar o produto final do grupo."}
+              </p>
+            </div>
 
-          {query.final_product_status === "success" && (
-            <p className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-md px-3 py-2 mb-3">
-              Produto final salvo com sucesso.
-            </p>
-          )}
-          {query.final_product_status === "invalid" && (
-            <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2 mb-3">
-              Título inválido. Informe ao menos 3 caracteres.
-            </p>
-          )}
-          {query.final_product_status === "error" && (
-            <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2 mb-3">
-              Não foi possível salvar o produto final. Tente novamente.
-            </p>
-          )}
-          {query.final_product_status === "forbidden" && (
-            <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2 mb-3">
-              É necessário estar autenticado para registrar o produto final.
-            </p>
-          )}
+            <span className="shrink-0 rounded-full bg-white/80 px-3 py-1 text-xs font-medium text-lime-800 border border-lime-100">
+              {getFinalProductStatusLabel(finalProduct?.status)}
+            </span>
+          </summary>
 
-          <div className="mb-4 p-3 border border-gray-100 rounded-md bg-gray-50">
-            <p className="text-sm text-gray-900 font-medium">
-              Título atual: {finalProduct?.title || "Não definido"}
-            </p>
-            <p className="text-xs text-gray-600 mt-1">
-              Status: {finalProduct?.status === "finalizado" ? "Finalizado" : "Rascunho"}
-            </p>
-            {finalProduct?.description && (
-              <p className="text-xs text-gray-700 mt-1 whitespace-pre-line">{finalProduct.description}</p>
+          <div className="mt-4">
+            {query.final_product_status === "success" && (
+              <p className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-md px-3 py-2 mb-3">
+                Produto final salvo com sucesso.
+              </p>
             )}
-            {finalProduct?.final_link && (
-              <p className="text-xs text-blue-700 mt-1 break-all">Link final: {finalProduct.final_link}</p>
+            {query.final_product_status === "invalid" && (
+              <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2 mb-3">
+                Título inválido. Informe ao menos 3 caracteres.
+              </p>
+            )}
+            {query.final_product_status === "error" && (
+              <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2 mb-3">
+                Não foi possível salvar o produto final. Tente novamente.
+              </p>
+            )}
+            {query.final_product_status === "forbidden" && (
+              <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2 mb-3">
+                É necessário estar autenticado para registrar o produto final.
+              </p>
+            )}
+
+            <div className="mb-4 p-3 border border-gray-100 rounded-md bg-gray-50">
+              <p className="text-sm text-gray-900 font-medium">
+                Título atual: {finalProduct?.title || "Não definido"}
+              </p>
+              <p className="text-xs text-gray-600 mt-1">
+                Status: {getFinalProductStatusLabel(finalProduct?.status)}
+              </p>
+              {finalProduct?.description && (
+                <p className="text-xs text-gray-700 mt-1 whitespace-pre-line">{finalProduct.description}</p>
+              )}
+              {finalProduct?.final_link && (
+                <p className="text-xs text-blue-700 mt-1 break-all">Link final: {finalProduct.final_link}</p>
+              )}
+            </div>
+
+            {canManageFinalProduct && (
+              <form action={handleUpsertFinalProduct} className="space-y-3 border-t border-gray-100 pt-4">
+                <div>
+                  <label htmlFor="final-product-title" className="block text-sm text-gray-700 mb-1">Título do produto final</label>
+                  <input
+                    id="final-product-title"
+                    name="title"
+                    type="text"
+                    defaultValue={finalProduct?.title || ""}
+                    placeholder="Ex.: Protótipo funcional de monitoramento ambiental"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="final-product-description" className="block text-sm text-gray-700 mb-1">Descrição</label>
+                  <textarea
+                    id="final-product-description"
+                    name="description"
+                    rows={3}
+                    defaultValue={finalProduct?.description || ""}
+                    placeholder="Descreva o produto final e seus principais resultados..."
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div>
+                    <label htmlFor="final-product-format" className="block text-sm text-gray-700 mb-1">Formato</label>
+                    <input
+                      id="final-product-format"
+                      name="product_format"
+                      type="text"
+                      defaultValue={finalProduct?.product_format || ""}
+                      placeholder="Ex.: App, relatório, vídeo"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label htmlFor="final-product-link" className="block text-sm text-gray-700 mb-1">Link final (opcional)</label>
+                    <input
+                      id="final-product-link"
+                      name="final_link"
+                      type="url"
+                      defaultValue={finalProduct?.final_link || ""}
+                      placeholder="https://..."
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label htmlFor="final-product-status" className="block text-sm text-gray-700 mb-1">Status</label>
+                    <select
+                      id="final-product-status"
+                      name="status"
+                      defaultValue={finalProduct?.status || "rascunho"}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="rascunho">Rascunho</option>
+                      <option value="finalizado">Finalizado</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div>
+                  <label htmlFor="final-product-presentation-notes" className="block text-sm text-gray-700 mb-1">Observações de apresentação (opcional)</label>
+                  <textarea
+                    id="final-product-presentation-notes"
+                    name="presentation_notes"
+                    rows={2}
+                    defaultValue={finalProduct?.presentation_notes || ""}
+                    placeholder="Ex.: Levar equipamento de demonstração e roteiro de apresentação."
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  className="bg-lime-700 hover:bg-lime-800 text-white font-medium px-4 py-2 rounded-md text-sm"
+                >
+                  Salvar produto final
+                </button>
+              </form>
             )}
           </div>
+        </details>
 
-          {canManageFinalProduct && (
-            <form action={handleUpsertFinalProduct} className="space-y-3 border-t border-gray-100 pt-4">
-              <div>
-                <label htmlFor="final-product-title" className="block text-sm text-gray-700 mb-1">Título do produto final</label>
-                <input
-                  id="final-product-title"
-                  name="title"
-                  type="text"
-                  defaultValue={finalProduct?.title || ""}
-                  placeholder="Ex.: Protótipo funcional de monitoramento ambiental"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
+        <details className="tca-soft-surface rounded-lg p-6 shadow-sm mb-6" open={Boolean(query.photo_status)}>
+          <summary className="flex cursor-pointer list-none items-start justify-between gap-4">
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900">Fotos do processo</h2>
+              <p className="text-sm text-gray-600 mt-1">
+                {processPhotos.length > 0
+                  ? `${processPhotos.length} registro(s) do processo disponíveis.`
+                  : "Clique para expandir e registrar fotos do processo do grupo."}
+              </p>
+            </div>
 
-              <div>
-                <label htmlFor="final-product-description" className="block text-sm text-gray-700 mb-1">Descrição</label>
-                <textarea
-                  id="final-product-description"
-                  name="description"
-                  rows={3}
-                  defaultValue={finalProduct?.description || ""}
-                  placeholder="Descreva o produto final e seus principais resultados..."
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
+            <span className="shrink-0 rounded-full bg-white/80 px-3 py-1 text-xs font-medium text-lime-800 border border-lime-100">
+              {processPhotos.length} foto(s)
+            </span>
+          </summary>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <div>
-                  <label htmlFor="final-product-format" className="block text-sm text-gray-700 mb-1">Formato</label>
-                  <input
-                    id="final-product-format"
-                    name="product_format"
-                    type="text"
-                    defaultValue={finalProduct?.product_format || ""}
-                    placeholder="Ex.: App, relatório, vídeo"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-
-                <div>
-                  <label htmlFor="final-product-link" className="block text-sm text-gray-700 mb-1">Link final (opcional)</label>
-                  <input
-                    id="final-product-link"
-                    name="final_link"
-                    type="url"
-                    defaultValue={finalProduct?.final_link || ""}
-                    placeholder="https://..."
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-
-                <div>
-                  <label htmlFor="final-product-status" className="block text-sm text-gray-700 mb-1">Status</label>
-                  <select
-                    id="final-product-status"
-                    name="status"
-                    defaultValue={finalProduct?.status || "rascunho"}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="rascunho">Rascunho</option>
-                    <option value="finalizado">Finalizado</option>
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label htmlFor="final-product-presentation-notes" className="block text-sm text-gray-700 mb-1">Observações de apresentação (opcional)</label>
-                <textarea
-                  id="final-product-presentation-notes"
-                  name="presentation_notes"
-                  rows={2}
-                  defaultValue={finalProduct?.presentation_notes || ""}
-                  placeholder="Ex.: Levar equipamento de demonstração e roteiro de apresentação."
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-
-              <button
-                type="submit"
-                className="bg-lime-700 hover:bg-lime-800 text-white font-medium px-4 py-2 rounded-md text-sm"
-              >
-                Salvar produto final
-              </button>
-            </form>
-          )}
-        </div>
-
-        <div className="tca-soft-surface rounded-lg p-6 shadow-sm mb-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-2">Fotos do processo</h2>
-
+          <div className="mt-4">
           {query.photo_status === "success" && query.photo_action === "add" && (
             <p className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-md px-3 py-2 mb-3">
               Foto do processo registrada com sucesso.
@@ -1844,11 +1848,26 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
               </button>
             </form>
           )}
-        </div>
+          </div>
+        </details>
 
-        <div className="tca-soft-surface rounded-lg p-6 shadow-sm mb-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-2">Exploração de repertório</h2>
+        <details className="tca-soft-surface rounded-lg p-6 shadow-sm mb-6" open={Boolean(query.repertory_status)}>
+          <summary className="flex cursor-pointer list-none items-start justify-between gap-4">
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900">Exploração de repertório</h2>
+              <p className="text-sm text-gray-600 mt-1">
+                {repertoryItems.length > 0
+                  ? `${repertoryItems.length} item(ns) de repertório registrados.`
+                  : "Clique para expandir e registrar referências e repertórios do grupo."}
+              </p>
+            </div>
 
+            <span className="shrink-0 rounded-full bg-white/80 px-3 py-1 text-xs font-medium text-lime-800 border border-lime-100">
+              {repertoryItems.length} item(ns)
+            </span>
+          </summary>
+
+          <div className="mt-4">
           {query.repertory_status === "success" && query.repertory_action === "add" && (
             <p className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-md px-3 py-2 mb-3">
               Item de repertório registrado com sucesso.
@@ -2022,7 +2041,8 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
               </button>
             </form>
           )}
-        </div>
+          </div>
+        </details>
 
         <div className="mb-6">
           <ProjectPreview
@@ -2036,19 +2056,23 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
           />
         </div>
 
-        <div className="mb-6">
-          <div className="mb-4">
-            <h2 className="text-xl font-semibold text-[#1F2937]">Seções</h2>
-            <p className="text-sm text-[#6B7280] mt-1">
-              Introdução, diagnóstico, pesquisa, proposta de intervenção, resultados e conclusão organizados em cards clicáveis.
-            </p>
-          </div>
-          <ProjectSections groupId={id} sections={sections} />
-        </div>
+        <details className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm mb-6" open={Boolean(query.guide_status)}>
+          <summary className="flex cursor-pointer list-none items-start justify-between gap-4">
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900">Guias interativos</h2>
+              <p className="text-sm text-gray-600 mt-1">
+                {interactiveGuides.length > 0
+                  ? `${interactiveGuides.length} guia(s) disponível(is) para apoio pedagógico do grupo.`
+                  : "Clique para expandir e cadastrar ou acompanhar guias interativos."}
+              </p>
+            </div>
 
-        <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm mb-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-2">Guias interativos</h2>
+            <span className="shrink-0 rounded-full bg-white px-3 py-1 text-xs font-medium text-indigo-700 border border-indigo-100">
+              {interactiveGuides.length} guia(s)
+            </span>
+          </summary>
 
+          <div className="mt-4">
           {query.guide_status === "success" && query.guide_action === "add" && (
             <p className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-md px-3 py-2 mb-3">
               Guia interativo registrado com sucesso.
@@ -2351,7 +2375,8 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
               </button>
             </form>
           )}
-        </div>
+          </div>
+        </details>
 
         <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm mb-6">
           <h2 className="text-lg font-semibold text-gray-900 mb-2">Feedback pedagógico com IA</h2>
@@ -2937,6 +2962,16 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
               Status do item atualizado com sucesso.
             </p>
           )}
+          {query.checklist_status === "success" && query.checklist_action === "generate_ai" && (
+            <p className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-md px-3 py-2 mb-3">
+              IA simulada gerou {query.checklist_generated || "novos"} item(ns) para o checklist com sucesso.
+            </p>
+          )}
+          {query.checklist_status === "noop" && query.checklist_action === "generate_ai" && (
+            <p className="text-sm text-blue-700 bg-blue-50 border border-blue-200 rounded-md px-3 py-2 mb-3">
+              A IA simulada não encontrou novos itens agora. O checklist já cobre os próximos passos mais prováveis.
+            </p>
+          )}
           {query.checklist_status === "invalid" && (
             <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2 mb-3">
               Dados inválidos no checklist. Revise os campos e tente novamente.
@@ -3019,559 +3054,103 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
           </div>
 
           {canManageChecklist && (
-            <form action={handleAddChecklistItem} className="space-y-3 border-t border-gray-100 pt-4">
-              <div>
-                <label htmlFor="checklist-item-text" className="block text-sm text-gray-700 mb-1">
-                  Novo item
-                </label>
-                <textarea
-                  id="checklist-item-text"
-                  name="item_text"
-                  rows={3}
-                  placeholder="Ex.: Revisar introdução e inserir referências bibliográficas da seção 1."
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
+            <div className="border-t border-gray-100 pt-4 space-y-4">
+              <div className="rounded-md border border-violet-200 bg-violet-50 px-4 py-4">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                  <div>
+                    <p className="text-sm font-semibold text-violet-900">IA simulada para gerar checklist</p>
+                    <p className="text-sm text-violet-800 mt-1 max-w-3xl">
+                      A sugestão usa o status das seções e o volume de conteúdo já registrado para propor próximos passos pedagógicos.
+                    </p>
+                  </div>
+
+                  <form action={handleGenerateSimulatedChecklist}>
+                    <button
+                      type="submit"
+                      className="bg-violet-600 hover:bg-violet-700 text-white font-medium px-4 py-2 rounded-md text-sm"
+                    >
+                      Gerar checklist com IA simulada
+                    </button>
+                  </form>
+                </div>
+
+                <div className="mt-4">
+                  {simulatedChecklistSuggestions.length === 0 ? (
+                    <p className="text-sm text-violet-900/90">
+                      No momento, a IA simulada não identificou novos itens além dos que já estão registrados no checklist.
+                    </p>
+                  ) : (
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-violet-800 mb-2">
+                        Prévia das próximas sugestões
+                      </p>
+                      <ul className="space-y-2">
+                        {simulatedChecklistSuggestions.slice(0, 4).map((suggestion) => (
+                          <li
+                            key={`${String(suggestion.section_id ?? "geral")}-${suggestion.item_text}`}
+                            className="text-sm text-gray-800 bg-white/80 border border-violet-100 rounded-md px-3 py-2"
+                          >
+                            <span className="font-medium text-violet-900 mr-2">
+                              {suggestion.priority === "alta"
+                                ? "Prioridade alta"
+                                : suggestion.priority === "media"
+                                  ? "Prioridade média"
+                                  : "Prioridade baixa"}
+                              :
+                            </span>
+                            {suggestion.item_text}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
               </div>
 
-              <div>
-                <label htmlFor="checklist-section-id" className="block text-sm text-gray-700 mb-1">
-                  Seção relacionada (opcional)
-                </label>
-                <select
-                  id="checklist-section-id"
-                  name="section_id"
-                  defaultValue=""
-                  className="w-full md:w-80 px-3 py-2 border border-gray-300 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              <form action={handleAddChecklistItem} className="space-y-3">
+                <div>
+                  <label htmlFor="checklist-item-text" className="block text-sm text-gray-700 mb-1">
+                    Novo item manual
+                  </label>
+                  <textarea
+                    id="checklist-item-text"
+                    name="item_text"
+                    rows={3}
+                    placeholder="Ex.: Revisar introdução e inserir referências bibliográficas da seção 1."
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="checklist-section-id" className="block text-sm text-gray-700 mb-1">
+                    Seção relacionada (opcional)
+                  </label>
+                  <select
+                    id="checklist-section-id"
+                    name="section_id"
+                    defaultValue=""
+                    className="w-full md:w-80 px-3 py-2 border border-gray-300 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">Geral (sem seção específica)</option>
+                    {sections.map((section) => (
+                      <option key={String(section.id)} value={String(section.id)}>
+                        {section.section_order}. {section.section_title}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <button
+                  type="submit"
+                  className="bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2 rounded-md text-sm"
                 >
-                  <option value="">Geral (sem seção específica)</option>
-                  {sections.map((section) => (
-                    <option key={String(section.id)} value={String(section.id)}>
-                      {section.section_order}. {section.section_title}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <button
-                type="submit"
-                className="bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2 rounded-md text-sm"
-              >
-                Adicionar item ao checklist
-              </button>
-            </form>
+                  Adicionar item ao checklist
+                </button>
+              </form>
+            </div>
           )}
         </div>
 
-        {sections.length === 0 ? (
-          <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm">
-            <p className="text-gray-600">Nenhuma seção disponível para edição ainda.</p>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {sections.map((section) => (
-              <article id={`section-${section.id}`} key={String(section.id)} className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm scroll-mt-24">
-                {(() => {
-                  const schedule = stageScheduleBySection.get(String(section.id));
-                  return (
-                    <div className="mb-4 p-3 rounded-md border border-blue-100 bg-blue-50">
-                      <div className="flex items-center justify-between gap-3 flex-wrap">
-                        <p className="text-sm font-semibold text-blue-900">Cronograma da etapa</p>
-                        <p className="text-xs text-blue-700">
-                          Prazo atual: {schedule?.due_date
-                            ? new Date(`${schedule.due_date}T00:00:00`).toLocaleDateString("pt-BR", {
-                                day: "2-digit",
-                                month: "2-digit",
-                                year: "numeric",
-                              })
-                            : "Não definido"}
-                        </p>
-                      </div>
-
-                      {schedule?.notes && (
-                        <p className="text-xs text-blue-800 mt-1 whitespace-pre-line">{schedule.notes}</p>
-                      )}
-
-                      {query.schedule_status === "success" && query.schedule_section === String(section.id) && (
-                        <p className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-md px-3 py-2 mt-2">
-                          Cronograma atualizado com sucesso.
-                        </p>
-                      )}
-                      {query.schedule_status === "invalid" && query.schedule_section === String(section.id) && (
-                        <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2 mt-2">
-                          Data inválida. Informe um prazo no formato correto.
-                        </p>
-                      )}
-                      {query.schedule_status === "error" && query.schedule_section === String(section.id) && (
-                        <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2 mt-2">
-                          Não foi possível salvar o cronograma desta etapa. Tente novamente.
-                        </p>
-                      )}
-                      {query.schedule_status === "forbidden" && (
-                        <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2 mt-2">
-                          Apenas orientadores (ou coordenação) podem alterar o cronograma nesta etapa.
-                        </p>
-                      )}
-
-                      {canManageSchedule && (
-                        <form action={handleUpsertSectionSchedule} className="mt-3 grid gap-2">
-                          <input type="hidden" name="section_id" value={String(section.id)} />
-
-                          <div>
-                            <label htmlFor={`due-date-${section.id}`} className="block text-xs text-blue-900 mb-1">
-                              Prazo da etapa
-                            </label>
-                            <input
-                              id={`due-date-${section.id}`}
-                              name="due_date"
-                              type="date"
-                              defaultValue={schedule?.due_date || ""}
-                              className="w-full md:w-64 px-3 py-2 border border-blue-200 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            />
-                          </div>
-
-                          <div>
-                            <label htmlFor={`schedule-notes-${section.id}`} className="block text-xs text-blue-900 mb-1">
-                              Observações do prazo (opcional)
-                            </label>
-                            <textarea
-                              id={`schedule-notes-${section.id}`}
-                              name="notes"
-                              rows={2}
-                              defaultValue={schedule?.notes || ""}
-                              placeholder="Ex.: Entregar versão preliminar para revisão até a data limite."
-                              className="w-full px-3 py-2 border border-blue-200 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            />
-                          </div>
-
-                          <button
-                            type="submit"
-                            className="w-fit bg-blue-700 hover:bg-blue-800 text-white font-medium px-3 py-2 rounded-md text-sm"
-                          >
-                            Salvar cronograma da etapa
-                          </button>
-                        </form>
-                      )}
-                    </div>
-                  );
-                })()}
-
-                {(() => {
-                  const guidance = getSectionPedagogicalGuidance(section.section_key);
-
-                  return (
-                    <div className="mb-4 rounded-md border border-lime-100 bg-lime-50/80 p-4">
-                      <p className="text-sm font-semibold text-lime-900">Orientação pedagógica desta seção</p>
-                      <p className="text-sm text-lime-950 mt-2">{guidance.objective}</p>
-
-                      <div className="mt-3 grid gap-3 lg:grid-cols-[1.5fr_1fr]">
-                        <div>
-                          <p className="text-xs font-semibold uppercase tracking-wide text-lime-800">
-                            Perguntas orientadoras
-                          </p>
-                          <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-gray-700">
-                            {guidance.guidingQuestions.map((question) => (
-                              <li key={`${section.section_key}-${question}`}>{question}</li>
-                            ))}
-                          </ul>
-                        </div>
-
-                        <div className="rounded-md border border-lime-200 bg-white/70 px-3 py-3">
-                          <p className="text-xs font-semibold uppercase tracking-wide text-lime-800">
-                            Evidência esperada
-                          </p>
-                          <p className="text-sm text-gray-700 mt-2">{guidance.expectedEvidence}</p>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })()}
-
-                <div className="flex flex-wrap items-start justify-between gap-3 mb-3">
-                  <div>
-                    <h2 className="text-lg font-semibold text-gray-900">
-                      {section.section_order}. {section.section_title}
-                    </h2>
-                    <p className="text-sm text-gray-600 mt-1">
-                      {section.section_description || "Sem descrição"}
-                    </p>
-                  </div>
-                  <span
-                    className={`text-xs font-semibold px-2 py-1 rounded-full ${
-                      section.status === "concluido"
-                        ? "bg-green-100 text-green-700"
-                        : section.status === "em_andamento"
-                          ? "bg-amber-100 text-amber-700"
-                          : "bg-gray-200 text-gray-700"
-                    }`}
-                  >
-                    {getStatusLabel(section.status)}
-                  </span>
-                </div>
-
-                {query.section_status === "success" && query.section_id === String(section.id) && (
-                  <p className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-md px-3 py-2 mb-3">
-                    Seção atualizada com sucesso.
-                  </p>
-                )}
-                {query.section_status === "error" && (!query.section_id || query.section_id === String(section.id)) && (
-                  <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2 mb-3">
-                    Não foi possível atualizar esta seção. Tente novamente.
-                  </p>
-                )}
-                {query.section_status === "forbidden" && (
-                  <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2 mb-3">
-                    É necessário estar autenticado para salvar alterações na seção.
-                  </p>
-                )}
-
-                <form action={handleUpdateSection} className="space-y-3">
-                  <input type="hidden" name="section_id" value={String(section.id)} />
-
-                  <div>
-                    <label htmlFor={`status-${section.id}`} className="block text-sm text-gray-700 mb-1">
-                      Status da seção
-                    </label>
-                    <select
-                      id={`status-${section.id}`}
-                      name="status"
-                      defaultValue={section.status}
-                      className="w-full md:w-64 px-3 py-2 border border-gray-300 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                      <option value="nao_iniciado">Não iniciada</option>
-                      <option value="em_andamento">Em andamento</option>
-                      <option value="concluido">Concluída</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label htmlFor={`content-${section.id}`} className="block text-sm text-gray-700 mb-1">
-                      Conteúdo da seção
-                    </label>
-                    <textarea
-                      id={`content-${section.id}`}
-                      name="content"
-                      rows={6}
-                      defaultValue={section.content || ""}
-                      placeholder="Escreva aqui o conteúdo desta seção..."
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-
-                  <button
-                    type="submit"
-                    className="bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2 rounded-md text-sm"
-                  >
-                    Salvar seção
-                  </button>
-                </form>
-
-                <div className="mt-4 p-3 border border-gray-100 rounded-md bg-gray-50">
-                  <p className="text-sm font-semibold text-gray-800 mb-2">Histórico de versões da seção</p>
-
-                  {(versionsBySection.get(String(section.id)) || []).length === 0 ? (
-                    <p className="text-xs text-gray-500">Nenhuma versão registrada ainda para esta seção.</p>
-                  ) : (
-                    <div className="space-y-2">
-                      {(versionsBySection.get(String(section.id)) || []).slice(0, 5).map((version) => (
-                        <div key={String(version.id)} className="border border-gray-200 rounded-md px-3 py-2 bg-white">
-                          <p className="text-xs text-gray-700 font-medium">
-                            Versão {version.version_number}
-                            {version.created_at
-                              ? ` • ${new Date(version.created_at).toLocaleString("pt-BR", {
-                                  day: "2-digit",
-                                  month: "2-digit",
-                                  year: "numeric",
-                                  hour: "2-digit",
-                                  minute: "2-digit",
-                                })}`
-                              : ""}
-                          </p>
-                          <p className="text-xs text-gray-600 mt-1">
-                            {version.author_name} ({version.author_role === "advisor" ? "orientador" : version.author_role === "coordinator" ? "coordenação" : "estudante"})
-                            {` • Status: ${getStatusLabel(version.status)}`}
-                          </p>
-                          <p className="text-xs text-gray-700 mt-1 whitespace-pre-line">
-                            {(version.content || "Sem conteúdo.").slice(0, 220)}
-                            {version.content && version.content.length > 220 ? "..." : ""}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                <div className="mt-6 pt-4 border-t border-gray-100">
-                  <h3 className="text-sm font-semibold text-gray-800 mb-2">Dúvidas dos estudantes</h3>
-
-                  {query.question_status === "success" && query.question_section === String(section.id) && (
-                    <p className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-md px-3 py-2 mb-3">
-                      Dúvida registrada com sucesso.
-                    </p>
-                  )}
-                  {query.question_status === "invalid" && query.question_section === String(section.id) && (
-                    <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2 mb-3">
-                      Dúvida inválida. Escreva ao menos 3 caracteres.
-                    </p>
-                  )}
-                  {query.question_status === "error" && query.question_section === String(section.id) && (
-                    <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2 mb-3">
-                      Não foi possível salvar a dúvida. Tente novamente.
-                    </p>
-                  )}
-                  {query.question_status === "forbidden" && (
-                    <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2 mb-3">
-                      Apenas estudantes podem registrar dúvidas nesta etapa.
-                    </p>
-                  )}
-
-                  <div className="space-y-2 mb-3">
-                    {(questionsBySection.get(String(section.id)) || []).length === 0 ? (
-                      <p className="text-sm text-gray-500">Ainda não há dúvidas registradas nesta seção.</p>
-                    ) : (
-                      (questionsBySection.get(String(section.id)) || []).map((question) => (
-                        <div key={String(question.id)} className="border border-gray-100 rounded-md px-3 py-2 bg-gray-50">
-                          <p className="text-sm text-gray-900">{question.question}</p>
-                          <p className="text-xs text-gray-500 mt-1">
-                            {question.author_name} (estudante)
-                            {question.created_at
-                              ? ` • ${new Date(question.created_at).toLocaleString("pt-BR", {
-                                  day: "2-digit",
-                                  month: "2-digit",
-                                  year: "numeric",
-                                  hour: "2-digit",
-                                  minute: "2-digit",
-                                })}`
-                              : ""}
-                          </p>
-
-                          <div className="mt-3 pl-3 border-l-2 border-gray-200">
-                            <p className="text-xs font-semibold text-gray-700 mb-2">Respostas à dúvida</p>
-
-                            {query.answer_status === "success" && query.answer_question === String(question.id) && (
-                              <p className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-md px-3 py-2 mb-2">
-                                Resposta registrada com sucesso.
-                              </p>
-                            )}
-                            {query.answer_status === "invalid" && query.answer_question === String(question.id) && (
-                              <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2 mb-2">
-                                Resposta inválida. Escreva ao menos 3 caracteres.
-                              </p>
-                            )}
-                            {query.answer_status === "error" && query.answer_question === String(question.id) && (
-                              <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2 mb-2">
-                                Não foi possível salvar a resposta. Tente novamente.
-                              </p>
-                            )}
-                            {query.answer_status === "forbidden" && (
-                              <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2 mb-2">
-                                Apenas orientadores (ou coordenação) podem responder dúvidas nesta etapa.
-                              </p>
-                            )}
-
-                            <div className="space-y-2 mb-2">
-                              {(answersByQuestion.get(String(question.id)) || []).length === 0 ? (
-                                <p className="text-sm text-gray-500">Nenhuma resposta registrada ainda.</p>
-                              ) : (
-                                (answersByQuestion.get(String(question.id)) || []).map((answer) => (
-                                  <div key={String(answer.id)} className="border border-gray-100 rounded-md px-3 py-2 bg-white">
-                                    <p className="text-sm text-gray-900">{answer.answer}</p>
-                                    <p className="text-xs text-gray-500 mt-1">
-                                      {answer.author_name} ({answer.author_role === "advisor" ? "orientador" : "coordenação"})
-                                      {answer.created_at
-                                        ? ` • ${new Date(answer.created_at).toLocaleString("pt-BR", {
-                                            day: "2-digit",
-                                            month: "2-digit",
-                                            year: "numeric",
-                                            hour: "2-digit",
-                                            minute: "2-digit",
-                                          })}`
-                                        : ""}
-                                    </p>
-                                  </div>
-                                ))
-                              )}
-                            </div>
-
-                            {canAnswerAsAdvisor && (
-                              <form action={handleAddQuestionAnswer} className="space-y-2">
-                                <input type="hidden" name="section_id" value={String(section.id)} />
-                                <input type="hidden" name="question_id" value={String(question.id)} />
-                                <textarea
-                                  name="answer"
-                                  rows={3}
-                                  placeholder="Responder dúvida do estudante..."
-                                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                                />
-                                <button
-                                  type="submit"
-                                  className="bg-emerald-600 hover:bg-emerald-700 text-white font-medium px-3 py-2 rounded-md text-sm"
-                                >
-                                  Enviar resposta
-                                </button>
-                              </form>
-                            )}
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-
-                  {canAskAsStudent && (
-                    <form action={handleAddSectionQuestion} className="space-y-2">
-                      <input type="hidden" name="section_id" value={String(section.id)} />
-                      <textarea
-                        name="question"
-                        rows={3}
-                        placeholder="Descreva sua dúvida sobre esta seção..."
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-sky-500"
-                      />
-                      <button
-                        type="submit"
-                        className="bg-sky-600 hover:bg-sky-700 text-white font-medium px-4 py-2 rounded-md text-sm"
-                      >
-                        Enviar dúvida
-                      </button>
-                    </form>
-                  )}
-                </div>
-
-                <div className="mt-6 pt-4 border-t border-gray-100">
-                  <h3 className="text-sm font-semibold text-gray-800 mb-2">Comentários do orientador</h3>
-
-                  {query.comment_status === "success" && query.comment_section === String(section.id) && (
-                    <p className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-md px-3 py-2 mb-3">
-                      Comentário registrado com sucesso.
-                    </p>
-                  )}
-                  {query.comment_status === "invalid" && query.comment_section === String(section.id) && (
-                    <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2 mb-3">
-                      Comentário inválido. Escreva ao menos 3 caracteres.
-                    </p>
-                  )}
-                  {query.comment_status === "error" && query.comment_section === String(section.id) && (
-                    <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2 mb-3">
-                      Não foi possível salvar o comentário. Tente novamente.
-                    </p>
-                  )}
-                  {query.comment_status === "forbidden" && (
-                    <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2 mb-3">
-                      Apenas orientadores (ou coordenação) podem registrar comentários nesta etapa.
-                    </p>
-                  )}
-
-                  <div className="space-y-2 mb-3">
-                    {(commentsBySection.get(String(section.id)) || []).length === 0 ? (
-                      <p className="text-sm text-gray-500">Ainda não há comentários nesta seção.</p>
-                    ) : (
-                      (commentsBySection.get(String(section.id)) || []).map((comment) => (
-                        <div key={String(comment.id)} className="border border-gray-100 rounded-md px-3 py-2 bg-gray-50">
-                          <p className="text-sm text-gray-900">{comment.comment}</p>
-                          <p className="text-xs text-gray-500 mt-1">
-                            {comment.author_name} ({comment.author_role === "advisor" ? "orientador" : "coordenação"})
-                            {comment.created_at
-                              ? ` • ${new Date(comment.created_at).toLocaleString("pt-BR", {
-                                  day: "2-digit",
-                                  month: "2-digit",
-                                  year: "numeric",
-                                  hour: "2-digit",
-                                  minute: "2-digit",
-                                })}`
-                              : ""}
-                          </p>
-                        </div>
-                      ))
-                    )}
-                  </div>
-
-                  {canCommentAsAdvisor && (
-                    <form action={handleAddSectionComment} className="space-y-2">
-                      <input type="hidden" name="section_id" value={String(section.id)} />
-                      <textarea
-                        name="comment"
-                        rows={3}
-                        placeholder="Registrar comentário orientativo sobre esta seção..."
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                      />
-                      <button
-                        type="submit"
-                        className="bg-indigo-600 hover:bg-indigo-700 text-white font-medium px-4 py-2 rounded-md text-sm"
-                      >
-                        Adicionar comentário
-                      </button>
-                    </form>
-                  )}
-                </div>
-
-                <div className="mt-6 pt-4 border-t border-gray-100">
-                  <h3 className="text-sm font-semibold text-gray-800 mb-2">Próximos passos</h3>
-
-                  {query.next_step_status === "success" && query.next_step_section === String(section.id) && (
-                    <p className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-md px-3 py-2 mb-3">
-                      Próximos passos registrados com sucesso.
-                    </p>
-                  )}
-                  {query.next_step_status === "invalid" && query.next_step_section === String(section.id) && (
-                    <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2 mb-3">
-                      Texto inválido. Escreva ao menos 3 caracteres.
-                    </p>
-                  )}
-                  {query.next_step_status === "error" && query.next_step_section === String(section.id) && (
-                    <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2 mb-3">
-                      Não foi possível salvar os próximos passos. Tente novamente.
-                    </p>
-                  )}
-                  {query.next_step_status === "forbidden" && (
-                    <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2 mb-3">
-                      Apenas orientadores (ou coordenação) podem registrar próximos passos nesta etapa.
-                    </p>
-                  )}
-
-                  <div className="space-y-2 mb-3">
-                    {(nextStepsBySection.get(String(section.id)) || []).length === 0 ? (
-                      <p className="text-sm text-gray-500">Ainda não há próximos passos registrados nesta seção.</p>
-                    ) : (
-                      (nextStepsBySection.get(String(section.id)) || []).map((nextStep) => (
-                        <div key={String(nextStep.id)} className="border border-gray-100 rounded-md px-3 py-2 bg-gray-50">
-                          <p className="text-sm text-gray-900 whitespace-pre-line">{nextStep.next_steps}</p>
-                          <p className="text-xs text-gray-500 mt-1">
-                            {nextStep.author_name} ({nextStep.author_role === "advisor" ? "orientador" : "coordenação"})
-                            {nextStep.created_at
-                              ? ` • ${new Date(nextStep.created_at).toLocaleString("pt-BR", {
-                                  day: "2-digit",
-                                  month: "2-digit",
-                                  year: "numeric",
-                                  hour: "2-digit",
-                                  minute: "2-digit",
-                                })}`
-                              : ""}
-                          </p>
-                        </div>
-                      ))
-                    )}
-                  </div>
-
-                  {canAnswerAsAdvisor && (
-                    <form action={handleAddSectionNextStep} className="space-y-2">
-                      <input type="hidden" name="section_id" value={String(section.id)} />
-                      <textarea
-                        name="next_steps"
-                        rows={3}
-                        placeholder="Registrar próximos passos orientados para esta seção..."
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-violet-500"
-                      />
-                      <button
-                        type="submit"
-                        className="bg-violet-600 hover:bg-violet-700 text-white font-medium px-4 py-2 rounded-md text-sm"
-                      >
-                        Registrar próximos passos
-                      </button>
-                    </form>
-                  )}
-                </div>
-              </article>
-            ))}
-          </div>
-        )}
       </section>
     </main>
   );
