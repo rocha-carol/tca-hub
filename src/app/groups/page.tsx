@@ -3,8 +3,14 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getAuthenticatedProfile } from "@/lib/auth/session-service";
 import { STUDENT_ROUTES } from "@/lib/utils/constants";
+import { buildStableGroupNumberMap, getNextGeneratedGroupNumber } from "@/lib/utils/group-number";
+import { resolveDisplayedGroupTheme } from "@/lib/utils/group-theme-label";
+import { fetchAllAdvisors } from "@/services/advisor-service";
 import { createGroup, fetchAllGroups, fetchGroupsVisibleToProfile } from "@/services/group-service";
+import { fetchThemeSectionContentMap } from "@/services/project-section-service";
 import { fetchAllStudents } from "@/services/student-service";
+import CoordinatorGroupMembersBuilder from "@/components/groups/CoordinatorGroupMembersBuilder";
+import type { Advisor } from "@/types/advisor";
 import type { Group, GroupStatus } from "@/types/group";
 import type { Student } from "@/types/student";
 
@@ -12,84 +18,6 @@ function getStatusLabel(status: GroupStatus) {
   if (status === "planejamento") return "Planejamento";
   if (status === "em_andamento") return "Em andamento";
   return "Concluído";
-}
-
-function normalizeSelectedStudentId(value: FormDataEntryValue | null) {
-  const rawValue = String(value ?? "").trim();
-
-  if (!rawValue) {
-    return null;
-  }
-
-  return /^\d+$/.test(rawValue) ? Number(rawValue) : rawValue;
-}
-
-function idsAreEqual(left: string | number | null | undefined, right: string | number | null | undefined) {
-  return String(left ?? "") === String(right ?? "");
-}
-
-interface MemberFormSectionProps {
-  index: 1 | 2 | 3;
-  required?: boolean;
-  students: Student[];
-}
-
-function MemberFormSection({ index, required = false, students }: MemberFormSectionProps) {
-  const studentFieldName = `student_${index}_id`;
-  const memberNameFieldName = `member_${index}_name`;
-  const memberSeriesFieldName = `member_${index}_series`;
-
-  return (
-    <div className="rounded-2xl border border-[#E3EDE0] bg-white px-4 py-4 shadow-sm">
-      <div className="mb-4 flex items-start justify-between gap-3">
-        <div>
-          <p className="text-sm font-semibold text-[#1F2937]">
-            {required ? "Integrante principal" : `Integrante opcional ${index}`}
-          </p>
-          <p className="text-xs text-[#6B7280] mt-1">
-            Selecione um estudante cadastrado ou preencha manualmente nome e série.
-          </p>
-        </div>
-
-        <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${required ? "bg-lime-100 text-lime-800" : "bg-gray-100 text-gray-600"}`}>
-          {required ? "Obrigatório" : "Opcional"}
-        </span>
-      </div>
-
-      <div className="space-y-3">
-        <select
-          id={studentFieldName}
-          name={studentFieldName}
-          defaultValue=""
-          className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-lime-500"
-        >
-          <option value="">{required ? "— Selecionar estudante cadastrado —" : "— Nenhum estudante vinculado —"}</option>
-          {students.map((student) => (
-            <option key={student.id} value={String(student.id)}>
-              {student.name} {student.grade ? `— ${student.grade}` : "— Série não informada"}
-            </option>
-          ))}
-        </select>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <input
-            id={memberNameFieldName}
-            name={memberNameFieldName}
-            type="text"
-            placeholder={`Nome do integrante ${index}`}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-lime-500"
-          />
-          <input
-            id={memberSeriesFieldName}
-            name={memberSeriesFieldName}
-            type="text"
-            placeholder={`Série do integrante ${index}`}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-lime-500"
-          />
-        </div>
-      </div>
-    </div>
-  );
 }
 
 interface GroupsPageProps {
@@ -109,6 +37,10 @@ export default async function GroupsPage({ searchParams }: GroupsPageProps) {
     redirect(STUDENT_ROUTES.HOME);
   }
 
+  if (profile?.role === "advisor") {
+    redirect("/advisor/dashboard");
+  }
+
   if (!profile) {
     redirect("/auth/login");
   }
@@ -117,6 +49,7 @@ export default async function GroupsPage({ searchParams }: GroupsPageProps) {
   let groupsError: string | null = null;
   let students: Student[] = [];
   let studentsError: string | null = null;
+  let advisors: Advisor[] = [];
 
   const params = searchParams ? await searchParams : {};
   const rawStatus = params.status ?? "all";
@@ -129,61 +62,66 @@ export default async function GroupsPage({ searchParams }: GroupsPageProps) {
   async function handleCreateGroup(formData: FormData) {
     "use server";
 
-    const selectedStudent1Id = normalizeSelectedStudentId(formData.get("student_1_id"));
-    const selectedStudent2Id = normalizeSelectedStudentId(formData.get("student_2_id"));
-    const selectedStudent3Id = normalizeSelectedStudentId(formData.get("student_3_id"));
-    const member1Name = String(formData.get("member_1_name") ?? "").trim();
-    const member1Series = String(formData.get("member_1_series") ?? "").trim();
-    const member2Name = String(formData.get("member_2_name") ?? "").trim();
-    const member2Series = String(formData.get("member_2_series") ?? "").trim();
-    const member3Name = String(formData.get("member_3_name") ?? "").trim();
-    const member3Series = String(formData.get("member_3_series") ?? "").trim();
-    const theme = String(formData.get("theme") ?? "").trim();
-    const description = String(formData.get("description") ?? "").trim();
+    const rawPayload = String(formData.get("members_payload") ?? "[]");
 
-    const selectedIds = [selectedStudent1Id, selectedStudent2Id, selectedStudent3Id].filter(
-      (value): value is string | number => value !== null
-    );
-    const uniqueIds = new Set(selectedIds.map((value) => String(value)));
+    let parsedMembers: Array<{ id: string | number; name: string; grade?: string | null }> = [];
+    try {
+      const parsed = JSON.parse(rawPayload);
+      parsedMembers = Array.isArray(parsed) ? parsed : [];
+    } catch {
+      redirect("/groups");
+    }
+
+    if (parsedMembers.length === 0 || parsedMembers.length > 5) {
+      redirect("/groups");
+    }
+
+    let availableStudents: Student[] = [];
+    let allGroups: Group[] = [];
+    try {
+      availableStudents = await fetchAllStudents();
+      allGroups = await fetchAllGroups();
+    } catch {
+      redirect("/groups");
+    }
+
+    const selectedIds = parsedMembers.map((member) => String(member.id));
+    const uniqueIds = new Set(selectedIds);
 
     if (uniqueIds.size !== selectedIds.length) {
       redirect("/groups");
     }
 
-    let availableStudents: Student[] = [];
-    try {
-      availableStudents = await fetchAllStudents();
-    } catch {
-      availableStudents = [];
-    }
+    const resolvedMembers = parsedMembers.map((member) =>
+      availableStudents.find((student) => String(student.id) === String(member.id)) ?? null
+    );
 
-    const linkedStudent1 = availableStudents.find((student) => idsAreEqual(student.id, selectedStudent1Id));
-    const linkedStudent2 = availableStudents.find((student) => idsAreEqual(student.id, selectedStudent2Id));
-    const linkedStudent3 = availableStudents.find((student) => idsAreEqual(student.id, selectedStudent3Id));
+    const firstMember = resolvedMembers[0];
 
-    const resolvedMember1Name = linkedStudent1?.name ?? member1Name;
-    const resolvedMember1Series = linkedStudent1?.grade ?? member1Series;
-    const resolvedMember2Name = linkedStudent2?.name ?? (member2Name || null);
-    const resolvedMember2Series = linkedStudent2?.grade ?? (member2Series || null);
-    const resolvedMember3Name = linkedStudent3?.name ?? (member3Name || null);
-    const resolvedMember3Series = linkedStudent3?.grade ?? (member3Series || null);
-
-    if (!resolvedMember1Name || resolvedMember1Name.length < 3 || !resolvedMember1Series) {
+    if (!firstMember?.name || !firstMember.grade) {
       redirect("/groups");
     }
 
+    const generatedGroupName = `Grupo ${getNextGeneratedGroupNumber(allGroups)}`;
+
     await createGroup({
-      student_1_id: selectedStudent1Id,
-      member_1_name: resolvedMember1Name,
-      member_1_series: resolvedMember1Series,
-      student_2_id: selectedStudent2Id,
-      member_2_name: resolvedMember2Name,
-      member_2_series: resolvedMember2Series,
-      student_3_id: selectedStudent3Id,
-      member_3_name: resolvedMember3Name,
-      member_3_series: resolvedMember3Series,
-      theme: theme || null,
-      description: description || null,
+      student_1_id: firstMember.id,
+      member_1_name: firstMember.name,
+      member_1_series: firstMember.grade,
+      student_2_id: resolvedMembers[1]?.id ?? null,
+      member_2_name: resolvedMembers[1]?.name ?? null,
+      member_2_series: resolvedMembers[1]?.grade ?? null,
+      student_3_id: resolvedMembers[2]?.id ?? null,
+      member_3_name: resolvedMembers[2]?.name ?? null,
+      member_3_series: resolvedMembers[2]?.grade ?? null,
+      student_4_id: resolvedMembers[3]?.id ?? null,
+      member_4_name: resolvedMembers[3]?.name ?? null,
+      member_4_series: resolvedMembers[3]?.grade ?? null,
+      student_5_id: resolvedMembers[4]?.id ?? null,
+      member_5_name: resolvedMembers[4]?.name ?? null,
+      member_5_series: resolvedMembers[4]?.grade ?? null,
+      theme: generatedGroupName,
+      description: null,
     });
 
     revalidatePath("/groups");
@@ -204,12 +142,34 @@ export default async function GroupsPage({ searchParams }: GroupsPageProps) {
     studentsError = error instanceof Error ? error.message : "Erro desconhecido ao carregar estudantes.";
   }
 
+  try {
+    advisors = await fetchAllAdvisors();
+  } catch {
+    advisors = [];
+  }
+
   const activeStudents = students.filter((student) => student.active !== false);
 
   const filteredGroups =
     currentFilter === "all"
       ? groups
       : groups.filter((group) => (group.status || "planejamento") === currentFilter);
+
+  let themeSectionContentMap = new Map<string, string | null>();
+  try {
+    themeSectionContentMap = await fetchThemeSectionContentMap(filteredGroups.map((group) => String(group.id)));
+  } catch {
+    themeSectionContentMap = new Map();
+  }
+
+  const stableGroupNumberMap = buildStableGroupNumberMap(groups);
+
+  const orderedGroups = [...filteredGroups]
+    .map((group) => ({
+      group,
+      numericLabel: stableGroupNumberMap.get(String(group.id)) ?? 0,
+    }))
+    .sort((left, right) => left.numericLabel - right.numericLabel);
 
   return (
     <main className="min-h-screen bg-transparent">
@@ -226,7 +186,7 @@ export default async function GroupsPage({ searchParams }: GroupsPageProps) {
           <div className="bg-lime-50 border border-lime-200 rounded-lg p-4 mb-6">
             <p className="text-lime-900 font-medium">Modo coordenador: criação manual de grupos</p>
             <p className="text-lime-800 text-sm mt-1">
-              Selecione estudantes cadastrados ou preencha manualmente os integrantes para criar um grupo.
+              Selecione estudantes cadastrados para compor o grupo. O número do grupo será gerado automaticamente ao salvar.
             </p>
           </div>
         )}
@@ -297,16 +257,27 @@ export default async function GroupsPage({ searchParams }: GroupsPageProps) {
           {filteredGroups.length === 0 ? (
             <p className="text-gray-700">Nenhum grupo encontrado para este filtro.</p>
           ) : (
-            <div className="space-y-4">
-              {filteredGroups.map((group, index) => (
-                <article key={group.id} className="border border-gray-200 rounded-md p-4">
-                  <h3 className="font-semibold text-gray-900 mb-2">Grupo {filteredGroups.length - index}</h3>
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+              {orderedGroups.map(({ group, numericLabel }) => (
+                <article key={group.id} className="border border-gray-200 rounded-md p-4 bg-white">
+                  {(() => {
+                    const primaryAdvisor = advisors.find((advisor) => String(advisor.id) === String(group.primary_advisor_id ?? ""));
+                    const coAdvisor = advisors.find((advisor) => String(advisor.id) === String(group.co_advisor_id ?? ""));
+
+                    return (
+                      <>
+                  <h3 className="font-semibold text-gray-900 mb-2">Grupo {numericLabel}</h3>
                   <p className="text-xs text-gray-500 mb-2">
                     Status: {getStatusLabel((group.status as GroupStatus) || "planejamento")}
                   </p>
-                  <p className="text-xs text-lime-700 mb-2">
-                    Estudantes vinculados: {[group.student_1_id, group.student_2_id, group.student_3_id].filter(Boolean).length}
+                  <p className="text-xs text-lime-700 mb-1">
+                    Orientador: {primaryAdvisor?.name || "a definir"}
                   </p>
+                  {coAdvisor && (
+                    <p className="text-xs text-lime-700 mb-2">
+                      Coorientador: {coAdvisor.name}
+                    </p>
+                  )}
                   <ul className="text-sm text-gray-800 space-y-0.5">
                     <li>{group.member_1_name} — {group.member_1_series}</li>
                     {group.member_2_name && (
@@ -315,10 +286,19 @@ export default async function GroupsPage({ searchParams }: GroupsPageProps) {
                     {group.member_3_name && (
                       <li>{group.member_3_name} — {group.member_3_series || "Sem série"}</li>
                     )}
+                    {group.member_4_name && (
+                      <li>{group.member_4_name} — {group.member_4_series || "Sem série"}</li>
+                    )}
+                    {group.member_5_name && (
+                      <li>{group.member_5_name} — {group.member_5_series || "Sem série"}</li>
+                    )}
                   </ul>
-                  {group.theme && (
-                    <p className="text-sm text-gray-500 mt-2">Tema: {group.theme}</p>
-                  )}
+                  <p className="text-sm text-gray-500 mt-2">
+                    Tema: {resolveDisplayedGroupTheme({
+                      storedTheme: group.theme,
+                      themeSectionContent: themeSectionContentMap.get(String(group.id)) ?? null,
+                    })}
+                  </p>
                   <div className="mt-3">
                     <Link
                       href={`/groups/${group.id}`}
@@ -327,106 +307,52 @@ export default async function GroupsPage({ searchParams }: GroupsPageProps) {
                       Ver detalhes →
                     </Link>
                   </div>
+                      </>
+                    );
+                  })()}
                 </article>
               ))}
             </div>
           )}
         </div>
 
-        <div className="tca-soft-surface rounded-lg p-6 shadow-sm mt-8">
-          <div className="mb-5 space-y-4">
-            <div>
+        <details className="group mt-8">
+          <summary className="list-none">
+            <span className="inline-flex cursor-pointer items-center rounded-md bg-lime-700 px-4 py-2 text-sm font-medium text-white hover:bg-lime-800">
+              Criar novo grupo
+            </span>
+          </summary>
+
+          <div className="tca-soft-surface rounded-lg p-6 shadow-sm mt-4">
+            <div className="mb-5">
               <p className="text-xs font-semibold uppercase tracking-[0.18em] text-lime-700">Novo grupo</p>
-              <h2 className="text-xl font-semibold text-gray-900 mt-1">Criar grupo manualmente</h2>
+              <h2 className="text-xl font-semibold text-gray-900 mt-1">Criar novo grupo</h2>
               <p className="text-sm text-gray-600 leading-relaxed mt-2">
-                Comece pelo integrante principal e pelos dados iniciais do projeto. Os demais integrantes podem ser adicionados aqui sem deixar o formulário mais pesado do que precisa.
+                Selecione estudantes cadastrados para montar o grupo de forma simples.
               </p>
             </div>
 
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-              <div className="rounded-2xl border border-[#DCEBD5] bg-white px-4 py-3 shadow-sm">
-                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#6B7280]">Estrutura</p>
-                <p className="text-sm font-semibold text-[#1F2937] mt-2">1 integrante obrigatório</p>
+            <form action={handleCreateGroup} className="space-y-4">
+              <CoordinatorGroupMembersBuilder
+                students={activeStudents.map((student) => ({
+                  id: student.id,
+                  name: student.name,
+                  grade: student.grade,
+                }))}
+                maxMembers={5}
+              />
+
+              <div className="flex flex-wrap gap-3">
+                <button
+                  type="submit"
+                  className="bg-lime-700 hover:bg-lime-800 text-white font-medium px-4 py-2 rounded-md"
+                >
+                  Salvar grupo
+                </button>
               </div>
-              <div className="rounded-2xl border border-[#DCEBD5] bg-white px-4 py-3 shadow-sm">
-                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#6B7280]">Composição</p>
-                <p className="text-sm font-semibold text-[#1F2937] mt-2">Até 3 integrantes neste formulário</p>
-              </div>
-              <div className="rounded-2xl border border-[#DCEBD5] bg-white px-4 py-3 shadow-sm">
-                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#6B7280]">Projeto</p>
-                <p className="text-sm font-semibold text-[#1F2937] mt-2">Tema e descrição iniciais</p>
-              </div>
-            </div>
+            </form>
           </div>
-
-          <form action={handleCreateGroup} className="space-y-4">
-            <MemberFormSection index={1} required students={activeStudents} />
-
-            <details className="rounded-2xl border border-[#DCEBD5] bg-white px-4 py-4 shadow-sm">
-              <summary className="cursor-pointer list-none">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-sm font-semibold text-[#1F2937]">Adicionar integrantes opcionais</p>
-                    <p className="text-xs text-[#6B7280] mt-1">
-                      Abra este bloco apenas se o grupo já tiver mais participantes definidos.
-                    </p>
-                  </div>
-                  <span className="inline-flex rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-600">
-                    Até 2 extras
-                  </span>
-                </div>
-              </summary>
-
-              <div className="mt-4 space-y-4">
-                <MemberFormSection index={2} students={activeStudents} />
-                <MemberFormSection index={3} students={activeStudents} />
-              </div>
-            </details>
-
-            <div className="rounded-2xl border border-[#E3EDE0] bg-white px-4 py-4 shadow-sm">
-              <div className="mb-4">
-                <p className="text-sm font-semibold text-[#1F2937]">Dados iniciais do projeto</p>
-                <p className="text-xs text-[#6B7280] mt-1">
-                  Estes campos ajudam a identificar rapidamente o grupo na organização do TCA.
-                </p>
-              </div>
-
-              <div className="space-y-3">
-                <input
-                  id="theme"
-                  name="theme"
-                  type="text"
-                  placeholder="Tema do projeto — ex.: Sustentabilidade na escola"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-lime-500"
-                />
-
-                <textarea
-                  id="description"
-                  name="description"
-                  rows={3}
-                  placeholder="Descrição breve do projeto"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-lime-500"
-                />
-              </div>
-            </div>
-
-            <div className="flex flex-wrap gap-3">
-              <button
-                type="submit"
-                className="bg-lime-700 hover:bg-lime-800 text-white font-medium px-4 py-2 rounded-md"
-              >
-                Criar novo grupo
-              </button>
-
-              <Link
-                href="/dashboard"
-                className="bg-gray-100 hover:bg-gray-200 text-gray-900 font-medium px-4 py-2 rounded-md"
-              >
-                Voltar ao dashboard
-              </Link>
-            </div>
-          </form>
-        </div>
+        </details>
       </section>
     </main>
   );

@@ -114,23 +114,19 @@ export default async function AppHeader({ groupName }: AppHeaderProps) {
   }
 
   return (
-    <header className="sticky top-0 z-50 border-b border-[var(--tca-border)] bg-white/80 backdrop-blur-xl shadow-[0_14px_36px_-28px_rgba(15,23,42,0.4)]">
+    <header className="sticky top-0 z-50 border-b border-[#d9e7d4] bg-white/95 backdrop-blur shadow-sm">
       <div className="tca-stripes h-1 w-full" />
-      <div className="flex min-h-[4.5rem] items-center justify-between gap-4 px-4 lg:px-6">
+      <div className="flex min-h-16 items-center justify-between gap-4 px-4 lg:px-6">
         <Link
           href={homeHref}
-          className="group flex shrink-0 items-center gap-3 rounded-2xl px-1 py-1 text-lg font-bold tracking-tight text-[var(--tca-primary)]"
+          className="flex items-center gap-3 font-bold text-lg tracking-tight text-[#4CAF50] shrink-0"
         >
-          <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[linear-gradient(135deg,var(--tca-primary)_0%,var(--tca-secondary)_100%)] text-sm font-black text-white shadow-[0_16px_28px_-18px_rgba(47,143,83,0.9)] transition-transform duration-200 group-hover:scale-105">
+          <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#eef8ea] text-sm text-[#4CAF50] shadow-sm">
             T
           </span>
           <div className="flex flex-col leading-none">
-            <span className="bg-[linear-gradient(135deg,var(--tca-primary-strong)_0%,var(--tca-secondary)_100%)] bg-clip-text text-transparent">
-              TCA HUB
-            </span>
-            <span className="mt-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--tca-text-muted)]">
-              plataforma de projeto autoral
-            </span>
+            <span>TCA HUB</span>
+            <span className="text-[11px] font-medium text-[#6B7280] mt-1">plataforma de projeto autoral</span>
           </div>
         </Link>
 
@@ -138,9 +134,9 @@ export default async function AppHeader({ groupName }: AppHeaderProps) {
 
         <div className="flex items-center gap-3 shrink-0">
           {groupName && (
-            <div className="hidden max-w-xs flex-col rounded-2xl border border-[var(--tca-border)] bg-[linear-gradient(135deg,rgba(255,255,255,0.96)_0%,rgba(248,251,255,0.98)_100%)] px-4 py-2 shadow-[0_10px_24px_-20px_rgba(15,23,42,0.5)] xl:flex">
-              <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--tca-text-muted)]">Grupo atual</span>
-              <span className="truncate text-sm font-semibold text-[var(--foreground)]">{groupName}</span>
+            <div className="hidden xl:flex flex-col rounded-2xl bg-[#f8fbf6] border border-[#e2ecdd] px-4 py-2 max-w-xs">
+              <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#6B7280]">Grupo atual</span>
+              <span className="text-sm font-medium text-[#1F2937] truncate">{groupName}</span>
             </div>
           )}
 
@@ -149,35 +145,35 @@ export default async function AppHeader({ groupName }: AppHeaderProps) {
               {role !== "advisor" ? (
                 <Link
                   href="/profile/setup"
-                  className="hidden items-center gap-3 rounded-2xl border border-[var(--tca-border)] bg-[linear-gradient(135deg,rgba(255,255,255,0.96)_0%,rgba(242,246,242,0.92)_100%)] px-3 py-2 shadow-[0_12px_24px_-22px_rgba(15,23,42,0.8)] transition-all duration-200 hover:-translate-y-0.5 hover:border-[var(--tca-border-strong)] hover:bg-white sm:flex"
+                  className="hidden sm:flex items-center gap-3 rounded-2xl border border-[#e2ecdd] bg-[#f8fbf6] px-3 py-2 hover:bg-white transition-colors"
                 >
-                  <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[linear-gradient(135deg,var(--tca-primary)_0%,var(--tca-secondary)_100%)] text-sm font-bold text-white shadow-[0_12px_24px_-16px_rgba(91,110,225,0.75)]">
+                  <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#4CAF50] text-sm font-bold text-white">
                     {userInitial}
                   </span>
                   <span className="flex flex-col text-left leading-tight">
-                    <span className="max-w-36 truncate text-sm font-semibold text-[var(--foreground)]">
+                    <span className="text-sm font-medium text-[#1F2937] max-w-36 truncate">
                       {userDisplayName}
                     </span>
-                    <span className="max-w-40 truncate text-xs text-[var(--tca-text-muted)]">{user.email}</span>
+                    <span className="text-xs text-[#6B7280] max-w-40 truncate">{user.email}</span>
                   </span>
                 </Link>
               ) : (
-                <div className="hidden items-center gap-3 rounded-2xl border border-[var(--tca-border)] bg-[linear-gradient(135deg,rgba(255,255,255,0.96)_0%,rgba(242,246,242,0.92)_100%)] px-3 py-2 shadow-[0_12px_24px_-22px_rgba(15,23,42,0.8)] sm:flex">
-                  <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-[linear-gradient(135deg,var(--tca-primary)_0%,var(--tca-secondary)_100%)] text-sm font-bold text-white shadow-[0_12px_24px_-16px_rgba(91,110,225,0.75)]">
+                <div className="hidden sm:flex items-center gap-3 rounded-2xl border border-[#e2ecdd] bg-[#f8fbf6] px-3 py-2">
+                  <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#4CAF50] text-sm font-bold text-white">
                     {userInitial}
                   </span>
                   <span className="flex flex-col text-left leading-tight">
-                    <span className="max-w-36 truncate text-sm font-semibold text-[var(--foreground)]">
+                    <span className="text-sm font-medium text-[#1F2937] max-w-36 truncate">
                       {userDisplayName}
                     </span>
-                    <span className="max-w-40 truncate text-xs text-[var(--tca-text-muted)]">{user.email}</span>
+                    <span className="text-xs text-[#6B7280] max-w-40 truncate">{user.email}</span>
                   </span>
                 </div>
               )}
               <form action={handleSignOut}>
                 <button
                   type="submit"
-                  className="rounded-2xl border border-rose-200 bg-[linear-gradient(135deg,var(--tca-highlight)_0%,#c93f61_100%)] px-4 py-2 text-sm font-semibold text-white shadow-[0_16px_26px_-18px_rgba(226,85,116,0.8)] transition-all duration-200 hover:-translate-y-0.5 hover:brightness-105"
+                  className="text-sm font-semibold bg-[#EB5757] hover:bg-red-400 text-white px-3 py-1.5 rounded-xl transition-colors"
                 >
                   Sair
                 </button>

@@ -1,32 +1,26 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f4f7fb;
-  --foreground: #1f2937;
-  --tca-primary: #2f8f53;
-  --tca-primary-strong: #247343;
-  --tca-secondary: #5b6ee1;
-  --tca-accent: #f4b740;
-  --tca-highlight: #e25574;
+  --background: #f6f5f0;
+  --foreground: #2c3a3a;
+  --tca-primary: #5a9a45;
+  --tca-primary-strong: #477b36;
+  --tca-secondary: #0ea5a0;
+  --tca-accent: #f0c44f;
+  --tca-highlight: #e6546a;
   --tca-surface: #ffffff;
-  --tca-surface-soft: #f8fbff;
-  --tca-surface-muted: #f2f6f2;
-  --tca-border: #d8e2dc;
-  --tca-border-strong: #bfd1c2;
-  --tca-text-soft: #4b5563;
-  --tca-text-muted: #6b7280;
-  --tca-focus: rgba(91, 110, 225, 0.28);
+  --tca-border: #dfe4d2;
 
   /* Design System — paleta institucional */
-  --color-green-600: #2f8f53;
-  --color-green-400: #73bf8e;
-  --color-yellow-400: #f4b740;
-  --color-red-500: #e25574;
-  --color-blue-500: #5b6ee1;
-  --color-paper: #f8fbff;
+  --color-green-600: #4CAF50;
+  --color-green-400: #8BC34A;
+  --color-yellow-400: #F2C94C;
+  --color-red-500: #EB5757;
+  --color-blue-500: #2F80ED;
+  --color-paper: #F5F2E9;
   --color-card: #FFFFFF;
   --color-text: #1F2937;
-  --color-muted: #6B7280;
+  --color-muted: #355E3B;
 
   /* Sidebar */
   --sidebar-width: 17rem;
@@ -41,36 +35,26 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #111827;
+    --background: #1f2828;
     --foreground: #ecf2ea;
-    --tca-primary: #7fdaa1;
-    --tca-primary-strong: #64c48a;
-    --tca-secondary: #94a3ff;
-    --tca-accent: #f7c867;
-    --tca-highlight: #ff8aa4;
-    --tca-surface: #18212f;
-    --tca-surface-soft: #1d2938;
-    --tca-surface-muted: #19242b;
-    --tca-border: #334155;
-    --tca-border-strong: #475569;
-    --tca-text-soft: #d1d5db;
-    --tca-text-muted: #9ca3af;
-    --tca-focus: rgba(148, 163, 255, 0.35);
+    --tca-primary: #8dcf6f;
+    --tca-primary-strong: #79b95e;
+    --tca-secondary: #54c5bc;
+    --tca-accent: #f4d678;
+    --tca-highlight: #ff8ba0;
+    --tca-surface: #2b3535;
+    --tca-border: #4a5a54;
   }
 }
 
 body {
-  background:
-    radial-gradient(circle at top, rgba(91, 110, 225, 0.08), transparent 26%),
-    linear-gradient(180deg, #f8fbff 0%, #f4f7fb 48%, #eef3f1 100%);
+  background: #fbfbf8;
   color: var(--foreground);
   font-family: "Inter", Arial, Helvetica, sans-serif;
-  min-height: 100vh;
 }
 
 a {
   color: var(--tca-primary);
-  transition: color 160ms ease;
 }
 
 a:hover {
@@ -80,22 +64,6 @@ a:hover {
 ::selection {
   background: color-mix(in srgb, var(--tca-primary) 24%, white);
   color: var(--foreground);
-}
-
-button,
-input,
-select,
-textarea {
-  transition:
-    background-color 160ms ease,
-    border-color 160ms ease,
-    box-shadow 160ms ease,
-    color 160ms ease,
-    transform 160ms ease;
-}
-
-:focus-visible {
-  outline: none;
 }
 
 .tca-stripes {
@@ -115,9 +83,8 @@ textarea {
 }
 
 .tca-soft-surface {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, rgba(248, 251, 255, 0.98) 100%);
+  background: linear-gradient(180deg, #fffffb 0%, #f8f8f2 100%);
   border: 1px solid var(--tca-border);
-  box-shadow: 0 16px 40px -28px rgba(15, 23, 42, 0.18);
 }
 
 .tca-title-guide {
@@ -125,84 +92,25 @@ textarea {
   text-shadow: 1px 1px 0 #ffffff, 2px 2px 0 color-mix(in srgb, var(--tca-primary) 35%, #5d6b4f);
 }
 
-.tca-form-panel {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(248, 251, 255, 0.98) 100%);
-  border: 1px solid var(--tca-border);
-  border-radius: 1.5rem;
-  box-shadow: 0 24px 44px -34px rgba(15, 23, 42, 0.32);
+/*
+  Ajuste global de contraste:
+  várias telas passaram a usar textos em cinza claro demais para leitura confortável.
+  Este bloco escurece utilitários de texto cinza recorrentes sem afetar campos de input,
+  placeholders ou estados semânticos como sucesso/erro.
+*/
+.text-gray-400,
+.text-gray-500,
+.text-gray-600,
+.text-slate-500,
+.text-slate-600,
+.text-slate-700,
+.text-\[\#6B7280\],
+.text-\[\#4B5563\] {
+  color: #1F2937 !important;
 }
 
-.tca-form-label {
-  display: block;
-  margin-bottom: 0.5rem;
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: var(--foreground);
-}
-
-.tca-input,
-.tca-select,
-.tca-textarea {
-  width: 100%;
-  border: 1px solid var(--tca-border);
-  background: rgba(255, 255, 255, 0.95);
-  color: var(--foreground);
-  border-radius: 1rem;
-  padding: 0.8rem 0.95rem;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75);
-}
-
-.tca-input::placeholder,
-.tca-textarea::placeholder {
-  color: var(--tca-text-muted);
-}
-
-.tca-input:hover,
-.tca-select:hover,
-.tca-textarea:hover {
-  border-color: var(--tca-border-strong);
-}
-
-.tca-input:focus,
-.tca-select:focus,
-.tca-textarea:focus {
-  outline: none;
-  border-color: color-mix(in srgb, var(--tca-secondary) 55%, white);
-  box-shadow:
-    0 0 0 4px var(--tca-focus),
-    inset 0 1px 0 rgba(255, 255, 255, 0.8);
-}
-
-.tca-input:disabled,
-.tca-select:disabled,
-.tca-textarea:disabled {
-  background: #eef2f7;
-  color: var(--tca-text-muted);
-  cursor: not-allowed;
-}
-
-.tca-feedback {
-  border-radius: 1rem;
-  border-width: 1px;
-  padding: 0.85rem 1rem;
-  font-size: 0.92rem;
-  line-height: 1.45;
-}
-
-.tca-feedback--error {
-  border-color: #fecaca;
-  background: #fff1f2;
-  color: #be123c;
-}
-
-.tca-feedback--success {
-  border-color: #bbf7d0;
-  background: #f0fdf4;
-  color: #166534;
-}
-
-.tca-feedback--warning {
-  border-color: #fde68a;
-  background: #fffbeb;
-  color: #b45309;
+.text-gray-700,
+.text-\[\#35523A\],
+.text-\[\#355E3B\] {
+  color: #24412A !important;
 }

@@ -77,7 +77,7 @@ export function ProjectPreviewActions({ fallbackHref, fileName }: ProjectPreview
   }
 
   return (
-    <div className="flex items-center justify-between flex-wrap gap-3">
+    <div className="flex items-center justify-between flex-wrap gap-3 w-full">
       <button
         type="button"
         onClick={handleBack}

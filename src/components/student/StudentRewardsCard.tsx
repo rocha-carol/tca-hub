@@ -147,11 +147,6 @@ export function StudentRewardsCard({
   processPhotosCount,
   repertoryItemsCount,
 }: StudentRewardsCardProps) {
-  const [activeMinutes, setActiveMinutes] = useState(0);
-  const [waitingStudyCompleted, setWaitingStudyCompleted] = useState(false);
-  const totalStoredMinutesRef = useRef(0);
-  const startedAtRef = useRef<number | null>(null);
-
   const storageKey = useMemo(
     () => `${STUDENT_JOURNEY_STORAGE_KEYS.ACTIVE_MINUTES}:${group?.id ?? "sem-grupo"}`,
     [group?.id]
@@ -161,12 +156,17 @@ export function StudentRewardsCard({
     [group?.id]
   );
 
+  const [activeMinutes, setActiveMinutes] = useState(() => readStoredActiveMinutes(storageKey));
+  const [waitingStudyCompleted, setWaitingStudyCompleted] = useState(() =>
+    readStoredBoolean(waitingStudyCompletedStorageKey)
+  );
+  const totalStoredMinutesRef = useRef(activeMinutes);
+  const startedAtRef = useRef<number | null>(null);
+
   useEffect(() => {
     const syncCompletedState = () => {
       setWaitingStudyCompleted(readStoredBoolean(waitingStudyCompletedStorageKey));
     };
-
-    syncCompletedState();
 
     function handleCompletedEvent(event: Event) {
       const customEvent = event as CustomEvent<{ storageKey?: string }>;
@@ -196,9 +196,6 @@ export function StudentRewardsCard({
   }, [waitingStudyCompletedStorageKey]);
 
   useEffect(() => {
-    const initialMinutes = readStoredActiveMinutes(storageKey);
-    totalStoredMinutesRef.current = initialMinutes;
-    setActiveMinutes(initialMinutes);
     startedAtRef.current = document.visibilityState === "visible" ? Date.now() : null;
 
     function flushElapsedMinutes() {

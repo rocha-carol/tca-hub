@@ -233,6 +233,34 @@ export async function deactivateAdvisor(advisorId: string | number): Promise<voi
 }
 
 /**
+ * Exclui um orientador do cadastro.
+ */
+export async function deleteAdvisor(advisorId: string | number): Promise<void> {
+	const supabase = await createClient();
+
+	const { error } = await supabase
+		.from("advisors")
+		.delete()
+		.eq("id", normalizeAdvisorId(advisorId));
+
+	if (error) {
+		if (isAdvisorsTableMissing(error.message)) {
+			throw new Error(
+				"Tabela advisors ainda não existe no Supabase. Execute o script database/003_create_advisors_table.sql no SQL Editor."
+			);
+		}
+
+		if (isAdvisorsPermissionDenied(error.message, error.code)) {
+			throw new Error(
+				"Exclusão de advisors bloqueada por policy/RLS no Supabase. Garanta policies DELETE para usuários autenticados."
+			);
+		}
+
+		throw new Error(`Erro ao excluir orientador: ${error.message}`);
+	}
+}
+
+/**
  * Importa orientadores por arquivo (CSV), fazendo upsert por e-mail.
  */
 export async function importAdvisors(rows: ImportAdvisorRow[]): Promise<ImportAdvisorsResult> {

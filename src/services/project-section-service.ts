@@ -90,6 +90,31 @@ export async function fetchGroupProjectSections(groupId: string): Promise<GroupP
   return (data || []) as GroupProjectSection[];
 }
 
+export async function fetchThemeSectionContentMap(groupIds: string[]): Promise<Map<string, string | null>> {
+  if (groupIds.length === 0) {
+    return new Map();
+  }
+
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("group_project_sections")
+    .select("group_id, content")
+    .eq("section_key", "tema_contexto")
+    .in("group_id", groupIds);
+
+  if (error) {
+    const mapped = mapProjectSectionsErrorMessage(error.message, error.code);
+    if (mapped) {
+      throw new Error(mapped);
+    }
+
+    throw new Error(`Erro ao buscar seções de tema dos grupos: ${error.message}`);
+  }
+
+  return new Map((data || []).map((item) => [String(item.group_id), item.content ?? null]));
+}
+
 export async function ensureGroupProjectSectionsStructure(groupId: string): Promise<GroupProjectSection[]> {
   const existingSections = await fetchGroupProjectSections(groupId);
   const existingKeys = new Set(existingSections.map((section) => section.section_key));

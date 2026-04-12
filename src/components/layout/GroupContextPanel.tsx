@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/Badge";
 
 interface GroupContextPanelProps {
   groupId: string;
+  mode?: "rail" | "stacked";
 }
 
 type Guidance = {
@@ -72,7 +73,7 @@ function getSectionGuidance(sectionKey?: string): Guidance {
   );
 }
 
-export default async function GroupContextPanel({ groupId }: GroupContextPanelProps) {
+export default async function GroupContextPanel({ groupId, mode = "rail" }: GroupContextPanelProps) {
   let sections: Awaited<ReturnType<typeof ensureGroupProjectSectionsStructure>> = [];
   let comments: Awaited<ReturnType<typeof fetchGroupProjectSectionComments>> = [];
   let nextSteps: Awaited<ReturnType<typeof fetchGroupProjectSectionNextSteps>> = [];
@@ -109,79 +110,82 @@ export default async function GroupContextPanel({ groupId }: GroupContextPanelPr
   const upcomingSteps = nextSteps.slice(-3).reverse();
   const completedCount = sections.filter((section) => section.status === "concluido").length;
 
-  return (
-    <aside className="hidden xl:flex xl:w-[21rem] shrink-0 flex-col gap-4">
-      <Card className="bg-[#eef8ea] border border-[#d8e8d1] shadow-sm">
-        <div className="flex items-center justify-between gap-3 mb-3">
-          <h3 className="text-sm font-semibold text-[#1F2937]">Panorama rápido</h3>
-          <Badge variant="green">{completedCount}/{sections.length || 0}</Badge>
-        </div>
-        <div className="space-y-2 text-sm text-[#6B7280]">
-          <p>Seções concluídas: <strong className="text-[#1F2937]">{completedCount}</strong></p>
-          <p>Próximos passos ativos: <strong className="text-[#1F2937]">{nextSteps.length}</strong></p>
-          <p>Comentários do orientador: <strong className="text-[#1F2937]">{comments.length}</strong></p>
-          <p>Produto final: <strong className="text-[#1F2937]">{finalProduct?.status === "finalizado" ? "Finalizado" : "Em construção"}</strong></p>
-        </div>
-      </Card>
-
-      <Card className="bg-[#f6fbf4] border border-[#dfead8] shadow-sm">
-        <div className="flex items-center justify-between gap-3 mb-3">
-          <h3 className="text-sm font-semibold text-[#1F2937]">Próximos passos</h3>
-          <Link href={`/groups/${groupId}/project`} className="text-xs text-[#4CAF50] hover:underline">
-            abrir
-          </Link>
-        </div>
-        {upcomingSteps.length === 0 ? (
-          <p className="text-sm text-[#6B7280]">Nenhum próximo passo registrado ainda.</p>
-        ) : (
-          <div className="space-y-3">
-            {upcomingSteps.map((step) => (
-              <div key={String(step.id)} className="rounded-xl bg-white px-3 py-3 border border-[#e5efe1]">
-                <p className="text-xs font-semibold text-[#4CAF50] mb-1">
-                  {sectionTitleById.get(String(step.section_id)) || "Projeto"}
-                </p>
-                <p className="text-sm text-[#1F2937] line-clamp-3">{step.next_steps}</p>
-              </div>
-            ))}
-          </div>
-        )}
-      </Card>
-
-      <Card className="bg-[#f6fbf4] border border-[#dfead8] shadow-sm">
-        <div className="flex items-center justify-between gap-3 mb-3">
-          <h3 className="text-sm font-semibold text-[#1F2937]">Comentários</h3>
-          <Link href={`/groups/${groupId}/comments`} className="text-xs text-[#4CAF50] hover:underline">
-            ver tudo
-          </Link>
-        </div>
-        {recentComments.length === 0 ? (
-          <p className="text-sm text-[#6B7280]">Sem comentários recentes.</p>
-        ) : (
-          <div className="space-y-3">
-            {recentComments.map((comment) => (
-              <div key={String(comment.id)} className="rounded-xl bg-white px-3 py-3 border border-[#e5efe1]">
-                <p className="text-xs font-semibold text-[#4CAF50] mb-1">
-                  {sectionTitleById.get(String(comment.section_id)) || "Projeto"}
-                </p>
-                <p className="text-sm text-[#1F2937] line-clamp-3">{comment.comment}</p>
-                <p className="text-xs text-[#6B7280] mt-2">{comment.author_name}</p>
-              </div>
-            ))}
-          </div>
-        )}
-      </Card>
-
-      <Card className="bg-[#f6fbf4] border border-[#dfead8] shadow-sm">
-        <h3 className="text-sm font-semibold text-[#1F2937] mb-2">Orientação pedagógica</h3>
-        <p className="text-xs font-semibold text-[#4CAF50] mb-2">
-          Foco atual: {guidance.title}
-        </p>
-        <ul className="space-y-2 text-sm text-[#6B7280] list-disc pl-4">
-          {guidance.tips.map((tip) => (
-            <li key={tip}>{tip}</li>
+  const cards = [
+    <Card key="panorama" className="bg-[#eef8ea] border border-[#d8e8d1] shadow-sm">
+      <div className="flex items-center justify-between gap-3 mb-3">
+        <h3 className="text-sm font-semibold text-[#1F2937]">Panorama rápido</h3>
+        <Badge variant="green">{completedCount}/{sections.length || 0}</Badge>
+      </div>
+      <div className="space-y-2 text-sm text-[#6B7280]">
+        <p>Seções concluídas: <strong className="text-[#1F2937]">{completedCount}</strong></p>
+        <p>Próximos passos ativos: <strong className="text-[#1F2937]">{nextSteps.length}</strong></p>
+        <p>Comentários do orientador: <strong className="text-[#1F2937]">{comments.length}</strong></p>
+        <p>Produto final: <strong className="text-[#1F2937]">{finalProduct?.status === "finalizado" ? "Finalizado" : "Em construção"}</strong></p>
+      </div>
+    </Card>,
+    <Card key="next-steps" className="bg-[#f6fbf4] border border-[#dfead8] shadow-sm">
+      <div className="flex items-center justify-between gap-3 mb-3">
+        <h3 className="text-sm font-semibold text-[#1F2937]">Próximos passos</h3>
+        <Link href={`/groups/${groupId}/project`} className="text-xs text-[#4CAF50] hover:underline">
+          abrir
+        </Link>
+      </div>
+      {upcomingSteps.length === 0 ? (
+        <p className="text-sm text-[#6B7280]">Nenhum próximo passo registrado ainda.</p>
+      ) : (
+        <div className="space-y-3">
+          {upcomingSteps.map((step) => (
+            <div key={String(step.id)} className="rounded-xl bg-white px-3 py-3 border border-[#e5efe1]">
+              <p className="text-xs font-semibold text-[#4CAF50] mb-1">
+                {sectionTitleById.get(String(step.section_id)) || "Projeto"}
+              </p>
+              <p className="text-sm text-[#1F2937] line-clamp-3">{step.next_steps}</p>
+            </div>
           ))}
-        </ul>
-      </Card>
-    </aside>
+        </div>
+      )}
+    </Card>,
+    <Card key="comments" className="bg-[#f6fbf4] border border-[#dfead8] shadow-sm">
+      <div className="flex items-center justify-between gap-3 mb-3">
+        <h3 className="text-sm font-semibold text-[#1F2937]">Comentários</h3>
+        <Link href={`/groups/${groupId}/comments`} className="text-xs text-[#4CAF50] hover:underline">
+          ver tudo
+        </Link>
+      </div>
+      {recentComments.length === 0 ? (
+        <p className="text-sm text-[#6B7280]">Sem comentários recentes.</p>
+      ) : (
+        <div className="space-y-3">
+          {recentComments.map((comment) => (
+            <div key={String(comment.id)} className="rounded-xl bg-white px-3 py-3 border border-[#e5efe1]">
+              <p className="text-xs font-semibold text-[#4CAF50] mb-1">
+                {sectionTitleById.get(String(comment.section_id)) || "Projeto"}
+              </p>
+              <p className="text-sm text-[#1F2937] line-clamp-3">{comment.comment}</p>
+              <p className="text-xs text-[#6B7280] mt-2">{comment.author_name}</p>
+            </div>
+          ))}
+        </div>
+      )}
+    </Card>,
+    <Card key="guidance" className="bg-[#f6fbf4] border border-[#dfead8] shadow-sm">
+      <h3 className="text-sm font-semibold text-[#1F2937] mb-2">Orientação pedagógica</h3>
+      <p className="text-xs font-semibold text-[#4CAF50] mb-2">
+        Foco atual: {guidance.title}
+      </p>
+      <ul className="space-y-2 text-sm text-[#6B7280] list-disc pl-4">
+        {guidance.tips.map((tip) => (
+          <li key={tip}>{tip}</li>
+        ))}
+      </ul>
+    </Card>,
+  ];
+
+  if (mode === "stacked") {
+    return <div className="grid grid-cols-1 gap-4 xl:grid-cols-2 2xl:grid-cols-4">{cards}</div>;
+  }
+
+  return (
+    <aside className="hidden xl:flex xl:w-[21rem] shrink-0 flex-col gap-4">{cards}</aside>
   );
 }

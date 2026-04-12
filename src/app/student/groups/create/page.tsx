@@ -2,6 +2,7 @@ import Link from "next/link";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getAuthenticatedProfile, getAuthenticatedUser } from "@/lib/auth/session-service";
+import { getNextGeneratedGroupNumber } from "@/lib/utils/group-number";
 import { createGroup, fetchAllGroups } from "@/services/group-service";
 import { fetchAllStudents } from "@/services/student-service";
 import StudentGroupMembersBuilder from "@/components/student/StudentGroupMembersBuilder";
@@ -51,7 +52,7 @@ export default async function StudentCreateGroupPage({ searchParams }: StudentCr
   }
 
   const currentStudent = allStudents.find((student) => student.profile_id === user.id) ?? null;
-  const nextGroupNumber = allGroups.length + 1;
+  const nextGroupNumber = getNextGeneratedGroupNumber(allGroups);
 
   async function handleCreateStudentGroup(formData: FormData) {
     "use server";
@@ -114,7 +115,7 @@ export default async function StudentCreateGroupPage({ searchParams }: StudentCr
       ? students.find((student) => String(student.id) === String(parsedMembers[3].id)) ?? null
       : null;
 
-    const generatedGroupName = `Grupo ${groups.length + 1}`;
+    const generatedGroupName = `Grupo ${getNextGeneratedGroupNumber(groups)}`;
 
     await createGroup({
       student_1_id: normalizeStudentId(loggedStudent.id),

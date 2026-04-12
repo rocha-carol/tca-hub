@@ -24,7 +24,11 @@ function isStudentLinkedToGroup(group: Group, studentId: string | number) {
 }
 
 function isAdvisorLinkedToGroup(group: Group, advisorId: string | number) {
-  return idsAreEqual(group.primary_advisor_id, advisorId) || idsAreEqual(group.co_advisor_id, advisorId);
+  return (
+    idsAreEqual(group.primary_advisor_id, advisorId) ||
+    idsAreEqual(group.co_advisor_id, advisorId) ||
+    (group.indication_status === "pendente" && idsAreEqual(group.indicated_advisor_id, advisorId))
+  );
 }
 
 async function fetchStudentIdByProfileId(profileId: string): Promise<string | number | null> {

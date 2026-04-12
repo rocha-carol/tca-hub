@@ -9,8 +9,6 @@ import SignInForm from "@/components/auth/SignInForm";
  * Rota: /auth/login
  */
 export default function SignInPage() {
-  const sharedPassword = process.env.MVP_SHARED_PASSWORD ?? "75077132";
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-[#f7f6ee] via-[#fdfbf2] to-[#eef4df] flex items-center justify-center p-4">
       <div className="w-full relative max-w-3xl">
@@ -20,22 +18,7 @@ export default function SignInPage() {
           <p className="text-slate-700">Plataforma de Trabalho Colaborativo de Autoria</p>
         </div>
 
-        <SignInForm
-          initialPassword={sharedPassword}
-        />
-
-        <p className="text-center mt-4 text-sm text-slate-700">
-          Senha padrão do MVP: <span className="font-semibold">75077132</span>
-        </p>
-
-        <div className="text-center mt-8">
-          <p className="text-sm text-slate-700">
-            Precisa de ajuda?{" "}
-            <a href="/support" className="text-lime-700 hover:text-lime-800 underline">
-              Entre em contato
-            </a>
-          </p>
-        </div>
+        <SignInForm />
       </div>
     </div>
   );

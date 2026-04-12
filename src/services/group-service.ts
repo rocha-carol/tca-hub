@@ -35,9 +35,38 @@ function isIndicationColumnMissing(message: string) {
 	);
 }
 
+function isAdvisorAvailabilityColumnMissing(message: string) {
+	const normalizedMessage = message.toLowerCase();
+
+	return (
+		(
+			normalizedMessage.includes("active") ||
+			normalizedMessage.includes("max_orientacoes")
+		) &&
+		(
+			normalizedMessage.includes("schema cache") ||
+			normalizedMessage.includes("does not exist") ||
+			normalizedMessage.includes("column")
+		)
+	);
+}
+
+function isGroupsPolicyError(message: string) {
+	const normalizedMessage = message.toLowerCase();
+
+	return (
+		(normalizedMessage.includes("row-level security") || normalizedMessage.includes("permission denied")) &&
+		normalizedMessage.includes("groups")
+	);
+}
+
 function mapSupabaseErrorToIndicationMessage(message: string) {
 	if (isIndicationColumnMissing(message)) {
 		return "Fluxo de indicação ainda não está preparado no Supabase. Execute o arquivo local database/009_add_advisor_indication_flow.sql no SQL Editor.";
+	}
+
+	if (isGroupsPolicyError(message)) {
+		return "Atualização da tabela groups bloqueada no Supabase. Execute o arquivo local database/037_enable_groups_crud_policies.sql no SQL Editor.";
 	}
 
 	return null;
@@ -95,12 +124,28 @@ async function recalculateAdvisorIndicationQueue(excludedGroupId?: string): Prom
 		.select("id, active, max_orientacoes")
 		.eq("active", true);
 
-	if (advisorsError) {
+	let resolvedAdvisorsData = advisorsData;
+
+	if (advisorsError && isAdvisorAvailabilityColumnMissing(advisorsError.message)) {
+		const { data: fallbackAdvisorsData, error: fallbackAdvisorsError } = await supabase
+			.from("advisors")
+			.select("id");
+
+		if (fallbackAdvisorsError) {
+			throw new Error(`Erro ao buscar orientadores para recálculo da fila: ${fallbackAdvisorsError.message}`);
+		}
+
+		resolvedAdvisorsData = (fallbackAdvisorsData || []).map((advisor) => ({
+			...advisor,
+			active: true,
+			max_orientacoes: 5,
+		}));
+	} else if (advisorsError) {
 		throw new Error(`Erro ao buscar orientadores para recálculo da fila: ${advisorsError.message}`);
 	}
 
 	const advisorCapacityMap = new Map<string, number>();
-	for (const advisor of advisorsData || []) {
+	for (const advisor of resolvedAdvisorsData || []) {
 		advisorCapacityMap.set(String(advisor.id), advisor.max_orientacoes ?? 5);
 	}
 
@@ -230,15 +275,33 @@ async function ensureAdvisorAvailableForPrimaryAssignment(
 		.eq("id", advisorId)
 		.single();
 
-	if (advisorError) {
+	let resolvedAdvisorData = advisorData;
+
+	if (advisorError && isAdvisorAvailabilityColumnMissing(advisorError.message)) {
+		const { data: fallbackAdvisorData, error: fallbackAdvisorError } = await supabase
+			.from("advisors")
+			.select("id")
+			.eq("id", advisorId)
+			.single();
+
+		if (fallbackAdvisorError) {
+			throw new Error(`Erro ao validar disponibilidade do orientador: ${fallbackAdvisorError.message}`);
+		}
+
+		resolvedAdvisorData = {
+			...fallbackAdvisorData,
+			active: true,
+			max_orientacoes: 5,
+		};
+	} else if (advisorError) {
 		throw new Error(`Erro ao validar disponibilidade do orientador: ${advisorError.message}`);
 	}
 
-	if (!advisorData || advisorData.active === false) {
+	if (!resolvedAdvisorData || resolvedAdvisorData.active === false) {
 		throw new Error("Orientador indisponível para assumir como principal.");
 	}
 
-	const maxOrientacoes = advisorData.max_orientacoes ?? 5;
+	const maxOrientacoes = resolvedAdvisorData.max_orientacoes ?? 5;
 
 	const { count, error: countError } = await supabase
 		.from("groups")
@@ -247,6 +310,11 @@ async function ensureAdvisorAvailableForPrimaryAssignment(
 		.neq("id", groupId);
 
 	if (countError) {
+		const indicationMessage = mapSupabaseErrorToIndicationMessage(countError.message);
+		if (indicationMessage) {
+			throw new Error(indicationMessage);
+		}
+
 		throw new Error(`Erro ao calcular carga atual do orientador: ${countError.message}`);
 	}
 
@@ -384,23 +452,49 @@ export async function fetchGroupsVisibleToProfile(profile: Pick<Profile, "id" | 
 	const supabase = await createClient();
 	const advisorIdValue = String(advisorId);
 
-	const { data, error } = await supabase
+	const { data: assignedGroups, error: assignedGroupsError } = await supabase
 		.from("groups")
 		.select("*")
 		.or(`primary_advisor_id.eq.${advisorIdValue},co_advisor_id.eq.${advisorIdValue}`)
 		.order("created_at", { ascending: false });
 
-	if (error) {
-		if (isGroupsTableMissing(error.message)) {
+	if (assignedGroupsError) {
+		if (isGroupsTableMissing(assignedGroupsError.message)) {
 			throw new Error(
 				"Tabela groups ainda não existe no Supabase. Execute o script database/001_create_groups_table.sql no SQL Editor."
 			);
 		}
 
-		throw new Error(`Erro ao buscar grupos visíveis para o perfil: ${error.message}`);
+		throw new Error(`Erro ao buscar grupos vinculados ao orientador: ${assignedGroupsError.message}`);
 	}
 
-	return (data || []) as Group[];
+	const { data: pendingIndicationGroups, error: pendingIndicationGroupsError } = await supabase
+		.from("groups")
+		.select("*")
+		.eq("indicated_advisor_id", advisorIdValue)
+		.eq("indication_status", "pendente")
+		.order("created_at", { ascending: false });
+
+	if (pendingIndicationGroupsError) {
+		if (isGroupsTableMissing(pendingIndicationGroupsError.message)) {
+			throw new Error(
+				"Tabela groups ainda não existe no Supabase. Execute o script database/001_create_groups_table.sql no SQL Editor."
+			);
+		}
+
+		throw new Error(`Erro ao buscar indicações pendentes do orientador: ${pendingIndicationGroupsError.message}`);
+	}
+
+	const combinedGroups = [...(assignedGroups || []), ...(pendingIndicationGroups || [])];
+	const uniqueGroups = Array.from(
+		new Map(combinedGroups.map((group) => [String(group.id), group as Group])).values()
+	);
+
+	return uniqueGroups.sort((left, right) => {
+		const leftDate = left.created_at || "";
+		const rightDate = right.created_at || "";
+		return rightDate.localeCompare(leftDate);
+	});
 }
 
 /**
@@ -546,6 +640,11 @@ export async function updateGroupAdvisors(
 				.eq("id", groupId);
 
 			if (fallbackError) {
+				const fallbackMessage = mapSupabaseErrorToIndicationMessage(fallbackError.message);
+				if (fallbackMessage) {
+					throw new Error(fallbackMessage);
+				}
+
 				throw new Error(`Erro ao atualizar orientadores: ${fallbackError.message}`);
 			}
 
@@ -645,6 +744,7 @@ export async function respondAdvisorIndication(
 			.update({
 				primary_advisor_id: group.indicated_advisor_id,
 				co_advisor_id: normalizedCoAdvisorId,
+				indicated_advisor_id: null,
 				indication_status: "aceita",
 				indication_updated_at: new Date().toISOString(),
 			})
@@ -661,7 +761,12 @@ export async function respondAdvisorIndication(
 
 		await clearPendingAdvisorPreferenceStatuses(groupId);
 		await updateAdvisorPreferenceIndicationStatus(groupId, indicatedAdvisorId, "aceita");
-		await recalculateAdvisorIndicationQueue(groupId);
+
+		try {
+			await recalculateAdvisorIndicationQueue(groupId);
+		} catch (queueError) {
+			console.error("Falha ao recalcular fila após aceite de orientação:", queueError);
+		}
 		return;
 	}
 
@@ -717,6 +822,11 @@ export async function updateGroupStatus(groupId: string, status: GroupStatus): P
 		.eq("id", groupId);
 
 	if (error) {
+		const indicationMessage = mapSupabaseErrorToIndicationMessage(error.message);
+		if (indicationMessage) {
+			throw new Error(indicationMessage);
+		}
+
 		if (isStatusColumnMissing(error.message)) {
 			throw new Error(
 				"Coluna status ainda não existe em groups. Execute: alter table public.groups add column if not exists status text not null default 'planejamento';"

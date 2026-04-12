@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Button } from "@/components/ui/Button";
 
 const CLASS_OPTIONS = ["9ºA", "9ºB", "9ºC"];
 
@@ -140,20 +139,15 @@ export default function StudentGroupMembersBuilder({
   };
 
   return (
-    <div className="space-y-4 rounded-[26px] border border-[var(--tca-border)] bg-[linear-gradient(135deg,rgba(255,255,255,0.98)_0%,rgba(248,251,255,0.98)_100%)] p-4 shadow-[0_18px_36px_-30px_rgba(15,23,42,0.4)]">
+    <div className="rounded-lg border border-gray-200 p-4 space-y-4">
       <div className="space-y-1">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-lg font-semibold text-[var(--foreground)]">Integrantes do grupo</h2>
-          <span className="inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
-            {members.length + (representative ? 1 : 0)}/{maxMembers} integrantes
-          </span>
-        </div>
+        <h2 className="text-lg font-semibold text-gray-900">Integrantes do grupo</h2>
         {representative ? (
-          <p className="text-sm leading-relaxed text-[var(--tca-text-soft)]">
+          <p className="text-sm text-gray-600">
             O Integrante 1 é preenchido automaticamente com o estudante logado. Agora dá para adicionar até {additionalMembersLimit} colega{additionalMembersLimit === 1 ? "" : "s"}.
           </p>
         ) : (
-          <p className="tca-feedback tca-feedback--warning">
+          <p className="text-sm text-amber-800">
             Não foi possível localizar seu cadastro de estudante. Confira seu perfil antes de salvar.
           </p>
         )}
@@ -161,22 +155,22 @@ export default function StudentGroupMembersBuilder({
 
       <div className="grid grid-cols-1 md:grid-cols-[1.7fr_1fr_auto] gap-3 items-end">
         <div>
-          <label className="tca-form-label">RA ou nome completo</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">RA ou nome completo</label>
           <input
             type="text"
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Ex.: 20240123 ou Maria Silva"
-            className="tca-input"
+            className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-lime-500"
           />
         </div>
 
         <div>
-          <label className="tca-form-label">Turma</label>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Turma</label>
           <select
             value={year}
             onChange={(event) => setYear(event.target.value)}
-            className="tca-select"
+            className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-lime-500"
           >
             <option value="">Selecione</option>
             {CLASS_OPTIONS.map((classOption) => (
@@ -187,32 +181,32 @@ export default function StudentGroupMembersBuilder({
           </select>
         </div>
 
-        <Button
+        <button
           type="button"
           onClick={handleAddMember}
-          className="w-full md:w-auto"
+          className="bg-lime-700 hover:bg-lime-800 text-white font-medium px-4 py-2 rounded-md"
         >
           Adicionar integrante
-        </Button>
+        </button>
       </div>
 
       {feedback && (
-        <p className="tca-feedback tca-feedback--warning">{feedback}</p>
+        <p className="text-sm text-gray-700">{feedback}</p>
       )}
 
       <input type="hidden" name="members_payload" value={JSON.stringify(members)} readOnly />
 
       <div className="overflow-x-auto">
-        <table className="min-w-full overflow-hidden rounded-[22px] border border-[var(--tca-border)] bg-white">
-          <thead className="bg-[var(--tca-surface-soft)]">
+        <table className="min-w-full border border-gray-200 rounded-md">
+          <thead className="bg-[#f8fbf6]">
             <tr>
-              <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-[0.1em] text-[var(--tca-text-muted)]">
+              <th className="text-left text-xs font-semibold uppercase tracking-[0.1em] text-gray-600 px-3 py-2">
                 RA ou nome completo
               </th>
-              <th className="px-3 py-3 text-left text-xs font-semibold uppercase tracking-[0.1em] text-[var(--tca-text-muted)]">
+              <th className="text-left text-xs font-semibold uppercase tracking-[0.1em] text-gray-600 px-3 py-2">
                 Turma
               </th>
-              <th className="px-3 py-3 text-right text-xs font-semibold uppercase tracking-[0.1em] text-[var(--tca-text-muted)]">
+              <th className="text-right text-xs font-semibold uppercase tracking-[0.1em] text-gray-600 px-3 py-2">
                 Ações
               </th>
             </tr>
@@ -220,22 +214,22 @@ export default function StudentGroupMembersBuilder({
 
           <tbody>
             {representative && (
-              <tr className="border-t border-[var(--tca-border)] bg-[var(--tca-surface-soft)]">
-                <td className="px-3 py-3 text-sm text-[var(--foreground)]">
-                  <p className="font-semibold">{representative.name}</p>
-                  <p className="text-xs text-[var(--tca-text-muted)]">
+              <tr className="border-t border-gray-100 bg-[#f8fbf6]">
+                <td className="px-3 py-3 text-sm text-gray-800">
+                  <p className="font-medium">{representative.name}</p>
+                  <p className="text-xs text-gray-500">
                     RA: {representative.registration_code || "Não informado"}
                   </p>
-                  <p className="mt-1 text-xs font-semibold text-[var(--tca-primary)]">Integrante 1 (representante)</p>
+                  <p className="text-xs text-lime-700 font-medium mt-1">Integrante 1 (representante)</p>
                 </td>
-                <td className="px-3 py-3 text-sm text-[var(--tca-text-soft)]">{representative.grade || "Não informado"}</td>
-                <td className="px-3 py-3 text-right text-xs font-medium text-[var(--tca-text-muted)]">Fixo</td>
+                <td className="px-3 py-3 text-sm text-gray-700">{representative.grade || "Não informado"}</td>
+                <td className="px-3 py-3 text-right text-xs font-medium text-gray-400">Fixo</td>
               </tr>
             )}
 
             {members.length === 0 ? (
               <tr>
-                <td colSpan={3} className="px-3 py-4 text-sm text-[var(--tca-text-muted)]">
+                <td colSpan={3} className="px-3 py-3 text-sm text-gray-500">
                   {representative
                     ? "Nenhum colega adicionado ainda."
                     : "Nenhum integrante adicionado ainda."}
@@ -243,25 +237,25 @@ export default function StudentGroupMembersBuilder({
               </tr>
             ) : (
               members.map((member) => (
-                <tr key={member.id} className="border-t border-[var(--tca-border)]">
-                  <td className="px-3 py-3 text-sm text-[var(--foreground)]">
-                    <p className="font-semibold">{member.name}</p>
-                    <p className="text-xs text-[var(--tca-text-muted)]">RA: {member.registrationCode}</p>
+                <tr key={member.id} className="border-t border-gray-100">
+                  <td className="px-3 py-3 text-sm text-gray-800">
+                    <p className="font-medium">{member.name}</p>
+                    <p className="text-xs text-gray-500">RA: {member.registrationCode}</p>
                   </td>
-                  <td className="px-3 py-3 text-sm text-[var(--tca-text-soft)]">{member.year}</td>
+                  <td className="px-3 py-3 text-sm text-gray-700">{member.year}</td>
                   <td className="px-3 py-3 text-right">
                     <div className="inline-flex gap-2">
                       <button
                         type="button"
                         onClick={() => handleEditMember(member.id)}
-                        className="rounded-xl border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-700 transition-colors hover:bg-indigo-100"
+                        className="bg-blue-100 hover:bg-blue-200 text-blue-900 text-xs font-medium px-3 py-1.5 rounded-md"
                       >
                         Editar
                       </button>
                       <button
                         type="button"
                         onClick={() => handleRemoveMember(member.id)}
-                        className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-700 transition-colors hover:bg-rose-100"
+                        className="bg-red-100 hover:bg-red-200 text-red-900 text-xs font-medium px-3 py-1.5 rounded-md"
                       >
                         Excluir
                       </button>

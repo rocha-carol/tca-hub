@@ -1,10 +1,8 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useState } from "react";
 import { signIn } from "@/lib/auth/auth-service";
 import type { AuthError } from "@/types/auth";
-import { Button } from "@/components/ui/Button";
 
 interface SignInFormProps {
   title?: string;
@@ -171,36 +169,28 @@ export default function SignInForm({
     <div
       role="form"
       aria-label="Formulário de login"
-      className={`tca-form-panel w-full max-w-md mx-auto overflow-hidden p-6 md:p-7 ${className}`.trim()}
+      className={`w-full max-w-md mx-auto p-6 bg-white border border-lime-200 rounded-xl shadow-md ${className}`.trim()}
     >
-      <div className="mb-6 flex items-start justify-between gap-4">
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--tca-secondary)]">Acesso seguro</p>
-          <h2 className="mt-2 text-2xl font-bold text-[var(--foreground)]">{title}</h2>
-          {description ? <p className="mt-2 text-sm leading-relaxed text-[var(--tca-text-soft)]">{description}</p> : null}
-        </div>
-        <span className="inline-flex rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700">
-          entrar
-        </span>
-      </div>
+      <h2 className="text-2xl font-bold mb-2 text-lime-800">{title}</h2>
+      {description ? <p className="text-sm text-slate-700 mb-6">{description}</p> : <div className="mb-6" />}
 
       {/* Mensagem de erro */}
       {error && (
-        <div className="tca-feedback tca-feedback--error mb-4">
+        <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
           {error}
         </div>
       )}
 
       {/* Mensagem de sucesso */}
       {success && (
-        <div className="tca-feedback tca-feedback--success mb-4">
+        <div className="mb-4 p-3 bg-green-100 border border-green-400 text-green-700 rounded">
           ✓ Login realizado com sucesso! Redirecionando...
         </div>
       )}
 
       {/* Campo de email */}
       <div className="mb-4">
-        <label htmlFor="email" className="tca-form-label">
+        <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
           Email
         </label>
         <input
@@ -211,13 +201,13 @@ export default function SignInForm({
           onChange={handleChange}
           disabled={loading || success}
           placeholder="seu.email@exemplo.com"
-          className="tca-input"
+          className="w-full px-3 py-2 border border-slate-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-lime-500 disabled:bg-gray-100"
         />
       </div>
 
       {/* Campo de senha */}
       <div className="mb-6">
-        <label htmlFor="password" className="tca-form-label">
+        <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
           Senha
         </label>
         <div className="relative">
@@ -229,14 +219,14 @@ export default function SignInForm({
             onChange={handleChange}
             disabled={loading || success}
             placeholder="••••••••"
-            className="tca-input pr-12"
+            className="w-full px-3 py-2 pr-12 border border-slate-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-lime-500 disabled:bg-gray-100"
           />
           <button
             type="button"
             onClick={() => setShowPassword((prev) => !prev)}
             disabled={loading || success}
             aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}
-            className="absolute inset-y-0 right-2 my-2 rounded-xl px-3 text-[var(--tca-text-soft)] transition-colors hover:bg-[var(--tca-surface-soft)] hover:text-[var(--tca-secondary)] disabled:text-gray-400"
+            className="absolute inset-y-0 right-0 px-3 text-gray-600 hover:text-gray-800 disabled:text-gray-400"
           >
             {showPassword ? (
               <svg
@@ -272,25 +262,24 @@ export default function SignInForm({
       </div>
 
       {/* Botão de submissão */}
-      <Button
+      <button
         type="button"
         onClick={() => {
           void handleSubmit();
         }}
         disabled={loading || success}
-        size="lg"
-        className="w-full"
+        className="w-full bg-lime-700 hover:bg-lime-800 disabled:bg-gray-400 text-white font-medium py-2 px-4 rounded-md transition"
       >
         {loading ? "Fazendo login..." : success ? "✓ Login realizado!" : submitLabel}
-      </Button>
+      </button>
 
       {/* Link para cadastro */}
       {showSignUpLink ? (
-        <p className="mt-5 text-center text-sm text-[var(--tca-text-soft)]">
+        <p className="text-center mt-4 text-sm text-gray-600">
           Não tem conta?{" "}
-          <Link href="/auth/signup" className="font-semibold text-[var(--tca-primary)] hover:text-[var(--tca-primary-strong)]">
+          <a href="/auth/signup" className="text-lime-700 hover:text-lime-800 font-medium">
             Crie uma agora
-          </Link>
+          </a>
         </p>
       ) : null}
     </div>

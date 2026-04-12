@@ -4,7 +4,9 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getAuthenticatedProfile, getAuthenticatedUser } from "@/lib/auth/session-service";
 import { STUDENT_ROUTES } from "@/lib/utils/constants";
-import { fetchGroupsVisibleToProfile } from "@/services/group-service";
+import { buildStableGroupNumberMap, parseGeneratedGroupNumber } from "@/lib/utils/group-number";
+import { resolveDisplayedGroupTheme } from "@/lib/utils/group-theme-label";
+import { fetchGroupsVisibleToProfile, respondAdvisorIndication } from "@/services/group-service";
 import { fetchGroupInternalNotificationsByGroupIds } from "@/services/group-internal-notification-service";
 import { ensureGroupProjectSectionsStructure } from "@/services/project-section-service";
 import { fetchGroupProjectSectionStageSchedule } from "@/services/project-section-stage-schedule-service";
@@ -13,7 +15,6 @@ import { fetchGroupProjectSectionNextSteps } from "@/services/project-section-ne
 import { fetchGroupProjectSectionVersions } from "@/services/project-section-version-service";
 import { fetchGroupProjectSectionComments } from "@/services/project-section-comment-service";
 import { Card } from "@/components/ui/Card";
-import { InfoCard } from "@/components/cards/InfoCard";
 import { ProgressCard } from "@/components/cards/ProgressCard";
 import { ActionCard } from "@/components/cards/ActionCard";
 import type { GroupStatus } from "@/types/group";
@@ -38,8 +39,55 @@ function idsAreEqual(left: string | number | null | undefined, right: string | n
   return String(left ?? "") === String(right ?? "");
 }
 
+function getGroupRecencyValue(group: {
+  indication_updated_at?: string | null;
+  created_at?: string | null;
+}) {
+  return Date.parse(group.indication_updated_at || group.created_at || "1970-01-01T00:00:00.000Z");
+}
+
+function resolveGroupDisplayNumber(
+  group: { id: string | number; theme?: string | null },
+  groupNumberMap: Map<string, number>
+) {
+  const parsedThemeNumber = parseGeneratedGroupNumber(group.theme);
+
+  if (parsedThemeNumber !== null) {
+    return parsedThemeNumber;
+  }
+
+  return groupNumberMap.get(String(group.id)) ?? "—";
+}
+
+function getGroupMembers(group: {
+  member_1_name: string;
+  member_1_series: string;
+  member_2_name?: string | null;
+  member_2_series?: string | null;
+  member_3_name?: string | null;
+  member_3_series?: string | null;
+  member_4_name?: string | null;
+  member_4_series?: string | null;
+  member_5_name?: string | null;
+  member_5_series?: string | null;
+}) {
+  return [
+    { name: group.member_1_name, series: group.member_1_series },
+    { name: group.member_2_name ?? null, series: group.member_2_series ?? null },
+    { name: group.member_3_name ?? null, series: group.member_3_series ?? null },
+    { name: group.member_4_name ?? null, series: group.member_4_series ?? null },
+    { name: group.member_5_name ?? null, series: group.member_5_series ?? null },
+  ].filter((member): member is { name: string; series: string | null } => Boolean(member.name));
+}
+
 interface AdvisorDashboardPageProps {
-  searchParams?: Promise<{ modo?: string; perfil?: string }>;
+  searchParams?: Promise<{
+    modo?: string;
+    perfil?: string;
+    indication_response?: string;
+    indication_group?: string;
+    indication_error?: string;
+  }>;
 }
 
 type AdvisorPriorityItem = {
@@ -54,37 +102,30 @@ type AdvisorPriorityItem = {
 export default async function AdvisorDashboardPage({ searchParams }: AdvisorDashboardPageProps) {
   const params = searchParams ? await searchParams : {};
   const isProvisionalMode = params.modo === "provisorio";
+  const indicationResponse = params.indication_response;
+  const indicationGroup = params.indication_group;
+  const indicationError = params.indication_error ? decodeURIComponent(params.indication_error) : null;
 
-  // Server action: atualização de nome do perfil autenticado
-  async function handleUpdateProfile(formData: FormData) {
+  async function handleRespondAdvisorIndication(formData: FormData) {
     "use server";
 
-    const supabase = await createClient();
+    const groupId = String(formData.get("group_id") ?? "").trim();
+    const decision = String(formData.get("decision") ?? "").trim();
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      redirect("/auth/login");
+    if (!groupId || (decision !== "aceita" && decision !== "recusada")) {
+      redirect("/advisor/dashboard?indication_response=invalid");
     }
 
-    const rawName = formData.get("name");
-    const name = typeof rawName === "string" ? rawName.trim() : "";
-
-    if (!name || name.length < 3) {
-      redirect("/advisor/dashboard");
+    try {
+      await respondAdvisorIndication(groupId, decision);
+      revalidatePath("/advisor/dashboard");
+      revalidatePath(`/groups/${groupId}`);
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Não foi possível registrar a resposta agora. Tente novamente.";
+      redirect(`/advisor/dashboard?indication_response=error&indication_group=${groupId}&indication_error=${encodeURIComponent(errorMessage)}`);
     }
 
-    await supabase
-      .from("profiles")
-      .update({ name })
-      .eq("id", user.id);
-
-    await supabase.auth.updateUser({ data: { name } });
-
-    revalidatePath("/advisor/dashboard");
-    redirect("/advisor/dashboard");
+    redirect(`/advisor/dashboard?indication_response=${decision}&indication_group=${groupId}`);
   }
 
   // Verificação de autenticação (ignorada no modo provisório)
@@ -124,6 +165,7 @@ export default async function AdvisorDashboardPage({ searchParams }: AdvisorDash
   let authenticatedAdvisorId: string | number | null = null;
   let pendingIndicationNotifications: Array<{
     groupId: string;
+    group: Awaited<ReturnType<typeof fetchGroupsVisibleToProfile>>[number];
     groupLabel: string;
     createdAt: string | null;
     title: string;
@@ -151,6 +193,16 @@ export default async function AdvisorDashboardPage({ searchParams }: AdvisorDash
   }
 
   const recentGroups = groups.slice(0, 5);
+  const groupNumberMap = buildStableGroupNumberMap(groups);
+  const acceptedGroup = indicationResponse === "aceita" && indicationGroup
+    ? groups.find((group) => String(group.id) === indicationGroup) ?? null
+    : null;
+  const persistedCelebrationGroup = authenticatedAdvisorId !== null
+    ? [...groups]
+        .filter((group) => idsAreEqual(group.primary_advisor_id, authenticatedAdvisorId))
+        .sort((left, right) => getGroupRecencyValue(right) - getGroupRecencyValue(left))[0] ?? null
+    : null;
+  const highlightedAdvisorGroup = acceptedGroup || persistedCelebrationGroup;
 
   if (authenticatedAdvisorId !== null) {
     const pendingIndicationGroups = groups.filter(
@@ -178,6 +230,7 @@ export default async function AdvisorDashboardPage({ searchParams }: AdvisorDash
 
         return {
           groupId: String(group.id),
+          group,
           groupLabel: group.theme || `Grupo ${String(group.id).slice(0, 8)}`,
           createdAt: latestNotification?.created_at ?? null,
           title: latestNotification?.title || "Solicitação de orientação pendente",
@@ -197,8 +250,10 @@ export default async function AdvisorDashboardPage({ searchParams }: AdvisorDash
   const dashboardCompletedCount = statusCount.concluido;
   const dashboardTotalCount = Math.max(groups.length, 1);
 
-  // Grupo em destaque: prefere "em andamento" para facilitar acompanhamento
+  // Grupo em destaque: quando houve aceite recente, o dashboard deve permanecer
+  // coerente com esse grupo para evitar mistura de contexto com outros grupos.
   const featuredGroup =
+    acceptedGroup ||
     groups.find((group) => group.status === "em_andamento") ||
     groups.find((group) => group.status === "planejamento") ||
     recentGroups[0] ||
@@ -307,6 +362,177 @@ export default async function AdvisorDashboardPage({ searchParams }: AdvisorDash
           )}
         </header>
 
+        {highlightedAdvisorGroup && (
+          <Card className="mb-8 border border-green-200 bg-green-50/80">
+            <div className="flex items-start justify-between gap-4 flex-wrap">
+              <div className="max-w-3xl">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-green-700">
+                  {acceptedGroup ? "Aceite confirmado" : "Orientação ativa"}
+                </p>
+                <h2 className="mt-2 text-2xl font-bold text-green-950">
+                  Parabéns, você está orientando o Grupo {resolveGroupDisplayNumber(highlightedAdvisorGroup, groupNumberMap)}.
+                </h2>
+                <p className="mt-2 text-sm text-green-900 leading-relaxed">
+                  {acceptedGroup ? "O acompanhamento foi confirmado" : "O acompanhamento segue ativo"} para o tema <strong>{resolveDisplayedGroupTheme({
+                    storedTheme: highlightedAdvisorGroup.theme,
+                    emptyLabel: "Tema em definição",
+                  })}</strong>. Este é um ótimo momento para criar vínculo com o grupo e organizar os primeiros combinados pedagógicos.
+                </p>
+              </div>
+
+              <Link
+                href={`/groups/${highlightedAdvisorGroup.id}`}
+                className="inline-flex rounded-lg bg-[#2F6F35] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#275C2C]"
+              >
+                Abrir grupo
+              </Link>
+            </div>
+
+            <div className="mt-5 rounded-2xl border border-green-200 bg-white px-4 py-4">
+              <p className="text-sm font-semibold text-[#1F2937]">Dicas para ser um bom orientador</p>
+              <ul className="mt-3 space-y-2 text-sm text-[#4B5563]">
+                <li>• Comece ouvindo o que o grupo já construiu antes de propor ajustes.</li>
+                <li>• Ajude a transformar ideias amplas em próximos passos claros e viáveis.</li>
+                <li>• Registre comentários pedagógicos curtos, frequentes e acionáveis ao longo do percurso.</li>
+                <li>• Valorize a autoria dos estudantes, orientando sem tomar o projeto para si.</li>
+              </ul>
+            </div>
+          </Card>
+        )}
+
+        {pendingIndicationNotifications.length > 0 && (
+          <Card className="mb-8 border border-amber-200 bg-amber-50/70">
+            <div className="flex items-start justify-between gap-4 flex-wrap mb-4">
+              <div>
+                <h2 className="text-xl font-semibold text-amber-950">Solicitações de orientação aguardando resposta</h2>
+                <p className="text-sm text-amber-900 mt-1">
+                  Estas notificações foram registradas automaticamente quando um grupo indicou você como orientador atual.
+                </p>
+              </div>
+              <span className="inline-flex rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-900">
+                {pendingIndicationNotifications.length} pendente(s)
+              </span>
+            </div>
+
+            <div className="space-y-3">
+              {pendingIndicationNotifications.map((notification) => (
+                <div
+                  key={notification.groupId}
+                  className="rounded-2xl border border-amber-200 bg-white px-4 py-4 shadow-sm"
+                >
+                  <div className="flex items-start justify-between gap-3 flex-wrap">
+                    <div>
+                      <p className="text-sm font-semibold text-[#1F2937]">{notification.title}</p>
+                      <p className="text-sm text-[#4B5563] mt-1">{notification.message}</p>
+                      <p className="text-xs text-[#6B7280] mt-2">
+                        Grupo: {notification.groupLabel}
+                        {notification.createdAt
+                          ? ` • ${new Date(notification.createdAt).toLocaleString("pt-BR", {
+                              day: "2-digit",
+                              month: "2-digit",
+                              year: "numeric",
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}`
+                          : ""}
+                      </p>
+                    </div>
+
+                    <details className="group mt-1 w-full lg:w-auto">
+                      <summary className="list-none">
+                        <span className="inline-flex cursor-pointer rounded-lg border border-amber-300 bg-white px-4 py-2 text-sm font-medium text-amber-900 transition-colors hover:bg-amber-50">
+                          <span className="group-open:hidden">Ver detalhes do grupo</span>
+                          <span className="hidden group-open:inline">Ocultar detalhes do grupo</span>
+                        </span>
+                      </summary>
+
+                      <div className="mt-4 rounded-2xl border border-[#F3E2A3] bg-[#FFFDF7] px-4 py-4">
+                        <div className="flex items-start justify-between gap-4 flex-wrap">
+                          <div>
+                            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-amber-700">
+                              Grupo {resolveGroupDisplayNumber(notification.group, groupNumberMap)}
+                            </p>
+                            <h3 className="mt-1 text-lg font-semibold text-[#1F2937]">
+                              {resolveDisplayedGroupTheme({
+                                storedTheme: notification.group.theme,
+                                emptyLabel: "Tema em definição",
+                              })}
+                            </h3>
+                          </div>
+                        </div>
+
+                        <div className="mt-4 grid gap-4 lg:grid-cols-[1.4fr_1fr]">
+                          <div>
+                            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#6B7280]">Estudantes</p>
+                            <ul className="mt-2 space-y-2 text-sm text-[#374151]">
+                              {getGroupMembers(notification.group).map((member) => (
+                                <li key={`${notification.groupId}-${member.name}`} className="rounded-lg border border-[#F5E8BE] bg-white px-3 py-2">
+                                  <span className="font-medium text-[#1F2937]">{member.name}</span>
+                                  <span className="text-[#6B7280]"> — {member.series || "Ano não informado"}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+
+                          <div className="space-y-3">
+                            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#6B7280]">Resposta da orientação</p>
+
+                            <form action={handleRespondAdvisorIndication}>
+                              <input type="hidden" name="group_id" value={notification.groupId} />
+                              <input type="hidden" name="decision" value="aceita" />
+                              <button
+                                type="submit"
+                                className="w-full rounded-lg bg-[#2F6F35] px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-[#275C2C]"
+                              >
+                                Aceitar orientação
+                              </button>
+                            </form>
+
+                            <form action={handleRespondAdvisorIndication}>
+                              <input type="hidden" name="group_id" value={notification.groupId} />
+                              <input type="hidden" name="decision" value="recusada" />
+                              <button
+                                type="submit"
+                                className="w-full rounded-lg border border-amber-300 bg-white px-4 py-2.5 text-sm font-medium text-amber-900 transition-colors hover:bg-amber-50"
+                              >
+                                Passar a vez
+                              </button>
+                            </form>
+                          </div>
+                        </div>
+                      </div>
+                    </details>
+                  </div>
+
+                  {indicationResponse === "aceita" && indicationGroup === notification.groupId && (
+                    <div className="mt-4 rounded-xl border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
+                      Orientação aceita com sucesso.
+                    </div>
+                  )}
+
+                  {indicationResponse === "recusada" && indicationGroup === notification.groupId && (
+                    <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                      Solicitação encaminhada para a próxima opção disponível.
+                    </div>
+                  )}
+
+                  {indicationResponse === "error" && indicationGroup === notification.groupId && (
+                    <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+                      {indicationError || "Não foi possível registrar a resposta agora. Tente novamente."}
+                    </div>
+                  )}
+
+                  {indicationResponse === "invalid" && (
+                    <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+                      A resposta da indicação não foi reconhecida.
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </Card>
+        )}
+
         <Card className="mb-8 border border-[#DCEBD5] bg-[#FBFDF9]">
           <div className="flex items-start justify-between gap-4 flex-wrap mb-4">
             <div>
@@ -353,96 +579,6 @@ export default async function AdvisorDashboardPage({ searchParams }: AdvisorDash
           )}
         </Card>
 
-        {/* Contadores */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-8">
-          <InfoCard
-            title="Grupos acompanhados"
-            value={groups.length}
-            description="Grupos vinculados a você como orientador principal ou coorientador."
-            href="/groups"
-            linkLabel="Ver todos os grupos →"
-            accent="green"
-          />
-
-          <InfoCard
-            title="Grupos em andamento"
-            value={statusCount.em_andamento}
-            description="Projetos ativamente em desenvolvimento neste ciclo."
-            href="/groups"
-            linkLabel="Ver grupos →"
-            accent="blue"
-          />
-        </div>
-
-        {pendingIndicationNotifications.length > 0 && (
-          <Card className="mb-8 border border-amber-200 bg-amber-50/70">
-            <div className="flex items-start justify-between gap-4 flex-wrap mb-4">
-              <div>
-                <h2 className="text-xl font-semibold text-amber-950">Solicitações de orientação aguardando resposta</h2>
-                <p className="text-sm text-amber-900 mt-1">
-                  Estas notificações foram registradas automaticamente quando um grupo indicou você como orientador atual.
-                </p>
-              </div>
-              <span className="inline-flex rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-900">
-                {pendingIndicationNotifications.length} pendente(s)
-              </span>
-            </div>
-
-            <div className="space-y-3">
-              {pendingIndicationNotifications.map((notification) => (
-                <div
-                  key={notification.groupId}
-                  className="rounded-2xl border border-amber-200 bg-white px-4 py-4 shadow-sm"
-                >
-                  <div className="flex items-start justify-between gap-3 flex-wrap">
-                    <div>
-                      <p className="text-sm font-semibold text-[#1F2937]">{notification.title}</p>
-                      <p className="text-sm text-[#4B5563] mt-1">{notification.message}</p>
-                      <p className="text-xs text-[#6B7280] mt-2">
-                        Grupo: {notification.groupLabel}
-                        {notification.createdAt
-                          ? ` • ${new Date(notification.createdAt).toLocaleString("pt-BR", {
-                              day: "2-digit",
-                              month: "2-digit",
-                              year: "numeric",
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })}`
-                          : ""}
-                      </p>
-                    </div>
-
-                    <Link
-                      href={`/groups/${notification.groupId}`}
-                      className="inline-flex rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-amber-700"
-                    >
-                      Responder solicitação
-                    </Link>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </Card>
-        )}
-
-        {/* Progresso geral + distribuição */}
-        <div className="grid grid-cols-1 lg:grid-cols-[1.4fr_1fr] gap-6 mb-8">
-          <ProgressCard
-            title="Progresso geral"
-            description="Panorama dos projetos concluídos em relação ao total cadastrado."
-            value={dashboardCompletedCount}
-            max={dashboardTotalCount}
-          />
-
-          <Card>
-            <h2 className="text-lg font-semibold text-gray-900 mb-3">Distribuição dos grupos</h2>
-            <div className="grid grid-cols-1 gap-3 text-sm">
-              <p className="text-gray-700">Planejamento: <strong>{statusCount.planejamento}</strong></p>
-              <p className="text-gray-700">Em andamento: <strong>{statusCount.em_andamento}</strong></p>
-              <p className="text-gray-700">Concluídos: <strong>{statusCount.concluido}</strong></p>
-            </div>
-          </Card>
-        </div>
 
         {/* Projeto em destaque */}
         <Card className="mb-8">
@@ -522,80 +658,6 @@ export default async function AdvisorDashboardPage({ searchParams }: AdvisorDash
           )}
         </Card>
 
-        {/* Grupos recentes */}
-        <Card className="mb-8">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-semibold text-gray-900">Meus grupos</h2>
-            <Link href="/groups" className="text-sm text-lime-700 hover:underline">
-              Ver todos
-            </Link>
-          </div>
-
-          {recentGroups.length === 0 ? (
-            <p className="text-gray-500 text-sm">
-              Nenhum grupo cadastrado ainda.{" "}
-              <Link href="/groups" className="text-lime-700 hover:underline">
-                Ver grupos
-              </Link>
-            </p>
-          ) : (
-            <div className="divide-y divide-gray-100">
-              {recentGroups.map((group, index) => (
-                <div key={group.id} className="py-3 flex items-center justify-between">
-                  <div>
-                    <p className="font-medium text-gray-900">Grupo {groups.length - index}</p>
-                    <p className="text-sm text-gray-700">
-                      {group.member_1_name} — {group.member_1_series}
-                    </p>
-                    <p className="text-xs text-gray-500">
-                      Status: {getStatusLabel((group.status as GroupStatus) || "planejamento")}
-                    </p>
-                    <p className="text-sm text-gray-500">{group.theme || "Sem tema"}</p>
-                  </div>
-                  <Link
-                    href={`/groups/${group.id}`}
-                    className="text-sm text-lime-700 hover:underline"
-                  >
-                    Ver detalhes →
-                  </Link>
-                </div>
-              ))}
-            </div>
-          )}
-        </Card>
-
-        {/* Perfil */}
-        <Card>
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">Meu perfil</h2>
-
-          <ul className="space-y-1 text-sm text-gray-700 mb-5">
-            <li><strong>Nome:</strong> {isProvisionalMode ? displayName : (profile?.name || user?.user_metadata?.name || "Não definido")}</li>
-            <li><strong>E-mail:</strong> {displayEmail}</li>
-            <li><strong>Perfil:</strong> Orientador</li>
-          </ul>
-
-          {isProvisionalMode ? (
-            <p className="text-xs text-gray-500">
-              Edição de perfil desativada no modo provisório de navegação.
-            </p>
-          ) : (
-            <form action={handleUpdateProfile} className="flex flex-col sm:flex-row gap-3">
-              <input
-                type="text"
-                name="name"
-                defaultValue={profile?.name || user?.user_metadata?.name || ""}
-                placeholder="Editar nome"
-                className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-lime-500"
-              />
-              <button
-                type="submit"
-                className="bg-lime-700 hover:bg-lime-800 text-white font-medium py-2 px-4 rounded-md"
-              >
-                Salvar nome
-              </button>
-            </form>
-          )}
-        </Card>
       </section>
     </main>
   );

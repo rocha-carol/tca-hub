@@ -1,7 +1,9 @@
 <!-- BEGIN:nextjs-agent-rules -->
+
 # This is NOT the Next.js you know
 
 This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` before writing any code. Heed deprecation notices.
+
 <!-- END:nextjs-agent-rules -->
 
 ## Instruções de contexto do projeto
@@ -9,14 +11,15 @@ This version has breaking changes — APIs, conventions, and file structure may 
 - Usar como base oficial de análise, priorização e decisões de MVP os documentos conceituais do TCA Hub fornecidos pela usuária.
 - Cruzar essa visão com a documentação local do repositório, especialmente `docs/project-context.md`, `docs/roadmap.md` e `docs/architecture.md`.
 - Quando houver divergência entre visão do projeto, documentação e implementação, explicitar:
-	- o que a visão do TCA Hub propõe;
-	- o que já está implementado no sistema;
-	- o que ainda precisa ser estruturado para o MVP.
+  - o que a visão do TCA Hub propõe;
+  - o que já está implementado no sistema;
+  - o que ainda precisa ser estruturado para o MVP.
 - Considerar sempre os três perfis do produto nas análises e priorizações: estudante, orientador e coordenador.
 - Priorizar fechamento e estruturação do MVP antes de sugerir expansão de escopo.
 
 ## Regras de continuidade segura
 
+- Não excluir nenhuma função, fluxo, componente, regra de negócio ou ideia já implementada sem antes pedir confirmação explícita à usuária.
 - Dar continuidade ao produto sem excluir ideias já implementadas, exceto quando houver conflito técnico real ou risco claro de inconsistência.
 - Trabalhar com o máximo de cautela para não quebrar o código já estável.
 - Priorizar reaproveitamento máximo do código, dos componentes, dos serviços e dos fluxos já existentes antes de criar novas estruturas.

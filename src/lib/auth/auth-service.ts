@@ -16,11 +16,11 @@ function mapProfileSyncErrorMessage(error: unknown) {
 
   const message = error.message.toLowerCase();
 
-  if (!message.includes("profile")) {
+  if (!message.includes("profile") && !message.includes("advisor")) {
     return null;
   }
 
-  return `O usuário foi criado no Auth, mas não foi possível sincronizar o registro em public.profiles. Execute o script local ${PROFILES_SYNC_SQL_FILE} no Supabase SQL Editor e tente novamente.`;
+  return `O usuário foi criado no Auth, mas não foi possível sincronizar o registro em public.profiles e o cadastro institucional em public.advisors. Execute o script local ${PROFILES_SYNC_SQL_FILE} no Supabase SQL Editor e tente novamente.`;
 }
 
 function normalizeUserRole(value: unknown): UserRole {
@@ -105,7 +105,14 @@ async function ensureProfileForAuthUser(
     patch.email = fallbackEmail;
   }
 
-  if (!existingProfile.role && fallbackRole) {
+  if (
+    fallbackRole &&
+    (
+      !existingProfile.role ||
+      (preferredRole && existingProfile.role !== preferredRole) ||
+      (existingProfile.role === "student" && fallbackRole !== "student")
+    )
+  ) {
     patch.role = fallbackRole;
   }
 
@@ -125,6 +132,134 @@ async function ensureProfileForAuthUser(
   }
 
   return updatedProfile;
+}
+
+async function ensureAdvisorDirectoryEntry(
+  supabase: BrowserSupabaseClient,
+  authUser: {
+    id: string;
+    email?: string | null;
+    user_metadata?: {
+      name?: unknown;
+      role?: unknown;
+    };
+  },
+  preferredName?: string,
+  preferredRole?: UserRole
+) {
+  const normalizedRole = preferredRole || normalizeUserRole(authUser.user_metadata?.role);
+
+  if (normalizedRole !== "advisor") {
+    return null;
+  }
+
+  const normalizedNameFromArg = preferredName?.trim() || "";
+  const normalizedNameFromMetadata =
+    typeof authUser.user_metadata?.name === "string" ? authUser.user_metadata.name.trim() : "";
+
+  const fallbackName = normalizedNameFromArg || normalizedNameFromMetadata || "Usuário";
+  const fallbackEmail = authUser.email?.trim() || "";
+
+  if (!fallbackEmail) {
+    throw new Error("Erro ao sincronizar advisor: email do usuário não disponível.");
+  }
+
+  const { data: linkedAdvisor, error: linkedAdvisorError } = await supabase
+    .from("advisors")
+    .select("*")
+    .eq("profile_id", authUser.id)
+    .maybeSingle();
+
+  if (linkedAdvisorError && linkedAdvisorError.code !== "PGRST116") {
+    throw new Error(`Erro ao verificar advisor vinculado ao profile: ${linkedAdvisorError.message}`);
+  }
+
+  if (linkedAdvisor) {
+    const patch: Record<string, unknown> = {};
+
+    if (!linkedAdvisor.name || linkedAdvisor.name.trim() === "") {
+      patch.name = fallbackName;
+    }
+
+    if (linkedAdvisor.email !== fallbackEmail) {
+      patch.email = fallbackEmail;
+    }
+
+    if (linkedAdvisor.active === false) {
+      patch.active = true;
+    }
+
+    if (Object.keys(patch).length === 0) {
+      return linkedAdvisor;
+    }
+
+    const { data: updatedAdvisor, error: updateAdvisorError } = await supabase
+      .from("advisors")
+      .update(patch)
+      .eq("id", linkedAdvisor.id)
+      .select("*")
+      .single();
+
+    if (updateAdvisorError) {
+      throw new Error(`Erro ao atualizar advisor vinculado ao profile: ${updateAdvisorError.message}`);
+    }
+
+    return updatedAdvisor;
+  }
+
+  const { data: advisorByEmail, error: advisorByEmailError } = await supabase
+    .from("advisors")
+    .select("*")
+    .eq("email", fallbackEmail)
+    .maybeSingle();
+
+  if (advisorByEmailError && advisorByEmailError.code !== "PGRST116") {
+    throw new Error(`Erro ao verificar advisor por email: ${advisorByEmailError.message}`);
+  }
+
+  if (advisorByEmail) {
+    const patch: Record<string, unknown> = {
+      profile_id: authUser.id,
+    };
+
+    if (!advisorByEmail.name || advisorByEmail.name.trim() === "") {
+      patch.name = fallbackName;
+    }
+
+    if (advisorByEmail.active === false) {
+      patch.active = true;
+    }
+
+    const { data: updatedAdvisor, error: updateAdvisorError } = await supabase
+      .from("advisors")
+      .update(patch)
+      .eq("id", advisorByEmail.id)
+      .select("*")
+      .single();
+
+    if (updateAdvisorError) {
+      throw new Error(`Erro ao vincular advisor existente ao profile: ${updateAdvisorError.message}`);
+    }
+
+    return updatedAdvisor;
+  }
+
+  const { data: createdAdvisor, error: createAdvisorError } = await supabase
+    .from("advisors")
+    .insert({
+      name: fallbackName,
+      email: fallbackEmail,
+      profile_id: authUser.id,
+      active: true,
+    })
+    .select("*")
+    .single();
+
+  if (createAdvisorError) {
+    throw new Error(`Erro ao criar advisor para o profile autenticado: ${createAdvisorError.message}`);
+  }
+
+  return createdAdvisor;
 }
 
 /**
@@ -190,6 +325,10 @@ export async function signUp(data: SignUpData): Promise<AuthResponse> {
     const profileData = authData.session
       ? await ensureProfileForAuthUser(supabase, authData.user, data.name, data.role)
       : undefined;
+
+    if (authData.session && data.role === "advisor") {
+      await ensureAdvisorDirectoryEntry(supabase, authData.user, data.name, data.role);
+    }
 
     // 3) Retornar resposta com dados de autenticação e perfil
     return {
@@ -282,6 +421,10 @@ export async function signIn(data: SignInData): Promise<AuthResponse> {
 
     // 2) Garantir profile 1:1 integrado com auth.users no login
     const profileData = await ensureProfileForAuthUser(supabase, authData.user);
+
+    if (profileData?.role === "advisor") {
+      await ensureAdvisorDirectoryEntry(supabase, authData.user, profileData.name, profileData.role);
+    }
 
     // 3) Retornar resposta com dados de autenticação e perfil
     return {

@@ -1,11 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { signUp } from "@/lib/auth/auth-service";
 import type { AuthError, UserRole } from "@/types/auth";
-import { Button } from "@/components/ui/Button";
 
 const roleOptions: Array<{ value: UserRole; label: string; description: string }> = [
   {
@@ -191,24 +189,13 @@ export default function SignUpForm() {
       onSubmit={(event) => {
         void handleSubmit(event);
       }}
-      className="tca-form-panel w-full max-w-md mx-auto overflow-hidden p-6 md:p-7"
+      className="w-full max-w-md mx-auto p-6 bg-white border border-lime-200 rounded-xl shadow-md"
     >
-      <div className="mb-6 flex items-start justify-between gap-4">
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--tca-secondary)]">Primeiro acesso</p>
-          <h2 className="mt-2 text-2xl font-bold text-[var(--foreground)]">Criar Conta</h2>
-          <p className="mt-2 text-sm leading-relaxed text-[var(--tca-text-soft)]">
-            Escolha o perfil da conta e entre na plataforma com uma experiência mais clara e acolhedora.
-          </p>
-        </div>
-        <span className="inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
-          cadastro
-        </span>
-      </div>
+      <h2 className="text-2xl font-bold mb-6 text-lime-800">Criar Conta</h2>
 
       {feedbackMessage ? (
         <div
-          className={`tca-feedback mb-4 ${feedbackClassName}`}
+          className={`mb-4 rounded-xl border p-3 text-sm ${feedbackClassName}`}
           role={error ? "alert" : "status"}
           aria-live={error ? "assertive" : "polite"}
         >
@@ -218,7 +205,7 @@ export default function SignUpForm() {
 
       {/* Campo de nome */}
       <div className="mb-4">
-        <label htmlFor="name" className="tca-form-label">
+        <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-2">
           Nome Completo
         </label>
         <input
@@ -229,13 +216,13 @@ export default function SignUpForm() {
           onChange={handleChange}
           disabled={loading || Boolean(successMessage)}
           placeholder="Seu nome completo"
-          className="tca-input"
+          className="w-full px-3 py-2 border border-slate-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-lime-500 disabled:bg-gray-100"
         />
       </div>
 
       {/* Campo de email */}
       <div className="mb-4">
-        <label htmlFor="email" className="tca-form-label">
+        <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
           Email
         </label>
         <input
@@ -246,12 +233,12 @@ export default function SignUpForm() {
           onChange={handleChange}
           disabled={loading || Boolean(successMessage)}
           placeholder="seu.email@exemplo.com"
-          className="tca-input"
+          className="w-full px-3 py-2 border border-slate-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-lime-500 disabled:bg-gray-100"
         />
       </div>
 
       <div className="mb-4">
-        <label htmlFor="role" className="tca-form-label">
+        <label htmlFor="role" className="block text-sm font-medium text-gray-700 mb-2">
           Tipo de conta
         </label>
         <select
@@ -260,7 +247,7 @@ export default function SignUpForm() {
           value={formData.role}
           onChange={handleChange}
           disabled={loading || Boolean(successMessage)}
-          className="tca-select"
+          className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-black focus:outline-none focus:ring-2 focus:ring-lime-500 disabled:bg-gray-100"
         >
           {roleOptions.map((roleOption) => (
             <option key={roleOption.value} value={roleOption.value}>
@@ -268,14 +255,14 @@ export default function SignUpForm() {
             </option>
           ))}
         </select>
-        <p className="mt-2 text-sm leading-relaxed text-[var(--tca-text-soft)]">
+        <p className="mt-2 text-sm text-slate-600">
           {roleOptions.find((roleOption) => roleOption.value === formData.role)?.description}
         </p>
       </div>
 
       {/* Campo de senha */}
       <div className="mb-4">
-        <label htmlFor="password" className="tca-form-label">
+        <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
           Senha (mínimo 8 caracteres)
         </label>
         <input
@@ -286,13 +273,13 @@ export default function SignUpForm() {
           onChange={handleChange}
           disabled={loading || Boolean(successMessage)}
           placeholder="••••••••"
-          className="tca-input"
+          className="w-full px-3 py-2 border border-slate-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-lime-500 disabled:bg-gray-100"
         />
       </div>
 
       {/* Campo de confirmação de senha */}
       <div className="mb-6">
-        <label htmlFor="passwordConfirm" className="tca-form-label">
+        <label htmlFor="passwordConfirm" className="block text-sm font-medium text-gray-700 mb-2">
           Confirmar Senha
         </label>
         <input
@@ -303,26 +290,25 @@ export default function SignUpForm() {
           onChange={handleChange}
           disabled={loading || Boolean(successMessage)}
           placeholder="••••••••"
-          className="tca-input"
+          className="w-full px-3 py-2 border border-slate-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-lime-500 disabled:bg-gray-100"
         />
       </div>
 
       {/* Botão de submissão */}
-      <Button
+      <button
         type="submit"
         disabled={loading || Boolean(successMessage)}
-        size="lg"
-        className="w-full"
+        className="w-full bg-lime-700 hover:bg-lime-800 disabled:bg-gray-400 text-white font-medium py-2 px-4 rounded-md transition"
       >
         {loading ? "Criando conta..." : successMessage ? "✓ Cadastro enviado" : "Criar Conta"}
-      </Button>
+      </button>
 
       {/* Link para login */}
-      <p className="mt-5 text-center text-sm text-[var(--tca-text-soft)]">
+      <p className="text-center mt-4 text-sm text-gray-600">
         Já tem conta?{" "}
-        <Link href="/auth/login" className="font-semibold text-[var(--tca-primary)] hover:text-[var(--tca-primary-strong)]">
+        <a href="/auth/login" className="text-lime-700 hover:text-lime-800 font-medium">
           Faça login
-        </Link>
+        </a>
       </p>
     </form>
   );

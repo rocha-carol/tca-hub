@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { getAuthenticatedProfile, getAuthenticatedUser, hasMinimumProfile } from "@/lib/auth/session-service";
+import BackLinkButton from "@/components/ui/BackLinkButton";
 
 /**
  * Etapa 5 — Fluxo inicial de profile após autenticação.
@@ -68,6 +69,10 @@ export default async function ProfileSetupPage() {
   return (
     <main className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
       <section className="w-full max-w-md bg-white border border-gray-200 rounded-lg p-6 shadow-sm">
+        <div className="mb-4">
+          <BackLinkButton fallbackHref="/dashboard" label="← Voltar" />
+        </div>
+
         <h1 className="text-2xl font-bold text-gray-900 mb-2">Completar perfil</h1>
         <p className="text-sm text-gray-600 mb-6">
           Antes de continuar, é necessário informar um nome para identificação no sistema.

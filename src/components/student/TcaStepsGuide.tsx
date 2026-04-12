@@ -511,6 +511,8 @@ export function TcaStepsGuide({
           max={steps.length}
           label="Progresso da jornada"
           colorClass="bg-[#4CAF50]"
+          labelClassName="text-black"
+          percentClassName="text-black"
         />
 
         <div className="rounded-xl border border-[#DCEBD5] bg-[#F8FBF6] px-4 py-4">

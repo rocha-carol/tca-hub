@@ -164,11 +164,12 @@ export default async function StudentAdvisorIndicationPage({
       revalidatePath(`/estudante/groups/${id}/advisor-indication`);
       revalidatePath(`/student/groups/${id}/advisor-indication`);
       revalidatePath(`/groups/${id}`);
+      revalidatePath(STUDENT_ROUTES.JOURNEY);
       revalidatePath(STUDENT_ROUTES.HOME);
       revalidatePath(STUDENT_ROUTES.LEGACY_NAMESPACE_HOME);
       revalidatePath("/groups");
       revalidatePath("/dashboard");
-      redirect(STUDENT_ROUTES.HOME);
+      redirect(STUDENT_ROUTES.JOURNEY);
     }
 
     const result = await suggestPrimaryAdvisorByPreference(id);
@@ -178,11 +179,12 @@ export default async function StudentAdvisorIndicationPage({
       revalidatePath(`/estudante/groups/${id}/advisor-indication`);
       revalidatePath(`/student/groups/${id}/advisor-indication`);
       revalidatePath(`/groups/${id}`);
+      revalidatePath(STUDENT_ROUTES.JOURNEY);
       revalidatePath(STUDENT_ROUTES.HOME);
       revalidatePath(STUDENT_ROUTES.LEGACY_NAMESPACE_HOME);
       revalidatePath("/groups");
       revalidatePath("/dashboard");
-      redirect(STUDENT_ROUTES.HOME);
+      redirect(STUDENT_ROUTES.JOURNEY);
     }
 
     await initiateAdvisorIndication(id, String(firstPreferenceId));
@@ -190,11 +192,12 @@ export default async function StudentAdvisorIndicationPage({
     revalidatePath(`/estudante/groups/${id}/advisor-indication`);
     revalidatePath(`/student/groups/${id}/advisor-indication`);
     revalidatePath(`/groups/${id}`);
+    revalidatePath(STUDENT_ROUTES.JOURNEY);
     revalidatePath(STUDENT_ROUTES.HOME);
     revalidatePath(STUDENT_ROUTES.LEGACY_NAMESPACE_HOME);
     revalidatePath("/groups");
     revalidatePath("/dashboard");
-    redirect(STUDENT_ROUTES.HOME);
+    redirect(STUDENT_ROUTES.JOURNEY);
   }
 
   let advisors = [] as Awaited<ReturnType<typeof fetchAllAdvisors>>;

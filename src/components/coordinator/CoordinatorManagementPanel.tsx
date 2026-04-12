@@ -6,7 +6,6 @@ import { fetchAllGroups, updateGroupAdvisors } from "@/services/group-service";
 import { fetchAllAdvisors } from "@/services/advisor-service";
 import { fetchCoordinatorSummary } from "@/services/coordinator-summary-service";
 import type { GroupStatus } from "@/types/group";
-import { Button } from "@/components/ui/Button";
 
 function getStatusLabel(status: GroupStatus) {
   if (status === "planejamento") return "Planejamento";
@@ -88,8 +87,8 @@ export default async function CoordinatorManagementPanel({
   if (!coordinatorSummary) {
     return (
       <div className="tca-soft-surface rounded-lg p-6 shadow-sm">
-        <h2 className="mb-3 text-xl font-semibold text-[var(--foreground)]">Gerenciamento de grupos e orientadores</h2>
-        <p className="text-sm text-[var(--tca-text-soft)]">
+        <h2 className="text-xl font-semibold text-gray-900 mb-3">Gerenciamento de grupos e orientadores</h2>
+        <p className="text-sm text-gray-600">
           Ainda não foi possível carregar os dados de gestão neste momento.
         </p>
       </div>
@@ -100,19 +99,19 @@ export default async function CoordinatorManagementPanel({
     <div className="tca-soft-surface rounded-lg p-6 shadow-sm">
       <div className="mb-5">
         <div>
-          <h2 className="text-xl font-semibold text-[var(--foreground)]">Gerenciamento de grupos e orientadores</h2>
-          <p className="mt-2 text-sm leading-relaxed text-[var(--tca-text-soft)]">
+          <h2 className="text-xl font-semibold text-gray-900">Gerenciamento de grupos e orientadores</h2>
+          <p className="text-sm text-gray-600 mt-2">
             Todas as ações de distribuição, vínculo manual e acompanhamento operacional ficam centralizadas aqui.
           </p>
         </div>
       </div>
 
       <div className="space-y-4">
-        <details id="carga-orientadores" className="group rounded-[22px] border border-[var(--tca-border)] bg-white/90 shadow-[0_14px_28px_-26px_rgba(15,23,42,0.45)]">
+        <details id="carga-orientadores" className="group rounded-xl border border-gray-200 bg-white/90">
           <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-4 py-3">
             <div>
-              <p className="text-sm font-semibold text-[var(--foreground)]">Carga de orientações por orientador</p>
-              <p className="mt-1 text-xs text-[var(--tca-text-muted)]">Distribuição atual da capacidade de acompanhamento.</p>
+              <p className="text-sm font-semibold text-gray-900">Carga de orientações por orientador</p>
+              <p className="text-xs text-gray-500 mt-1">Distribuição atual da capacidade de acompanhamento.</p>
             </div>
             <div className="flex items-center gap-2">
               <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${coordinatorSummary.advisorsFullCount > 0 ? "bg-red-100 text-red-700" : "bg-lime-100 text-lime-700"}`}>
@@ -120,23 +119,23 @@ export default async function CoordinatorManagementPanel({
                   ? `${coordinatorSummary.advisorsFullCount} no limite`
                   : `${activeAdvisors.length} disponível(is)`}
               </span>
-              <span className="text-xs text-[var(--tca-text-muted)] transition group-open:rotate-180">⌄</span>
+              <span className="text-xs text-gray-400 transition group-open:rotate-180">⌄</span>
             </div>
           </summary>
 
-          <div className="border-t border-[var(--tca-border)] px-4 py-4">
+          <div className="border-t border-gray-100 px-4 py-4">
             {coordinatorSummary.advisorLoads.length > 0 ? (
               <div className="space-y-2">
                 {coordinatorSummary.advisorLoads.map(({ advisor, currentCount, maxOrientacoes, available }) => {
                   const pct = Math.min(100, Math.round((currentCount / maxOrientacoes) * 100));
                   return (
                     <div key={String(advisor.id)} className="flex items-center gap-3 text-sm">
-                      <div className="w-40 shrink-0 truncate font-semibold text-[var(--foreground)]" title={advisor.name}>
+                      <div className="w-40 shrink-0 truncate text-gray-800 font-medium" title={advisor.name}>
                         {advisor.name}
                       </div>
-                      <div className="h-2.5 flex-1 overflow-hidden rounded-full border border-[var(--tca-border)] bg-[linear-gradient(180deg,#eef2f7_0%,#e7edf4_100%)]">
+                      <div className="flex-1 h-2 rounded-full bg-gray-200 overflow-hidden">
                         <div
-                          className={`h-full rounded-full transition-all ${available ? "bg-[linear-gradient(135deg,var(--tca-primary)_0%,var(--tca-secondary)_100%)]" : "bg-[linear-gradient(135deg,var(--tca-highlight)_0%,#c93f61_100%)]"}`}
+                          className={`h-2 rounded-full transition-all ${available ? "bg-green-500" : "bg-red-500"}`}
                           style={{ width: `${pct}%` }}
                         />
                       </div>
@@ -148,16 +147,16 @@ export default async function CoordinatorManagementPanel({
                 })}
               </div>
             ) : (
-              <p className="text-sm text-[var(--tca-text-muted)]">Nenhum orientador ativo cadastrado.</p>
+              <p className="text-sm text-gray-500">Nenhum orientador ativo cadastrado.</p>
             )}
           </div>
         </details>
 
-        <details id="grupos-sem-orientador" className="group rounded-[22px] border border-[var(--tca-border)] bg-white/90 shadow-[0_14px_28px_-26px_rgba(15,23,42,0.45)]">
+        <details id="grupos-sem-orientador" className="group rounded-xl border border-gray-200 bg-white/90">
           <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-4 py-3">
             <div>
-              <p className="text-sm font-semibold text-[var(--foreground)]">Grupos sem orientador principal</p>
-              <p className="mt-1 text-xs text-[var(--tca-text-muted)]">Vinculação manual e leitura das preferências já registradas.</p>
+              <p className="text-sm font-semibold text-gray-900">Grupos sem orientador principal</p>
+              <p className="text-xs text-gray-500 mt-1">Vinculação manual e leitura das preferências já registradas.</p>
             </div>
             <div className="flex items-center gap-2">
               <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${coordinatorSummary.groupsWithoutAdvisor > 0 ? "bg-amber-100 text-amber-800" : "bg-lime-100 text-lime-700"}`}>
@@ -165,18 +164,18 @@ export default async function CoordinatorManagementPanel({
                   ? `${coordinatorSummary.groupsWithoutAdvisor} sem orientação`
                   : "Sem pendências"}
               </span>
-              <span className="text-xs text-[var(--tca-text-muted)] transition group-open:rotate-180">⌄</span>
+              <span className="text-xs text-gray-400 transition group-open:rotate-180">⌄</span>
             </div>
           </summary>
 
-          <div className="border-t border-[var(--tca-border)] px-4 py-4">
+          <div className="border-t border-gray-100 px-4 py-4">
             {coordinatorSummary.groupsWithoutAdvisorList.length > 0 ? (
-              <div className="divide-y divide-[var(--tca-border)] overflow-hidden rounded-[22px] border border-[var(--tca-border)] bg-white">
+              <div className="divide-y divide-gray-100 border border-gray-100 rounded-md">
                 {coordinatorSummary.groupsWithoutAdvisorList.map((group) => (
                   <div key={group.id} className="flex items-center justify-between px-4 py-3 gap-3">
                     <div>
-                      <p className="text-sm font-semibold text-[var(--foreground)]">{group.theme || group.member_1_name}</p>
-                      <p className="text-xs text-[var(--tca-text-muted)]">{group.member_1_name} — {group.member_1_series}</p>
+                      <p className="text-sm font-medium text-gray-900">{group.theme || group.member_1_name}</p>
+                      <p className="text-xs text-gray-500">{group.member_1_name} — {group.member_1_series}</p>
                       {group.hasPreferences ? (
                         <span className="text-xs text-blue-700 font-medium">Lista de preferências definida</span>
                       ) : (
@@ -211,20 +210,20 @@ export default async function CoordinatorManagementPanel({
                       )}
                     </div>
 
-                    <div className="w-full max-w-sm rounded-[20px] border border-[var(--tca-border)] bg-[var(--tca-surface-soft)] p-3">
+                    <div className="w-full max-w-sm">
                       {activeAdvisors.length > 0 ? (
-                        <form action={handleManualBindAdvisors} className="space-y-3">
+                        <form action={handleManualBindAdvisors} className="space-y-2">
                           <input type="hidden" name="group_id" value={group.id} />
 
                           <div>
-                            <label htmlFor={`manual-primary-${group.id}`} className="tca-form-label !mb-1 !text-xs">
+                            <label htmlFor={`manual-primary-${group.id}`} className="block text-xs text-gray-600 mb-1">
                               Orientador principal
                             </label>
                             <select
                               id={`manual-primary-${group.id}`}
                               name="primary_advisor_id"
                               defaultValue=""
-                              className="tca-select !py-2 !text-xs"
+                              className="w-full px-2.5 py-1.5 border border-gray-300 rounded-md text-black bg-white text-xs focus:outline-none focus:ring-2 focus:ring-lime-500"
                             >
                               <option value="">— Selecionar —</option>
                               {activeAdvisors.map((advisor) => (
@@ -236,14 +235,14 @@ export default async function CoordinatorManagementPanel({
                           </div>
 
                           <div>
-                            <label htmlFor={`manual-co-${group.id}`} className="tca-form-label !mb-1 !text-xs">
+                            <label htmlFor={`manual-co-${group.id}`} className="block text-xs text-gray-600 mb-1">
                               Coorientador (opcional)
                             </label>
                             <select
                               id={`manual-co-${group.id}`}
                               name="co_advisor_id"
                               defaultValue=""
-                              className="tca-select !py-2 !text-xs"
+                              className="w-full px-2.5 py-1.5 border border-gray-300 rounded-md text-black bg-white text-xs focus:outline-none focus:ring-2 focus:ring-lime-500"
                             >
                               <option value="">— Nenhum —</option>
                               {activeAdvisors.map((advisor) => (
@@ -255,17 +254,16 @@ export default async function CoordinatorManagementPanel({
                           </div>
 
                           <div className="flex items-center justify-between gap-2">
-                            <Button
+                            <button
                               type="submit"
-                              size="sm"
-                              className="text-xs"
+                              className="bg-lime-700 hover:bg-lime-800 text-white text-xs font-medium px-3 py-1.5 rounded-md"
                             >
                               Vincular manualmente
-                            </Button>
+                            </button>
 
                             <Link
                               href={`/groups/${group.id}`}
-                              className="text-xs font-semibold text-[var(--tca-primary)] hover:underline"
+                              className="text-xs text-lime-700 hover:underline font-medium"
                             >
                               Detalhes →
                             </Link>
@@ -273,8 +271,8 @@ export default async function CoordinatorManagementPanel({
                         </form>
                       ) : (
                         <div className="text-right">
-                          <p className="mb-1 text-xs text-[var(--tca-text-muted)]">Sem orientadores ativos para vincular.</p>
-                          <Link href="/coordinator/advisors" className="text-xs font-semibold text-[var(--tca-primary)] hover:underline">
+                          <p className="text-xs text-gray-500 mb-1">Sem orientadores ativos para vincular.</p>
+                          <Link href="/coordinator/advisors" className="text-xs text-lime-700 hover:underline font-medium">
                             Cadastrar orientador →
                           </Link>
                         </div>
@@ -284,7 +282,7 @@ export default async function CoordinatorManagementPanel({
                 ))}
               </div>
             ) : (
-              <p className="text-sm text-[var(--tca-text-muted)]">Todos os grupos atuais já possuem orientação principal definida.</p>
+              <p className="text-sm text-gray-500">Todos os grupos atuais já possuem orientação principal definida.</p>
             )}
           </div>
         </details>

@@ -16,7 +16,9 @@ import { fetchAllStudents } from "@/services/student-service";
 import { ensureGroupProjectSectionsStructure, updateGroupProjectSection } from "@/services/project-section-service";
 import {
   createProjectSectionComment,
+  deleteProjectSectionComment,
   fetchGroupProjectSectionComments,
+  updateProjectSectionComment,
 } from "@/services/project-section-comment-service";
 import {
   fetchGroupProjectSectionQuestions,
@@ -27,7 +29,9 @@ import {
 } from "@/services/project-section-question-answer-service";
 import {
   createProjectSectionNextStep,
+  deleteProjectSectionNextStep,
   fetchGroupProjectSectionNextSteps,
+  updateProjectSectionNextStep,
 } from "@/services/project-section-next-step-service";
 import {
   createProjectSectionVersion,
@@ -50,6 +54,18 @@ function getStatusLabel(status: GroupStatus) {
 
 function idsAreEqual(left: string | number | null | undefined, right: string | number | null | undefined) {
   return String(left ?? "") === String(right ?? "");
+}
+
+function canManageAdvisorSavedText(
+  currentProfileId: string | null | undefined,
+  currentRole: string | null | undefined,
+  authorProfileId: string | null | undefined
+) {
+  if (currentRole === "coordinator") {
+    return true;
+  }
+
+  return idsAreEqual(currentProfileId, authorProfileId);
 }
 
 function getProjectSectionStatusLabel(status: string) {
@@ -210,7 +226,10 @@ export default async function GroupDetailPage({ params, searchParams }: GroupDet
       redirect(`/groups/${id}`);
     }
 
-    const primaryAdvisorId = String(formData.get("primary_advisor_id") ?? "").trim() || null;
+    const primaryAdvisorField = formData.get("primary_advisor_id");
+    const primaryAdvisorId = primaryAdvisorField === null
+      ? (group.primary_advisor_id ? String(group.primary_advisor_id) : null)
+      : (String(primaryAdvisorField).trim() || null);
     const coAdvisorId = String(formData.get("co_advisor_id") ?? "").trim() || null;
 
     try {
@@ -219,6 +238,9 @@ export default async function GroupDetailPage({ params, searchParams }: GroupDet
       const message = error instanceof Error ? error.message.toLowerCase() : "";
       if (message.includes("indisponível") || message.includes("limite")) {
         redirect(`/groups/${id}?advisor_error=unavailable`);
+      }
+      if (message.includes("database/037_enable_groups_crud_policies.sql")) {
+        redirect(`/groups/${id}?advisor_error=groups_policy`);
       }
       redirect(`/groups/${id}?advisor_error=save`);
     }
@@ -439,6 +461,85 @@ export default async function GroupDetailPage({ params, searchParams }: GroupDet
     redirect(`/groups/${id}?comment_status=success&comment_section=${targetSectionId}`);
   }
 
+  async function handleUpdateSectionComment(formData: FormData) {
+    "use server";
+
+    const { profile: authenticatedProfile } = await requireGroupAccess(id);
+    if (authenticatedProfile.role !== "advisor" && authenticatedProfile.role !== "coordinator") {
+      redirect(`/groups/${id}?comment_status=forbidden`);
+    }
+
+    const commentId = String(formData.get("comment_id") ?? "").trim();
+    const fallbackSectionId = String(formData.get("section_id") ?? "").trim();
+    const comment = String(formData.get("comment") ?? "").trim();
+
+    if (!commentId || comment.length < 3) {
+      redirect(`/groups/${id}?comment_status=invalid&comment_section=${fallbackSectionId}`);
+    }
+
+    const allComments = await fetchGroupProjectSectionComments(id).catch(() => []);
+    const existingComment = allComments.find((item) => String(item.id) === commentId);
+    const targetSectionId = String(existingComment?.section_id ?? fallbackSectionId ?? "");
+
+    if (!existingComment) {
+      redirect(`/groups/${id}?comment_status=invalid&comment_section=${targetSectionId}`);
+    }
+
+    if (!canManageAdvisorSavedText(authenticatedProfile.id, authenticatedProfile.role, existingComment.author_profile_id)) {
+      redirect(`/groups/${id}?comment_status=forbidden&comment_section=${targetSectionId}`);
+    }
+
+    try {
+      await updateProjectSectionComment(commentId, comment);
+    } catch {
+      redirect(`/groups/${id}?comment_status=update_error&comment_section=${targetSectionId}`);
+    }
+
+    revalidatePath(`/groups/${id}`);
+    revalidatePath(`/groups/${id}/project`);
+    revalidatePath(`/groups/${id}/comments`);
+    redirect(`/groups/${id}?comment_status=updated&comment_section=${targetSectionId}`);
+  }
+
+  async function handleDeleteSectionComment(formData: FormData) {
+    "use server";
+
+    const { profile: authenticatedProfile } = await requireGroupAccess(id);
+    if (authenticatedProfile.role !== "advisor" && authenticatedProfile.role !== "coordinator") {
+      redirect(`/groups/${id}?comment_status=forbidden`);
+    }
+
+    const commentId = String(formData.get("comment_id") ?? "").trim();
+    const fallbackSectionId = String(formData.get("section_id") ?? "").trim();
+
+    if (!commentId) {
+      redirect(`/groups/${id}?comment_status=invalid&comment_section=${fallbackSectionId}`);
+    }
+
+    const allComments = await fetchGroupProjectSectionComments(id).catch(() => []);
+    const existingComment = allComments.find((item) => String(item.id) === commentId);
+    const targetSectionId = String(existingComment?.section_id ?? fallbackSectionId ?? "");
+
+    if (!existingComment) {
+      redirect(`/groups/${id}?comment_status=invalid&comment_section=${targetSectionId}`);
+    }
+
+    if (!canManageAdvisorSavedText(authenticatedProfile.id, authenticatedProfile.role, existingComment.author_profile_id)) {
+      redirect(`/groups/${id}?comment_status=forbidden&comment_section=${targetSectionId}`);
+    }
+
+    try {
+      await deleteProjectSectionComment(commentId);
+    } catch {
+      redirect(`/groups/${id}?comment_status=delete_error&comment_section=${targetSectionId}`);
+    }
+
+    revalidatePath(`/groups/${id}`);
+    revalidatePath(`/groups/${id}/project`);
+    revalidatePath(`/groups/${id}/comments`);
+    redirect(`/groups/${id}?comment_status=deleted&comment_section=${targetSectionId}`);
+  }
+
   async function handleAddQuestionAnswer(formData: FormData) {
     "use server";
 
@@ -505,6 +606,83 @@ export default async function GroupDetailPage({ params, searchParams }: GroupDet
     revalidatePath(`/groups/${id}`);
     revalidatePath(`/groups/${id}/project`);
     redirect(`/groups/${id}?next_step_status=success&next_step_section=${targetSectionId}`);
+  }
+
+  async function handleUpdateSectionNextStep(formData: FormData) {
+    "use server";
+
+    const { profile: authenticatedProfile } = await requireGroupAccess(id);
+    if (authenticatedProfile.role !== "advisor" && authenticatedProfile.role !== "coordinator") {
+      redirect(`/groups/${id}?next_step_status=forbidden`);
+    }
+
+    const nextStepId = String(formData.get("next_step_id") ?? "").trim();
+    const fallbackSectionId = String(formData.get("section_id") ?? "").trim();
+    const nextSteps = String(formData.get("next_steps") ?? "").trim();
+
+    if (!nextStepId || nextSteps.length < 3) {
+      redirect(`/groups/${id}?next_step_status=invalid&next_step_section=${fallbackSectionId}`);
+    }
+
+    const allNextSteps = await fetchGroupProjectSectionNextSteps(id).catch(() => []);
+    const existingNextStep = allNextSteps.find((item) => String(item.id) === nextStepId);
+    const targetSectionId = String(existingNextStep?.section_id ?? fallbackSectionId ?? "");
+
+    if (!existingNextStep) {
+      redirect(`/groups/${id}?next_step_status=invalid&next_step_section=${targetSectionId}`);
+    }
+
+    if (!canManageAdvisorSavedText(authenticatedProfile.id, authenticatedProfile.role, existingNextStep.author_profile_id)) {
+      redirect(`/groups/${id}?next_step_status=forbidden&next_step_section=${targetSectionId}`);
+    }
+
+    try {
+      await updateProjectSectionNextStep(nextStepId, nextSteps);
+    } catch {
+      redirect(`/groups/${id}?next_step_status=update_error&next_step_section=${targetSectionId}`);
+    }
+
+    revalidatePath(`/groups/${id}`);
+    revalidatePath(`/groups/${id}/project`);
+    redirect(`/groups/${id}?next_step_status=updated&next_step_section=${targetSectionId}`);
+  }
+
+  async function handleDeleteSectionNextStep(formData: FormData) {
+    "use server";
+
+    const { profile: authenticatedProfile } = await requireGroupAccess(id);
+    if (authenticatedProfile.role !== "advisor" && authenticatedProfile.role !== "coordinator") {
+      redirect(`/groups/${id}?next_step_status=forbidden`);
+    }
+
+    const nextStepId = String(formData.get("next_step_id") ?? "").trim();
+    const fallbackSectionId = String(formData.get("section_id") ?? "").trim();
+
+    if (!nextStepId) {
+      redirect(`/groups/${id}?next_step_status=invalid&next_step_section=${fallbackSectionId}`);
+    }
+
+    const allNextSteps = await fetchGroupProjectSectionNextSteps(id).catch(() => []);
+    const existingNextStep = allNextSteps.find((item) => String(item.id) === nextStepId);
+    const targetSectionId = String(existingNextStep?.section_id ?? fallbackSectionId ?? "");
+
+    if (!existingNextStep) {
+      redirect(`/groups/${id}?next_step_status=invalid&next_step_section=${targetSectionId}`);
+    }
+
+    if (!canManageAdvisorSavedText(authenticatedProfile.id, authenticatedProfile.role, existingNextStep.author_profile_id)) {
+      redirect(`/groups/${id}?next_step_status=forbidden&next_step_section=${targetSectionId}`);
+    }
+
+    try {
+      await deleteProjectSectionNextStep(nextStepId);
+    } catch {
+      redirect(`/groups/${id}?next_step_status=delete_error&next_step_section=${targetSectionId}`);
+    }
+
+    revalidatePath(`/groups/${id}`);
+    revalidatePath(`/groups/${id}/project`);
+    redirect(`/groups/${id}?next_step_status=deleted&next_step_section=${targetSectionId}`);
   }
 
   // Carrega orientadores para preencher o seletor — falha silenciosa se tabela não existir
@@ -672,9 +850,14 @@ export default async function GroupDetailPage({ params, searchParams }: GroupDet
       <section className="max-w-2xl mx-auto px-6 py-10">
         <div className="tca-stripes h-1.5 w-full rounded-md mb-6" />
         <header className="mb-8">
-          {!isStudentView && (
+          {!isStudentView && profile?.role === "coordinator" && (
             <Link href="/groups" className="text-lime-700 hover:underline text-sm">
               ← Voltar para grupos
+            </Link>
+          )}
+          {!isStudentView && profile?.role === "advisor" && (
+            <Link href="/advisor/dashboard" className="text-lime-700 hover:underline text-sm">
+              ← Voltar para o dashboard
             </Link>
           )}
           <h1 className="text-3xl font-bold tca-title-guide mt-3">Detalhe do grupo</h1>
@@ -882,7 +1065,7 @@ export default async function GroupDetailPage({ params, searchParams }: GroupDet
             <>
               {!isStudentView && (
               <form action={handleAssignAdvisors} className="space-y-4 border-t border-gray-100 pt-4">
-                <p className="text-sm font-medium text-gray-700">Atualizar orientadores:</p>
+                <p className="text-sm font-medium text-gray-700">Incluir coorientador:</p>
 
                 {advisor_error === "unavailable" && (
                   <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2">
@@ -894,25 +1077,13 @@ export default async function GroupDetailPage({ params, searchParams }: GroupDet
                     Não foi possível salvar a atualização de orientadores. Tente novamente.
                   </p>
                 )}
+                {advisor_error === "groups_policy" && (
+                  <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2">
+                    O Supabase bloqueou a atualização da tabela de grupos. Execute o arquivo local <span className="font-semibold">database/037_enable_groups_crud_policies.sql</span> no SQL Editor e tente novamente.
+                  </p>
+                )}
 
-                <div>
-                  <label htmlFor="primary_advisor_id" className="block text-sm text-gray-600 mb-1">
-                    Orientador principal
-                  </label>
-                  <select
-                    id="primary_advisor_id"
-                    name="primary_advisor_id"
-                    defaultValue={group.primary_advisor_id ?? ""}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-lime-500"
-                  >
-                    <option value="">— Nenhum —</option>
-                    {advisors.map((advisor) => (
-                      <option key={advisor.id} value={advisor.id}>
-                        {advisor.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                <input type="hidden" name="primary_advisor_id" value={group.primary_advisor_id ?? ""} />
 
                 <div>
                   <label htmlFor="co_advisor_id" className="block text-sm text-gray-600 mb-1">
@@ -937,7 +1108,7 @@ export default async function GroupDetailPage({ params, searchParams }: GroupDet
                   type="submit"
                   className="bg-lime-700 hover:bg-lime-800 text-white font-medium px-4 py-2 rounded-md text-sm"
                 >
-                  Salvar orientadores
+                  Salvar coorientador
                 </button>
               </form>
               )}
@@ -1346,6 +1517,16 @@ export default async function GroupDetailPage({ params, searchParams }: GroupDet
                               Comentário registrado com sucesso.
                             </p>
                           )}
+                          {comment_status === "updated" && comment_section === currentSectionId && (
+                            <p className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-md px-3 py-2 mb-3">
+                              Comentário atualizado com sucesso.
+                            </p>
+                          )}
+                          {comment_status === "deleted" && comment_section === currentSectionId && (
+                            <p className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-md px-3 py-2 mb-3">
+                              Comentário excluído com sucesso.
+                            </p>
+                          )}
                           {comment_status === "invalid" && comment_section === currentSectionId && (
                             <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2 mb-3">
                               Comentário inválido. Escreva ao menos 3 caracteres.
@@ -1354,6 +1535,16 @@ export default async function GroupDetailPage({ params, searchParams }: GroupDet
                           {comment_status === "error" && comment_section === currentSectionId && (
                             <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2 mb-3">
                               Não foi possível salvar o comentário. Tente novamente.
+                            </p>
+                          )}
+                          {comment_status === "update_error" && comment_section === currentSectionId && (
+                            <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2 mb-3">
+                              Não foi possível atualizar o comentário. Tente novamente.
+                            </p>
+                          )}
+                          {comment_status === "delete_error" && comment_section === currentSectionId && (
+                            <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2 mb-3">
+                              Não foi possível excluir o comentário. Tente novamente.
                             </p>
                           )}
 
@@ -1376,6 +1567,43 @@ export default async function GroupDetailPage({ params, searchParams }: GroupDet
                                         })}`
                                       : ""}
                                   </p>
+
+                                  {canManageProjectSections && canManageAdvisorSavedText(profile?.id, profile?.role, comment.author_profile_id) && (
+                                    <div className="mt-3 flex flex-wrap gap-2">
+                                      <details className="rounded-md border border-indigo-200 bg-white px-3 py-2">
+                                        <summary className="cursor-pointer list-none text-xs font-medium text-indigo-700">
+                                          Editar texto
+                                        </summary>
+                                        <form action={handleUpdateSectionComment} className="mt-3 space-y-2">
+                                          <input type="hidden" name="comment_id" value={String(comment.id)} />
+                                          <input type="hidden" name="section_id" value={currentSectionId} />
+                                          <textarea
+                                            name="comment"
+                                            rows={3}
+                                            defaultValue={comment.comment}
+                                            className="w-full min-w-[240px] px-3 py-2 border border-gray-300 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                          />
+                                          <button
+                                            type="submit"
+                                            className="bg-indigo-600 hover:bg-indigo-700 text-white font-medium px-3 py-2 rounded-md text-xs"
+                                          >
+                                            Salvar edição
+                                          </button>
+                                        </form>
+                                      </details>
+
+                                      <form action={handleDeleteSectionComment}>
+                                        <input type="hidden" name="comment_id" value={String(comment.id)} />
+                                        <input type="hidden" name="section_id" value={currentSectionId} />
+                                        <button
+                                          type="submit"
+                                          className="rounded-md border border-red-200 bg-white px-3 py-2 text-xs font-medium text-red-700 transition-colors hover:bg-red-50"
+                                        >
+                                          Excluir
+                                        </button>
+                                      </form>
+                                    </div>
+                                  )}
                                 </div>
                               ))
                             )}
@@ -1406,6 +1634,16 @@ export default async function GroupDetailPage({ params, searchParams }: GroupDet
                               Próximos passos registrados com sucesso.
                             </p>
                           )}
+                          {next_step_status === "updated" && next_step_section === currentSectionId && (
+                            <p className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-md px-3 py-2 mb-3">
+                              Próximos passos atualizados com sucesso.
+                            </p>
+                          )}
+                          {next_step_status === "deleted" && next_step_section === currentSectionId && (
+                            <p className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-md px-3 py-2 mb-3">
+                              Próximos passos excluídos com sucesso.
+                            </p>
+                          )}
                           {next_step_status === "invalid" && next_step_section === currentSectionId && (
                             <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2 mb-3">
                               Texto inválido. Escreva ao menos 3 caracteres.
@@ -1414,6 +1652,16 @@ export default async function GroupDetailPage({ params, searchParams }: GroupDet
                           {next_step_status === "error" && next_step_section === currentSectionId && (
                             <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2 mb-3">
                               Não foi possível salvar os próximos passos. Tente novamente.
+                            </p>
+                          )}
+                          {next_step_status === "update_error" && next_step_section === currentSectionId && (
+                            <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2 mb-3">
+                              Não foi possível atualizar os próximos passos. Tente novamente.
+                            </p>
+                          )}
+                          {next_step_status === "delete_error" && next_step_section === currentSectionId && (
+                            <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2 mb-3">
+                              Não foi possível excluir os próximos passos. Tente novamente.
                             </p>
                           )}
 
@@ -1436,6 +1684,43 @@ export default async function GroupDetailPage({ params, searchParams }: GroupDet
                                         })}`
                                       : ""}
                                   </p>
+
+                                  {canManageProjectSections && canManageAdvisorSavedText(profile?.id, profile?.role, nextStep.author_profile_id) && (
+                                    <div className="mt-3 flex flex-wrap gap-2">
+                                      <details className="rounded-md border border-violet-200 bg-white px-3 py-2">
+                                        <summary className="cursor-pointer list-none text-xs font-medium text-violet-700">
+                                          Editar texto
+                                        </summary>
+                                        <form action={handleUpdateSectionNextStep} className="mt-3 space-y-2">
+                                          <input type="hidden" name="next_step_id" value={String(nextStep.id)} />
+                                          <input type="hidden" name="section_id" value={currentSectionId} />
+                                          <textarea
+                                            name="next_steps"
+                                            rows={3}
+                                            defaultValue={nextStep.next_steps}
+                                            className="w-full min-w-[240px] px-3 py-2 border border-gray-300 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-violet-500"
+                                          />
+                                          <button
+                                            type="submit"
+                                            className="bg-violet-600 hover:bg-violet-700 text-white font-medium px-3 py-2 rounded-md text-xs"
+                                          >
+                                            Salvar edição
+                                          </button>
+                                        </form>
+                                      </details>
+
+                                      <form action={handleDeleteSectionNextStep}>
+                                        <input type="hidden" name="next_step_id" value={String(nextStep.id)} />
+                                        <input type="hidden" name="section_id" value={currentSectionId} />
+                                        <button
+                                          type="submit"
+                                          className="rounded-md border border-red-200 bg-white px-3 py-2 text-xs font-medium text-red-700 transition-colors hover:bg-red-50"
+                                        >
+                                          Excluir
+                                        </button>
+                                      </form>
+                                    </div>
+                                  )}
                                 </div>
                               ))
                             )}

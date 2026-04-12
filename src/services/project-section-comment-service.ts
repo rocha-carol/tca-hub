@@ -23,7 +23,7 @@ function mapProjectSectionCommentsError(message: string, code?: string) {
   }
 
   if (isProjectSectionCommentsPermissionDenied(message, code)) {
-    return "Acesso aos comentários das seções bloqueado por policy/RLS no Supabase. Garanta policies SELECT/INSERT para usuários autenticados.";
+    return "Acesso aos comentários das seções bloqueado por policy/RLS no Supabase. Garanta policies SELECT/INSERT/UPDATE/DELETE para usuários autenticados.";
   }
 
   return null;
@@ -75,5 +75,48 @@ export async function createProjectSectionComment(
     }
 
     throw new Error(`Erro ao salvar comentário da seção: ${error.message}`);
+  }
+}
+
+export async function updateProjectSectionComment(
+  commentId: string | number,
+  comment: string
+): Promise<void> {
+  const supabase = await createClient();
+
+  const { error } = await supabase
+    .from("group_project_section_comments")
+    .update({
+      comment,
+    })
+    .eq("id", commentId);
+
+  if (error) {
+    const mapped = mapProjectSectionCommentsError(error.message, error.code);
+    if (mapped) {
+      throw new Error(mapped);
+    }
+
+    throw new Error(`Erro ao atualizar comentário da seção: ${error.message}`);
+  }
+}
+
+export async function deleteProjectSectionComment(
+  commentId: string | number
+): Promise<void> {
+  const supabase = await createClient();
+
+  const { error } = await supabase
+    .from("group_project_section_comments")
+    .delete()
+    .eq("id", commentId);
+
+  if (error) {
+    const mapped = mapProjectSectionCommentsError(error.message, error.code);
+    if (mapped) {
+      throw new Error(mapped);
+    }
+
+    throw new Error(`Erro ao excluir comentário da seção: ${error.message}`);
   }
 }

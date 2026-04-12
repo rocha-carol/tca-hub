@@ -23,7 +23,7 @@ function mapProjectSectionNextStepsError(message: string, code?: string) {
   }
 
   if (isProjectSectionNextStepsPermissionDenied(message, code)) {
-    return "Acesso aos próximos passos bloqueado por policy/RLS no Supabase. Garanta policies SELECT/INSERT para usuários autenticados.";
+    return "Acesso aos próximos passos bloqueado por policy/RLS no Supabase. Garanta policies SELECT/INSERT/UPDATE/DELETE para usuários autenticados.";
   }
 
   return null;
@@ -75,5 +75,48 @@ export async function createProjectSectionNextStep(
     }
 
     throw new Error(`Erro ao salvar próximos passos: ${error.message}`);
+  }
+}
+
+export async function updateProjectSectionNextStep(
+  nextStepId: string | number,
+  nextSteps: string
+): Promise<void> {
+  const supabase = await createClient();
+
+  const { error } = await supabase
+    .from("group_project_section_next_steps")
+    .update({
+      next_steps: nextSteps,
+    })
+    .eq("id", nextStepId);
+
+  if (error) {
+    const mapped = mapProjectSectionNextStepsError(error.message, error.code);
+    if (mapped) {
+      throw new Error(mapped);
+    }
+
+    throw new Error(`Erro ao atualizar próximos passos: ${error.message}`);
+  }
+}
+
+export async function deleteProjectSectionNextStep(
+  nextStepId: string | number
+): Promise<void> {
+  const supabase = await createClient();
+
+  const { error } = await supabase
+    .from("group_project_section_next_steps")
+    .delete()
+    .eq("id", nextStepId);
+
+  if (error) {
+    const mapped = mapProjectSectionNextStepsError(error.message, error.code);
+    if (mapped) {
+      throw new Error(mapped);
+    }
+
+    throw new Error(`Erro ao excluir próximos passos: ${error.message}`);
   }
 }

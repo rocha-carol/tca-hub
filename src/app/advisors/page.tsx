@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { fetchAllGroups } from "@/services/group-service";
 import {
   createAdvisor,
+  deleteAdvisor,
   deactivateAdvisor,
   fetchAllAdvisors,
   importAdvisors,
@@ -10,6 +12,60 @@ import {
 } from "@/services/advisor-service";
 import { parseCsvText } from "@/lib/import/csv";
 import type { Advisor } from "@/types/advisor";
+import type { Group } from "@/types/group";
+
+const ADVISOR_PAGE_PATHS = ["/advisors", "/coordinator/advisors"] as const;
+
+function revalidateAdvisorPages() {
+  for (const path of ADVISOR_PAGE_PATHS) {
+    revalidatePath(path);
+  }
+}
+
+function idsAreEqual(left: string | number | null | undefined, right: string | number | null | undefined) {
+  return String(left ?? "") === String(right ?? "");
+}
+
+function getGroupLabel(group: Group) {
+  return group.theme || group.member_1_name || `Grupo ${String(group.id).slice(0, 8)}`;
+}
+
+function getAdvisorStatus(advisor: Advisor, groups: Group[]) {
+  const pendingGroup = groups.find(
+    (group) =>
+      idsAreEqual(group.indicated_advisor_id, advisor.id) &&
+      group.indication_status === "pendente"
+  );
+
+  if (pendingGroup) {
+    return {
+      label: "Status: Ainda não respondeu solicitação de orientação",
+      description: getGroupLabel(pendingGroup),
+      className: "bg-amber-100 text-amber-800",
+    };
+  }
+
+  const linkedGroups = groups.filter(
+    (group) => idsAreEqual(group.primary_advisor_id, advisor.id) || idsAreEqual(group.co_advisor_id, advisor.id)
+  );
+
+  if (linkedGroups.length > 0) {
+    const firstGroupLabel = getGroupLabel(linkedGroups[0]);
+    const suffix = linkedGroups.length > 1 ? ` e +${linkedGroups.length - 1}` : "";
+
+    return {
+      label: `Status: Orientador ${firstGroupLabel}${suffix}`,
+      description: linkedGroups.length > 1 ? `${linkedGroups.length} grupo(s) vinculados` : "Grupo vinculado",
+      className: "bg-blue-100 text-blue-800",
+    };
+  }
+
+  return {
+    label: "Status: Sem grupo para orientar",
+    description: "Disponível para nova distribuição",
+    className: "bg-gray-100 text-gray-700",
+  };
+}
 
 /**
  * Página de Orientadores (MVP).
@@ -18,13 +74,23 @@ import type { Advisor } from "@/types/advisor";
  * Associação com grupos será feita em etapa futura.
  */
 interface AdvisorsPageProps {
-  searchParams: Promise<{ import_status?: string; import_count?: string; import_skipped?: string }>;
+  searchParams: Promise<{
+    import_status?: string;
+    import_count?: string;
+    import_skipped?: string;
+    update_status?: string;
+    update_id?: string;
+    delete_status?: string;
+    delete_id?: string;
+    edit_id?: string;
+  }>;
 }
 
 export default async function AdvisorsPage({ searchParams }: AdvisorsPageProps) {
-  const { import_status, import_count, import_skipped } = await searchParams;
+  const { import_status, import_count, import_skipped, update_status, update_id, delete_status, delete_id, edit_id } = await searchParams;
 
   let advisors: Advisor[] = [];
+  let groups: Group[] = [];
   let advisorsError: string | null = null;
 
   async function handleCreateAdvisor(formData: FormData) {
@@ -55,7 +121,7 @@ export default async function AdvisorsPage({ searchParams }: AdvisorsPageProps) 
       max_orientacoes: maxOrientacoes,
     });
 
-    revalidatePath("/advisors");
+    revalidateAdvisorPages();
     redirect("/advisors");
   }
 
@@ -88,8 +154,8 @@ export default async function AdvisorsPage({ searchParams }: AdvisorsPageProps) 
       max_orientacoes: maxOrientacoes,
     });
 
-    revalidatePath("/advisors");
-    redirect("/advisors");
+    revalidateAdvisorPages();
+    redirect(`/advisors?update_status=success&update_id=${id}`);
   }
 
   async function handleDeactivateAdvisor(formData: FormData) {
@@ -103,8 +169,27 @@ export default async function AdvisorsPage({ searchParams }: AdvisorsPageProps) 
 
     await deactivateAdvisor(id);
 
-    revalidatePath("/advisors");
+    revalidateAdvisorPages();
     redirect("/advisors");
+  }
+
+  async function handleDeleteAdvisor(formData: FormData) {
+    "use server";
+
+    const id = String(formData.get("id") ?? "").trim();
+
+    if (!id) {
+      redirect("/advisors?delete_status=invalid");
+    }
+
+    try {
+      await deleteAdvisor(id);
+    } catch {
+      redirect(`/advisors?delete_status=error&delete_id=${id}`);
+    }
+
+    revalidateAdvisorPages();
+    redirect(`/advisors?delete_status=success&delete_id=${id}`);
   }
 
   async function handleImportAdvisors(formData: FormData) {
@@ -146,7 +231,7 @@ export default async function AdvisorsPage({ searchParams }: AdvisorsPageProps) 
 
     try {
       const result = await importAdvisors(mappedRows);
-      revalidatePath("/advisors");
+      revalidateAdvisorPages();
       redirect(
         `/advisors?import_status=success&import_count=${result.importedCount}&import_skipped=${result.skippedCount}`
       );
@@ -162,8 +247,21 @@ export default async function AdvisorsPage({ searchParams }: AdvisorsPageProps) 
       error instanceof Error ? error.message : "Erro desconhecido ao carregar orientadores.";
   }
 
-  const activeAdvisorsCount = advisors.filter((advisor) => advisor.active !== false).length;
+  try {
+    groups = await fetchAllGroups();
+  } catch {
+    groups = [];
+  }
+
+  const activeAdvisors = advisors.filter((advisor) => advisor.active !== false);
+  const activeAdvisorsCount = activeAdvisors.length;
   const inactiveAdvisorsCount = advisors.length - activeAdvisorsCount;
+  const advisorsWithGroupCount = activeAdvisors.filter((advisor) =>
+    groups.some(
+      (group) => idsAreEqual(group.primary_advisor_id, advisor.id) || idsAreEqual(group.co_advisor_id, advisor.id)
+    )
+  ).length;
+  const advisorsWithoutGroupCount = activeAdvisors.length - advisorsWithGroupCount;
 
   return (
     <main className="min-h-screen bg-transparent">
@@ -211,8 +309,383 @@ export default async function AdvisorsPage({ searchParams }: AdvisorsPageProps) 
             <p className="text-red-800 text-sm mt-1">Verifique o formato do arquivo e tente novamente.</p>
           </div>
         )}
+        {delete_status === "success" && (
+          <div className="bg-green-50 border border-green-300 rounded-lg p-4 mb-6">
+            <p className="text-green-900 font-medium">Orientador excluído com sucesso.</p>
+          </div>
+        )}
+        {delete_status === "error" && (
+          <div className="bg-red-50 border border-red-300 rounded-lg p-4 mb-6">
+            <p className="text-red-900 font-medium">Não foi possível excluir o orientador.</p>
+            <p className="text-red-800 text-sm mt-1">Se houver vínculo com grupos ou restrição no banco, remova o vínculo antes de tentar novamente.</p>
+          </div>
+        )}
 
-        <div className="tca-soft-surface rounded-lg p-6 shadow-sm mb-8">
+        {/* Listagem */}
+        <div className="tca-soft-surface rounded-lg p-6 shadow-sm">
+          <h2 className="text-xl font-semibold text-gray-900 mb-4">Orientadores cadastrados</h2>
+          <p className="text-sm text-gray-600">
+            Total de orientadores cadastrados: <strong>{advisors.length}</strong>
+          </p>
+          <p className="text-sm text-gray-600 mb-4">
+            Ativos: <strong>{activeAdvisorsCount}</strong> • Inativos: <strong>{inactiveAdvisorsCount}</strong>
+          </p>
+          <p className="text-sm text-gray-600 mb-4">
+            Com grupo: <strong>{advisorsWithGroupCount}</strong> • Sem grupo: <strong>{advisorsWithoutGroupCount}</strong>
+          </p>
+
+          {advisors.length === 0 ? (
+            <p className="text-gray-700">Nenhum orientador cadastrado ainda.</p>
+          ) : (
+            <div className="space-y-3">
+              {advisors.map((advisor) => {
+                const advisorStatus = getAdvisorStatus(advisor, groups);
+
+                return (
+                <article key={advisor.id} className="rounded-xl border border-gray-200 bg-white p-3.5 shadow-sm">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-base font-semibold text-gray-900 leading-tight">{advisor.name}</p>
+                      <p className="text-sm text-gray-600 truncate mt-1">{advisor.email}</p>
+                    </div>
+                    <span
+                      className={`inline-flex shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold ${
+                        advisor.active === false
+                          ? "bg-gray-100 text-gray-700"
+                          : "bg-green-100 text-green-700"
+                      }`}
+                    >
+                      {advisor.active === false ? "Inativo" : "Ativo"}
+                    </span>
+                  </div>
+
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${advisorStatus.className}`}>
+                      {advisorStatus.label}
+                    </span>
+                    <span className="text-xs text-gray-500">{advisorStatus.description}</span>
+                  </div>
+
+                  {update_status === "success" && update_id === String(advisor.id) && (
+                    <div className="mb-3 rounded-md border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-800">
+                      Alterações salvas com sucesso.
+                    </div>
+                  )}
+                  {delete_status === "error" && delete_id === String(advisor.id) && (
+                    <div className="mb-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">
+                      Não foi possível excluir este orientador.
+                    </div>
+                  )}
+
+                  <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    <div className="rounded-lg bg-gray-50 px-3 py-2">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-gray-500">Cargo/Função</p>
+                      <p className="text-sm text-gray-800 mt-1">{advisor.role_title || "Não informado"}</p>
+                    </div>
+                    <div className="rounded-lg bg-gray-50 px-3 py-2">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-gray-500">Código funcional</p>
+                      <p className="text-sm text-gray-800 mt-1">{advisor.employee_code || "Não informado"}</p>
+                    </div>
+                    <div className="rounded-lg bg-gray-50 px-3 py-2">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-gray-500">Escola</p>
+                      <p className="text-sm text-gray-800 mt-1">{advisor.school || "Não informada"}</p>
+                    </div>
+                    <div className="rounded-lg bg-gray-50 px-3 py-2">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-gray-500">Área de atuação</p>
+                      <p className="text-sm text-gray-800 mt-1">{advisor.area_of_activity || "Não informada"}</p>
+                    </div>
+                  </div>
+
+                  <div className="mt-3 border-t border-gray-100 pt-3 flex flex-wrap items-center justify-between gap-3">
+                    <div className="flex flex-wrap items-center gap-3">
+                      <Link
+                        href={`/advisors?edit_id=${advisor.id}`}
+                        className="inline-flex items-center rounded-md bg-gray-100 px-4 py-2 text-sm font-medium text-gray-900 hover:bg-gray-200"
+                      >
+                        Editar cadastro
+                      </Link>
+
+                      {advisor.active !== false && (
+                        <form action={handleDeactivateAdvisor}>
+                          <input type="hidden" name="id" value={String(advisor.id)} />
+                          <button
+                            type="submit"
+                            className="bg-amber-100 hover:bg-amber-200 text-amber-900 font-medium px-4 py-2 rounded-md text-sm"
+                          >
+                            Inativar cadastro
+                          </button>
+                        </form>
+                      )}
+                    </div>
+
+                    <form action={handleDeleteAdvisor}>
+                      <input type="hidden" name="id" value={String(advisor.id)} />
+                      <button
+                        type="submit"
+                        className="bg-red-100 hover:bg-red-200 text-red-900 font-medium px-4 py-2 rounded-md text-sm"
+                      >
+                        Excluir orientador
+                      </button>
+                    </form>
+                  </div>
+
+                  {edit_id === String(advisor.id) && (
+                    <form action={handleUpdateAdvisor} className="mt-3 space-y-3 border-t border-gray-100 pt-3">
+                      <input type="hidden" name="id" value={String(advisor.id)} />
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div>
+                          <label htmlFor={`advisor-name-${advisor.id}`} className="block text-sm font-medium text-gray-700 mb-1">
+                            Nome completo
+                          </label>
+                          <input
+                            id={`advisor-name-${advisor.id}`}
+                            name="name"
+                            type="text"
+                            defaultValue={advisor.name}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-lime-500"
+                          />
+                        </div>
+
+                        <div>
+                          <label htmlFor={`advisor-email-${advisor.id}`} className="block text-sm font-medium text-gray-700 mb-1">
+                            E-mail
+                          </label>
+                          <input
+                            id={`advisor-email-${advisor.id}`}
+                            name="email"
+                            type="email"
+                            defaultValue={advisor.email}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-lime-500"
+                          />
+                        </div>
+
+                        <div>
+                          <label htmlFor={`advisor-role-${advisor.id}`} className="block text-sm font-medium text-gray-700 mb-1">
+                            Cargo/Função
+                          </label>
+                          <input
+                            id={`advisor-role-${advisor.id}`}
+                            name="role_title"
+                            type="text"
+                            defaultValue={advisor.role_title ?? ""}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-lime-500"
+                          />
+                        </div>
+
+                        <div>
+                          <label htmlFor={`advisor-code-${advisor.id}`} className="block text-sm font-medium text-gray-700 mb-1">
+                            Código funcional
+                          </label>
+                          <input
+                            id={`advisor-code-${advisor.id}`}
+                            name="employee_code"
+                            type="text"
+                            defaultValue={advisor.employee_code ?? ""}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-lime-500"
+                          />
+                        </div>
+
+                        <div>
+                          <label htmlFor={`advisor-school-${advisor.id}`} className="block text-sm font-medium text-gray-700 mb-1">
+                            Escola
+                          </label>
+                          <input
+                            id={`advisor-school-${advisor.id}`}
+                            name="school"
+                            type="text"
+                            defaultValue={advisor.school ?? ""}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-lime-500"
+                          />
+                        </div>
+
+                        <div>
+                          <label htmlFor={`advisor-area-${advisor.id}`} className="block text-sm font-medium text-gray-700 mb-1">
+                            Área de atuação
+                          </label>
+                          <input
+                            id={`advisor-area-${advisor.id}`}
+                            name="area_of_activity"
+                            type="text"
+                            defaultValue={advisor.area_of_activity ?? ""}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-lime-500"
+                          />
+                        </div>
+
+                        <div>
+                          <label htmlFor={`advisor-max-${advisor.id}`} className="block text-sm font-medium text-gray-700 mb-1">
+                            Máx. orientações simultâneas
+                          </label>
+                          <input
+                            id={`advisor-max-${advisor.id}`}
+                            name="max_orientacoes"
+                            type="number"
+                            min="1"
+                            max="99"
+                            defaultValue={advisor.max_orientacoes ?? 5}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-lime-500"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="flex flex-wrap gap-3">
+                        <button
+                          type="submit"
+                          className="bg-lime-700 hover:bg-lime-800 text-white font-medium px-4 py-2 rounded-md text-sm"
+                        >
+                          Salvar alterações
+                        </button>
+
+                        <Link
+                          href="/advisors"
+                          className="inline-flex items-center rounded-md bg-gray-100 px-4 py-2 text-sm font-medium text-gray-900 hover:bg-gray-200"
+                        >
+                          Cancelar edição
+                        </Link>
+                      </div>
+                    </form>
+                  )}
+                </article>
+              )})}
+            </div>
+          )}
+        </div>
+
+        {/* Formulário de cadastro */}
+        <div className="tca-soft-surface rounded-lg p-6 shadow-sm mt-8">
+          <details className="group">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-4">
+              <div>
+                <h2 className="text-xl font-semibold text-gray-900">Cadastrar orientador</h2>
+                <p className="text-sm text-gray-600 mt-2">
+                  Abra este bloco apenas quando for incluir um novo orientador no sistema.
+                </p>
+              </div>
+
+              <span className="inline-flex items-center rounded-md bg-lime-700 px-4 py-2 text-sm font-medium text-white hover:bg-lime-800">
+                Cadastrar orientador
+              </span>
+            </summary>
+
+            <form action={handleCreateAdvisor} className="space-y-4 mt-5 pt-5 border-t border-gray-100">
+              <div>
+                <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">
+                  Nome completo *
+                </label>
+                <input
+                  id="name"
+                  name="name"
+                  type="text"
+                  placeholder="Ex.: Prof. João da Silva"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-lime-500"
+                />
+              </div>
+
+              <div>
+                <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
+                  E-mail *
+                </label>
+                <input
+                  id="email"
+                  name="email"
+                  type="email"
+                  placeholder="Ex.: joao.silva@escola.edu.br"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-lime-500"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label htmlFor="role_title" className="block text-sm font-medium text-gray-700 mb-1">
+                    Cargo/Função
+                  </label>
+                  <input
+                    id="role_title"
+                    name="role_title"
+                    type="text"
+                    placeholder="Ex.: Professor de Ciências"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-lime-500"
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="employee_code" className="block text-sm font-medium text-gray-700 mb-1">
+                    Código funcional
+                  </label>
+                  <input
+                    id="employee_code"
+                    name="employee_code"
+                    type="text"
+                    placeholder="Ex.: 123456"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-lime-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label htmlFor="school" className="block text-sm font-medium text-gray-700 mb-1">
+                    Escola
+                  </label>
+                  <input
+                    id="school"
+                    name="school"
+                    type="text"
+                    placeholder="Ex.: EMEF Exemplo"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-lime-500"
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="area_of_activity" className="block text-sm font-medium text-gray-700 mb-1">
+                    Área de atuação
+                  </label>
+                  <input
+                    id="area_of_activity"
+                    name="area_of_activity"
+                    type="text"
+                    placeholder="Ex.: Ciências da Natureza"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-lime-500"
+                  />
+                </div>
+              </div>
+
+              <div className="max-w-xs">
+                <label htmlFor="max_orientacoes" className="block text-sm font-medium text-gray-700 mb-1">
+                  Máx. de orientações simultâneas
+                </label>
+                <input
+                  id="max_orientacoes"
+                  name="max_orientacoes"
+                  type="number"
+                  min="1"
+                  max="99"
+                  placeholder="5"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-lime-500"
+                />
+                <p className="text-xs text-gray-500 mt-1">Padrão: 5. Define quantos grupos este orientador pode assumir como orientador principal ao mesmo tempo.</p>
+              </div>
+
+              <div className="flex flex-wrap gap-3">
+                <button
+                  type="submit"
+                  className="bg-lime-700 hover:bg-lime-800 text-white font-medium px-4 py-2 rounded-md"
+                >
+                  Salvar orientador
+                </button>
+
+                <Link
+                  href="/dashboard"
+                  className="bg-gray-100 hover:bg-gray-200 text-gray-900 font-medium px-4 py-2 rounded-md"
+                >
+                  Voltar ao dashboard
+                </Link>
+              </div>
+            </form>
+          </details>
+        </div>
+
+        <div className="tca-soft-surface rounded-lg p-6 shadow-sm mt-8">
           <h2 className="text-xl font-semibold text-gray-900 mb-2">Importar orientadores por arquivo</h2>
           <p className="text-sm text-gray-600 mb-4">
             Envie um CSV com colunas como: <code>name,email,role_title,employee_code,school,area_of_activity,max_orientacoes</code>
@@ -240,305 +713,6 @@ export default async function AdvisorsPage({ searchParams }: AdvisorsPageProps) 
               Importar CSV
             </button>
           </form>
-        </div>
-
-        {/* Formulário de cadastro */}
-        <div className="tca-soft-surface rounded-lg p-6 shadow-sm mb-8">
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">Cadastrar orientador</h2>
-
-          <form action={handleCreateAdvisor} className="space-y-4">
-            <div>
-              <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">
-                Nome completo *
-              </label>
-              <input
-                id="name"
-                name="name"
-                type="text"
-                placeholder="Ex.: Prof. João da Silva"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-lime-500"
-              />
-            </div>
-
-            <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
-                E-mail *
-              </label>
-              <input
-                id="email"
-                name="email"
-                type="email"
-                placeholder="Ex.: joao.silva@escola.edu.br"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-lime-500"
-              />
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label htmlFor="role_title" className="block text-sm font-medium text-gray-700 mb-1">
-                  Cargo/Função
-                </label>
-                <input
-                  id="role_title"
-                  name="role_title"
-                  type="text"
-                  placeholder="Ex.: Professor de Ciências"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-lime-500"
-                />
-              </div>
-
-              <div>
-                <label htmlFor="employee_code" className="block text-sm font-medium text-gray-700 mb-1">
-                  Código funcional
-                </label>
-                <input
-                  id="employee_code"
-                  name="employee_code"
-                  type="text"
-                  placeholder="Ex.: 123456"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-lime-500"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label htmlFor="school" className="block text-sm font-medium text-gray-700 mb-1">
-                  Escola
-                </label>
-                <input
-                  id="school"
-                  name="school"
-                  type="text"
-                  placeholder="Ex.: EMEF Exemplo"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-lime-500"
-                />
-              </div>
-
-              <div>
-                <label htmlFor="area_of_activity" className="block text-sm font-medium text-gray-700 mb-1">
-                  Área de atuação
-                </label>
-                <input
-                  id="area_of_activity"
-                  name="area_of_activity"
-                  type="text"
-                  placeholder="Ex.: Ciências da Natureza"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-lime-500"
-                />
-              </div>
-            </div>
-
-            <div className="max-w-xs">
-              <label htmlFor="max_orientacoes" className="block text-sm font-medium text-gray-700 mb-1">
-                Máx. de orientações simultâneas
-              </label>
-              <input
-                id="max_orientacoes"
-                name="max_orientacoes"
-                type="number"
-                min="1"
-                max="99"
-                placeholder="5"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-lime-500"
-              />
-              <p className="text-xs text-gray-500 mt-1">Padrão: 5. Define quantos grupos este orientador pode assumir como orientador principal ao mesmo tempo.</p>
-            </div>
-
-            <div className="flex flex-wrap gap-3">
-              <button
-                type="submit"
-                className="bg-lime-700 hover:bg-lime-800 text-white font-medium px-4 py-2 rounded-md"
-              >
-                Cadastrar orientador
-              </button>
-
-              <Link
-                href="/dashboard"
-                className="bg-gray-100 hover:bg-gray-200 text-gray-900 font-medium px-4 py-2 rounded-md"
-              >
-                Voltar ao dashboard
-              </Link>
-            </div>
-          </form>
-        </div>
-
-        {/* Listagem */}
-        <div className="tca-soft-surface rounded-lg p-6 shadow-sm">
-          <h2 className="text-xl font-semibold text-gray-900 mb-4">Orientadores cadastrados</h2>
-          <p className="text-sm text-gray-600">
-            Total de orientadores cadastrados: <strong>{advisors.length}</strong>
-          </p>
-          <p className="text-sm text-gray-600 mb-4">
-            Ativos: <strong>{activeAdvisorsCount}</strong> • Inativos: <strong>{inactiveAdvisorsCount}</strong>
-          </p>
-
-          {advisors.length === 0 ? (
-            <p className="text-gray-700">Nenhum orientador cadastrado ainda.</p>
-          ) : (
-            <div className="space-y-4">
-              {advisors.map((advisor) => (
-                <article key={advisor.id} className="border border-gray-200 rounded-lg p-4">
-                  <div className="flex items-start justify-between gap-4 mb-3">
-                    <div>
-                      <p className="font-semibold text-gray-900">{advisor.name}</p>
-                      <p className="text-sm text-gray-600">{advisor.email}</p>
-                    </div>
-                    <div className="text-right">
-                      <span className="block text-xs text-gray-400">ID: {String(advisor.id).slice(0, 8)}…</span>
-                      <span
-                        className={`inline-flex mt-2 rounded-full px-2 py-1 text-xs font-semibold ${
-                          advisor.active === false
-                            ? "bg-gray-100 text-gray-700"
-                            : "bg-green-100 text-green-700"
-                        }`}
-                      >
-                        {advisor.active === false ? "Inativo" : "Ativo"}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-                    <p className="text-gray-700">
-                      <strong>Cargo/Função:</strong> {advisor.role_title || "Não informado"}
-                    </p>
-                    <p className="text-gray-700">
-                      <strong>Código funcional:</strong> {advisor.employee_code || "Não informado"}
-                    </p>
-                    <p className="text-gray-700">
-                      <strong>Escola:</strong> {advisor.school || "Não informada"}
-                    </p>
-                    <p className="text-gray-700">
-                      <strong>Área de atuação:</strong> {advisor.area_of_activity || "Não informada"}
-                    </p>
-                    <p className="text-gray-700">
-                      <strong>Máx. orientações:</strong> {advisor.max_orientacoes ?? 5}
-                    </p>
-                  </div>
-
-                  <form action={handleUpdateAdvisor} className="mt-4 border-t border-gray-100 pt-4 space-y-3">
-                    <input type="hidden" name="id" value={String(advisor.id)} />
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      <div>
-                        <label htmlFor={`advisor-name-${advisor.id}`} className="block text-sm font-medium text-gray-700 mb-1">
-                          Nome completo
-                        </label>
-                        <input
-                          id={`advisor-name-${advisor.id}`}
-                          name="name"
-                          type="text"
-                          defaultValue={advisor.name}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-lime-500"
-                        />
-                      </div>
-
-                      <div>
-                        <label htmlFor={`advisor-email-${advisor.id}`} className="block text-sm font-medium text-gray-700 mb-1">
-                          E-mail
-                        </label>
-                        <input
-                          id={`advisor-email-${advisor.id}`}
-                          name="email"
-                          type="email"
-                          defaultValue={advisor.email}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-lime-500"
-                        />
-                      </div>
-
-                      <div>
-                        <label htmlFor={`advisor-role-${advisor.id}`} className="block text-sm font-medium text-gray-700 mb-1">
-                          Cargo/Função
-                        </label>
-                        <input
-                          id={`advisor-role-${advisor.id}`}
-                          name="role_title"
-                          type="text"
-                          defaultValue={advisor.role_title ?? ""}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-lime-500"
-                        />
-                      </div>
-
-                      <div>
-                        <label htmlFor={`advisor-code-${advisor.id}`} className="block text-sm font-medium text-gray-700 mb-1">
-                          Código funcional
-                        </label>
-                        <input
-                          id={`advisor-code-${advisor.id}`}
-                          name="employee_code"
-                          type="text"
-                          defaultValue={advisor.employee_code ?? ""}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-lime-500"
-                        />
-                      </div>
-
-                      <div>
-                        <label htmlFor={`advisor-school-${advisor.id}`} className="block text-sm font-medium text-gray-700 mb-1">
-                          Escola
-                        </label>
-                        <input
-                          id={`advisor-school-${advisor.id}`}
-                          name="school"
-                          type="text"
-                          defaultValue={advisor.school ?? ""}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-lime-500"
-                        />
-                      </div>
-
-                      <div>
-                        <label htmlFor={`advisor-area-${advisor.id}`} className="block text-sm font-medium text-gray-700 mb-1">
-                          Área de atuação
-                        </label>
-                        <input
-                          id={`advisor-area-${advisor.id}`}
-                          name="area_of_activity"
-                          type="text"
-                          defaultValue={advisor.area_of_activity ?? ""}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-lime-500"
-                        />
-                      </div>
-
-                      <div>
-                        <label htmlFor={`advisor-max-${advisor.id}`} className="block text-sm font-medium text-gray-700 mb-1">
-                          Máx. orientações simultâneas
-                        </label>
-                        <input
-                          id={`advisor-max-${advisor.id}`}
-                          name="max_orientacoes"
-                          type="number"
-                          min="1"
-                          max="99"
-                          defaultValue={advisor.max_orientacoes ?? 5}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md text-black placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-lime-500"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="flex flex-wrap gap-3">
-                      <button
-                        type="submit"
-                        className="bg-lime-700 hover:bg-lime-800 text-white font-medium px-4 py-2 rounded-md text-sm"
-                      >
-                        Salvar alterações
-                      </button>
-                    </div>
-                  </form>
-
-                  {advisor.active !== false && (
-                    <form action={handleDeactivateAdvisor} className="mt-3">
-                      <input type="hidden" name="id" value={String(advisor.id)} />
-                      <button
-                        type="submit"
-                        className="bg-amber-100 hover:bg-amber-200 text-amber-900 font-medium px-4 py-2 rounded-md text-sm"
-                      >
-                        Inativar cadastro
-                      </button>
-                    </form>
-                  )}
-                </article>
-              ))}
-            </div>
-          )}
         </div>
       </section>
     </main>
