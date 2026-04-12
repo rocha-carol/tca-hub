@@ -8,16 +8,16 @@ interface CardProps {
 
 export function Card({ children, className = "", accent = "none" }: CardProps) {
   const accentBar: Record<string, string> = {
-    green: "border-l-4 border-l-[#4CAF50]",
-    yellow: "border-l-4 border-l-[#F2C94C]",
-    red: "border-l-4 border-l-[#EB5757]",
-    blue: "border-l-4 border-l-[#2F80ED]",
+    green: "border-l-4 border-l-[var(--tca-primary)]",
+    yellow: "border-l-4 border-l-[var(--tca-accent)]",
+    red: "border-l-4 border-l-[var(--tca-highlight)]",
+    blue: "border-l-4 border-l-[var(--tca-secondary)]",
     none: "",
   };
 
   return (
     <div
-      className={`rounded-2xl shadow-md bg-white p-6 ${accentBar[accent]} ${className}`}
+      className={`rounded-[28px] border border-[var(--tca-border)] bg-white/95 p-6 shadow-[0_18px_40px_-30px_rgba(15,23,42,0.28)] backdrop-blur-[2px] ${accentBar[accent]} ${className}`}
     >
       {children}
     </div>

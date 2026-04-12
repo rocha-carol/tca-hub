@@ -11,18 +11,18 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 
 const variantClasses: Record<ButtonVariant, string> = {
   primary:
-    "bg-[#4CAF50] hover:bg-[#43A047] text-white font-semibold shadow-sm",
+    "border border-transparent bg-[var(--tca-primary)] text-white font-semibold shadow-[0_14px_28px_-18px_rgba(47,143,83,0.9)] hover:bg-[var(--tca-primary-strong)] hover:-translate-y-0.5",
   secondary:
-    "bg-[#F5F2E9] hover:bg-[#EDE8D9] text-[#1F2937] border border-[#dfe4d2] font-medium",
+    "border border-[var(--tca-border)] bg-white/95 text-[var(--foreground)] font-semibold shadow-[0_10px_24px_-22px_rgba(15,23,42,0.7)] hover:border-[var(--tca-border-strong)] hover:bg-[var(--tca-surface-soft)] hover:-translate-y-0.5",
   ghost:
-    "bg-transparent hover:bg-[#F5F2E9] text-[#4CAF50] font-medium",
+    "border border-transparent bg-transparent text-[var(--tca-secondary)] font-semibold hover:bg-[color:var(--tca-focus)]/40",
   danger:
-    "bg-[#EB5757] hover:bg-[#E53E3E] text-white font-semibold shadow-sm",
+    "border border-transparent bg-[var(--tca-highlight)] text-white font-semibold shadow-[0_14px_28px_-18px_rgba(226,85,116,0.85)] hover:bg-[#cf4664] hover:-translate-y-0.5",
 };
 
 const sizeClasses: Record<ButtonSize, string> = {
-  sm: "px-3 py-1.5 text-sm",
-  md: "px-4 py-2 text-sm",
+  sm: "px-3.5 py-2 text-sm",
+  md: "px-4.5 py-2.5 text-sm",
   lg: "px-6 py-3 text-base",
 };
 
@@ -35,7 +35,7 @@ export function Button({
 }: ButtonProps) {
   return (
     <button
-      className={`rounded-xl transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#4CAF50] disabled:opacity-50 disabled:cursor-not-allowed ${variantClasses[variant]} ${sizeClasses[size]} ${className}`}
+      className={`rounded-2xl transition-[background-color,border-color,box-shadow,color,transform] duration-200 focus:outline-none focus-visible:ring-4 focus-visible:ring-[var(--tca-focus)] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0 ${variantClasses[variant]} ${sizeClasses[size]} ${className}`}
       {...props}
     >
       {children}

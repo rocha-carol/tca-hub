@@ -1,23 +1,29 @@
 @import "tailwindcss";
 
 :root {
-  --background: #f6f5f0;
-  --foreground: #2c3a3a;
-  --tca-primary: #5a9a45;
-  --tca-primary-strong: #477b36;
-  --tca-secondary: #0ea5a0;
-  --tca-accent: #f0c44f;
-  --tca-highlight: #e6546a;
+  --background: #f4f7fb;
+  --foreground: #1f2937;
+  --tca-primary: #2f8f53;
+  --tca-primary-strong: #247343;
+  --tca-secondary: #5b6ee1;
+  --tca-accent: #f4b740;
+  --tca-highlight: #e25574;
   --tca-surface: #ffffff;
-  --tca-border: #dfe4d2;
+  --tca-surface-soft: #f8fbff;
+  --tca-surface-muted: #f2f6f2;
+  --tca-border: #d8e2dc;
+  --tca-border-strong: #bfd1c2;
+  --tca-text-soft: #4b5563;
+  --tca-text-muted: #6b7280;
+  --tca-focus: rgba(91, 110, 225, 0.28);
 
   /* Design System — paleta institucional */
-  --color-green-600: #4CAF50;
-  --color-green-400: #8BC34A;
-  --color-yellow-400: #F2C94C;
-  --color-red-500: #EB5757;
-  --color-blue-500: #2F80ED;
-  --color-paper: #F5F2E9;
+  --color-green-600: #2f8f53;
+  --color-green-400: #73bf8e;
+  --color-yellow-400: #f4b740;
+  --color-red-500: #e25574;
+  --color-blue-500: #5b6ee1;
+  --color-paper: #f8fbff;
   --color-card: #FFFFFF;
   --color-text: #1F2937;
   --color-muted: #6B7280;
@@ -35,26 +41,36 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #1f2828;
+    --background: #111827;
     --foreground: #ecf2ea;
-    --tca-primary: #8dcf6f;
-    --tca-primary-strong: #79b95e;
-    --tca-secondary: #54c5bc;
-    --tca-accent: #f4d678;
-    --tca-highlight: #ff8ba0;
-    --tca-surface: #2b3535;
-    --tca-border: #4a5a54;
+    --tca-primary: #7fdaa1;
+    --tca-primary-strong: #64c48a;
+    --tca-secondary: #94a3ff;
+    --tca-accent: #f7c867;
+    --tca-highlight: #ff8aa4;
+    --tca-surface: #18212f;
+    --tca-surface-soft: #1d2938;
+    --tca-surface-muted: #19242b;
+    --tca-border: #334155;
+    --tca-border-strong: #475569;
+    --tca-text-soft: #d1d5db;
+    --tca-text-muted: #9ca3af;
+    --tca-focus: rgba(148, 163, 255, 0.35);
   }
 }
 
 body {
-  background: #fbfbf8;
+  background:
+    radial-gradient(circle at top, rgba(91, 110, 225, 0.08), transparent 26%),
+    linear-gradient(180deg, #f8fbff 0%, #f4f7fb 48%, #eef3f1 100%);
   color: var(--foreground);
   font-family: "Inter", Arial, Helvetica, sans-serif;
+  min-height: 100vh;
 }
 
 a {
   color: var(--tca-primary);
+  transition: color 160ms ease;
 }
 
 a:hover {
@@ -64,6 +80,22 @@ a:hover {
 ::selection {
   background: color-mix(in srgb, var(--tca-primary) 24%, white);
   color: var(--foreground);
+}
+
+button,
+input,
+select,
+textarea {
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    color 160ms ease,
+    transform 160ms ease;
+}
+
+:focus-visible {
+  outline: none;
 }
 
 .tca-stripes {
@@ -83,8 +115,9 @@ a:hover {
 }
 
 .tca-soft-surface {
-  background: linear-gradient(180deg, #fffffb 0%, #f8f8f2 100%);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, rgba(248, 251, 255, 0.98) 100%);
   border: 1px solid var(--tca-border);
+  box-shadow: 0 16px 40px -28px rgba(15, 23, 42, 0.18);
 }
 
 .tca-title-guide {
