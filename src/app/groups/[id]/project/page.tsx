@@ -73,6 +73,7 @@ import { generateProjectDevelopmentChecklistSimulated } from "@/lib/ai/project-d
 import { generatePedagogicalFeedbackWithAI } from "@/lib/ai/pedagogical-feedback-service";
 import { ProjectProgress } from "@/components/project/ProjectProgress";
 import { ProjectPreview } from "@/components/project/ProjectPreview";
+import ProjectPageScrollRestore from "@/components/ui/ProjectPageScrollRestore";
 import type { ProjectSectionStatus } from "@/types/project-section";
 import type { ProjectDevelopmentChecklistStatus } from "@/types/project-development-checklist-item";
 import type { GroupInPersonMeetingStatus } from "@/types/group-in-person-meeting";
@@ -394,9 +395,9 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
   const canManageSchedule = profile?.role === "advisor" || profile?.role === "coordinator";
   const canManageMeetings = profile?.role === "advisor" || profile?.role === "coordinator";
   const canManageInternalNotifications = profile?.role === "advisor" || profile?.role === "coordinator";
-  const canManageFinalProduct = !!profile;
-  const canManageProcessPhotos = !!profile;
-  const canManageRepertory = !!profile;
+  const canManageFinalProduct = profile?.role === "student";
+  const canManageProcessPhotos = profile?.role === "student";
+  const canManageRepertory = profile?.role === "student";
   const canManageInteractiveGuides = !!profile;
   const canRespondInteractiveGuides = profile?.role === "student";
   const canManageAIFeedback = profile?.role === "advisor" || profile?.role === "coordinator";
@@ -804,7 +805,7 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
   async function handleUpsertFinalProduct(formData: FormData) {
     "use server";
 
-    const authenticatedProfile = await requireSharedProjectAccess(id);
+    const authenticatedProfile = await requireStudentProjectAccess(id, "final_product_status=forbidden");
 
     const title = String(formData.get("title") ?? "").trim();
     const descriptionRaw = String(formData.get("description") ?? "").trim();
@@ -848,7 +849,7 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
   async function handleAddProcessPhoto(formData: FormData) {
     "use server";
 
-    const authenticatedProfile = await requireSharedProjectAccess(id);
+    const authenticatedProfile = await requireStudentProjectAccess(id, "photo_status=forbidden&photo_action=add");
 
     const photoUrl = String(formData.get("photo_url") ?? "").trim();
     const captionRaw = String(formData.get("caption") ?? "").trim();
@@ -885,7 +886,7 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
   async function handleAddRepertoryItem(formData: FormData) {
     "use server";
 
-    const authenticatedProfile = await requireSharedProjectAccess(id);
+    const authenticatedProfile = await requireStudentProjectAccess(id, "repertory_status=forbidden&repertory_action=add");
 
     const title = String(formData.get("title") ?? "").trim();
     const descriptionRaw = String(formData.get("description") ?? "").trim();
@@ -1418,6 +1419,7 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
 
   return (
     <main className="min-h-screen bg-transparent">
+      <ProjectPageScrollRestore />
       <section className="max-w-5xl mx-auto px-6 py-10">
         <div className="tca-stripes h-1.5 w-full rounded-md mb-6" />
         <header className="mb-8">
@@ -1619,6 +1621,12 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
               )}
             </div>
 
+            {!canManageFinalProduct && profile && (
+              <div className="mb-4 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                Modo somente visualização para orientador e coordenação. A edição e colaboração deste módulo ficam disponíveis para estudantes.
+              </div>
+            )}
+
             {canManageFinalProduct && (
               <form action={handleUpsertFinalProduct} className="space-y-3 border-t border-gray-100 pt-4">
                 <div>
@@ -1787,6 +1795,12 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
             )}
           </div>
 
+          {!canManageProcessPhotos && profile && (
+            <div className="mb-4 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+              Modo somente visualização para orientador e coordenação. O envio colaborativo de fotos do processo fica disponível para estudantes.
+            </div>
+          )}
+
           {canManageProcessPhotos && (
             <form action={handleAddProcessPhoto} className="space-y-3 border-t border-gray-100 pt-4">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -1948,6 +1962,12 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
               ))
             )}
           </div>
+
+          {!canManageRepertory && profile && (
+            <div className="mb-4 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+              Modo somente visualização para orientador e coordenação. A edição e colaboração deste repertório ficam disponíveis para estudantes.
+            </div>
+          )}
 
           {canManageRepertory && (
             <form action={handleAddRepertoryItem} className="space-y-3 border-t border-gray-100 pt-4">
@@ -2487,303 +2507,6 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
         </div>
 
         <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm mb-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-2">Indicador de autoria</h2>
-
-          {query.authorship_status === "success" && query.authorship_action === "add" && (
-            <p className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-md px-3 py-2 mb-3">
-              Indicador de autoria registrado com sucesso.
-            </p>
-          )}
-          {query.authorship_status === "invalid" && (
-            <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2 mb-3">
-              Dados inválidos. Os percentuais devem totalizar 100 e a base da análise deve ter pelo menos 3 caracteres.
-            </p>
-          )}
-          {query.authorship_status === "error" && (
-            <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2 mb-3">
-              Não foi possível registrar o indicador de autoria. Tente novamente.
-            </p>
-          )}
-          {query.authorship_status === "forbidden" && (
-            <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2 mb-3">
-              Apenas orientadores (ou coordenação) podem registrar indicador de autoria.
-            </p>
-          )}
-
-          <div className="space-y-2 mb-4">
-            {sections.length === 0 ? (
-              <p className="text-sm text-gray-500">Não há seções disponíveis para calcular autoria.</p>
-            ) : (
-              sections.map((section) => {
-                const latest = latestAuthorshipBySection.get(String(section.id));
-                const suggestion = getSuggestedAuthorshipPercentages(String(section.id));
-
-                return (
-                  <div key={`authorship-${String(section.id)}`} className="border border-gray-100 rounded-md px-3 py-2 bg-gray-50">
-                    <p className="text-sm font-medium text-gray-900">
-                      {section.section_order}. {section.section_title}
-                    </p>
-
-                    {latest ? (
-                      <>
-                        <p className="text-xs text-gray-700 mt-1">
-                          Último indicador: Estudantes {latest.student_percent}% • Orientador {latest.advisor_percent}% • Coordenação {latest.coordinator_percent}%
-                        </p>
-                        <p className="text-xs text-gray-600 mt-1 whitespace-pre-line">Base: {latest.analysis_basis}</p>
-                        {latest.recommendation && (
-                          <p className="text-xs text-blue-700 mt-1 whitespace-pre-line">Recomendação: {latest.recommendation}</p>
-                        )}
-                      </>
-                    ) : (
-                      <p className="text-xs text-gray-500 mt-1">Nenhum indicador manual registrado ainda para esta seção.</p>
-                    )}
-
-                    <p className="text-xs text-indigo-700 mt-1">
-                      Sugestão automática (pelo histórico de versões): Estudantes {suggestion.student}% • Orientador {suggestion.advisor}% • Coordenação {suggestion.coordinator}%
-                    </p>
-                  </div>
-                );
-              })
-            )}
-          </div>
-
-          {canManageAuthorshipIndicator && (
-            <form action={handleAddAuthorshipIndicator} className="space-y-3 border-t border-gray-100 pt-4">
-              <div>
-                <label htmlFor="authorship-section" className="block text-sm text-gray-700 mb-1">Seção para análise</label>
-                <select
-                  id="authorship-section"
-                  name="section_id"
-                  defaultValue={query.authorship_section || ""}
-                  className="w-full md:w-96 px-3 py-2 border border-gray-300 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="">Selecione uma seção...</option>
-                  {sections.map((section) => (
-                    <option key={String(section.id)} value={String(section.id)}>
-                      {section.section_order}. {section.section_title}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <div>
-                  <label htmlFor="authorship-student" className="block text-sm text-gray-700 mb-1">Estudantes (%)</label>
-                  <input
-                    id="authorship-student"
-                    name="student_percent"
-                    type="number"
-                    min={0}
-                    max={100}
-                    defaultValue={0}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white"
-                  />
-                </div>
-
-                <div>
-                  <label htmlFor="authorship-advisor" className="block text-sm text-gray-700 mb-1">Orientador (%)</label>
-                  <input
-                    id="authorship-advisor"
-                    name="advisor_percent"
-                    type="number"
-                    min={0}
-                    max={100}
-                    defaultValue={0}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white"
-                  />
-                </div>
-
-                <div>
-                  <label htmlFor="authorship-coordinator" className="block text-sm text-gray-700 mb-1">Coordenação (%)</label>
-                  <input
-                    id="authorship-coordinator"
-                    name="coordinator_percent"
-                    type="number"
-                    min={0}
-                    max={100}
-                    defaultValue={0}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label htmlFor="authorship-basis" className="block text-sm text-gray-700 mb-1">Base da análise</label>
-                <textarea
-                  id="authorship-basis"
-                  name="analysis_basis"
-                  rows={2}
-                  placeholder="Ex.: análise baseada no histórico de versões, participação em encontros e qualidade da produção escrita."
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white"
-                />
-              </div>
-
-              <div>
-                <label htmlFor="authorship-recommendation" className="block text-sm text-gray-700 mb-1">Recomendação pedagógica (opcional)</label>
-                <textarea
-                  id="authorship-recommendation"
-                  name="recommendation"
-                  rows={2}
-                  placeholder="Ex.: reforçar registro individual de contribuição em cada entrega parcial."
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white"
-                />
-              </div>
-
-              <button
-                type="submit"
-                className="bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2 rounded-md text-sm"
-              >
-                Registrar indicador de autoria
-              </button>
-            </form>
-          )}
-        </div>
-
-        <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm mb-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-2">Notificações internas do sistema</h2>
-
-          {query.notification_status === "success" && query.notification_action === "add" && (
-            <p className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-md px-3 py-2 mb-3">
-              Notificação interna registrada com sucesso.
-            </p>
-          )}
-          {query.notification_status === "invalid" && (
-            <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2 mb-3">
-              Dados inválidos para notificação. Revise título e mensagem.
-            </p>
-          )}
-          {query.notification_status === "error" && (
-            <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2 mb-3">
-              Não foi possível registrar a notificação interna. Tente novamente.
-            </p>
-          )}
-          {query.notification_status === "forbidden" && (
-            <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2 mb-3">
-              Apenas orientadores (ou coordenação) podem registrar notificações internas nesta etapa.
-            </p>
-          )}
-
-          <div className="space-y-2 mb-4">
-            {internalNotifications.length === 0 ? (
-              <p className="text-sm text-gray-500">Ainda não há notificações internas para este grupo.</p>
-            ) : (
-              internalNotifications.map((notification) => (
-                <div key={String(notification.id)} className="border border-gray-100 rounded-md px-3 py-2 bg-gray-50">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-sm font-medium text-gray-900">{notification.title}</p>
-                      <p className="text-sm text-gray-800 mt-1 whitespace-pre-line">{notification.message}</p>
-                      <p className="text-xs text-gray-500 mt-1">
-                        {notification.author_name} ({notification.author_role === "advisor" ? "orientador" : "coordenação"})
-                        {notification.section_id
-                          ? ` • ${sectionTitleById.get(String(notification.section_id)) || "Seção"}`
-                          : " • Geral"}
-                        {notification.created_at
-                          ? ` • ${new Date(notification.created_at).toLocaleString("pt-BR", {
-                              day: "2-digit",
-                              month: "2-digit",
-                              year: "numeric",
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })}`
-                          : ""}
-                      </p>
-                    </div>
-
-                    <span
-                      className={`text-xs font-semibold px-2 py-1 rounded-full ${
-                        notification.notification_type === "prazo"
-                          ? "bg-amber-100 text-amber-700"
-                          : notification.notification_type === "encontro"
-                            ? "bg-blue-100 text-blue-700"
-                            : notification.notification_type === "orientacao"
-                              ? "bg-indigo-100 text-indigo-700"
-                              : "bg-gray-200 text-gray-700"
-                      }`}
-                    >
-                      {notification.notification_type === "prazo"
-                        ? "Prazo"
-                        : notification.notification_type === "encontro"
-                          ? "Encontro"
-                          : notification.notification_type === "orientacao"
-                            ? "Orientação"
-                            : "Aviso"}
-                    </span>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-
-          {canManageInternalNotifications && (
-            <form action={handleAddInternalNotification} className="space-y-3 border-t border-gray-100 pt-4">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <div>
-                  <label htmlFor="notification-type" className="block text-sm text-gray-700 mb-1">Tipo</label>
-                  <select
-                    id="notification-type"
-                    name="notification_type"
-                    defaultValue="aviso"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="aviso">Aviso</option>
-                    <option value="prazo">Prazo</option>
-                    <option value="encontro">Encontro</option>
-                    <option value="orientacao">Orientação</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label htmlFor="notification-section" className="block text-sm text-gray-700 mb-1">Seção (opcional)</label>
-                  <select
-                    id="notification-section"
-                    name="section_id"
-                    defaultValue=""
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="">Geral (sem seção específica)</option>
-                    {sections.map((section) => (
-                      <option key={String(section.id)} value={String(section.id)}>
-                        {section.section_order}. {section.section_title}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label htmlFor="notification-title" className="block text-sm text-gray-700 mb-1">Título</label>
-                  <input
-                    id="notification-title"
-                    name="title"
-                    type="text"
-                    placeholder="Ex.: Atualização do cronograma"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label htmlFor="notification-message" className="block text-sm text-gray-700 mb-1">Mensagem</label>
-                <textarea
-                  id="notification-message"
-                  name="message"
-                  rows={3}
-                  placeholder="Descreva a notificação para o grupo..."
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-
-              <button
-                type="submit"
-                className="bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2 rounded-md text-sm"
-              >
-                Publicar notificação interna
-              </button>
-            </form>
-          )}
-        </div>
-
-        <div className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm mb-6">
           <h2 className="text-lg font-semibold text-gray-900 mb-2">Agenda de encontros presenciais</h2>
 
           {query.meeting_status === "success" && query.meeting_action === "add" && (
@@ -3150,6 +2873,331 @@ export default async function GroupProjectPage({ params, searchParams }: GroupPr
             </div>
           )}
         </div>
+
+        <details className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm mb-6">
+          <summary className="flex cursor-pointer list-none items-start justify-between gap-4">
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="text-lg font-semibold text-gray-900">Indicador de autoria</h2>
+                <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-800 border border-amber-200">
+                  Em desenvolvimento
+                </span>
+              </div>
+              <p className="text-sm text-gray-600 mt-1">
+                Módulo retraído ao final da página para uso experimental e acompanhamento futuro.
+              </p>
+            </div>
+          </summary>
+
+          <div className="mt-4">
+            {query.authorship_status === "success" && query.authorship_action === "add" && (
+              <p className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-md px-3 py-2 mb-3">
+                Indicador de autoria registrado com sucesso.
+              </p>
+            )}
+            {query.authorship_status === "invalid" && (
+              <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2 mb-3">
+                Dados inválidos. Os percentuais devem totalizar 100 e a base da análise deve ter pelo menos 3 caracteres.
+              </p>
+            )}
+            {query.authorship_status === "error" && (
+              <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2 mb-3">
+                Não foi possível registrar o indicador de autoria. Tente novamente.
+              </p>
+            )}
+            {query.authorship_status === "forbidden" && (
+              <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2 mb-3">
+                Apenas orientadores (ou coordenação) podem registrar indicador de autoria.
+              </p>
+            )}
+
+            <div className="space-y-2 mb-4">
+              {sections.length === 0 ? (
+                <p className="text-sm text-gray-500">Não há seções disponíveis para calcular autoria.</p>
+              ) : (
+                sections.map((section) => {
+                  const latest = latestAuthorshipBySection.get(String(section.id));
+                  const suggestion = getSuggestedAuthorshipPercentages(String(section.id));
+
+                  return (
+                    <div key={`authorship-${String(section.id)}`} className="border border-gray-100 rounded-md px-3 py-2 bg-gray-50">
+                      <p className="text-sm font-medium text-gray-900">
+                        {section.section_order}. {section.section_title}
+                      </p>
+
+                      {latest ? (
+                        <>
+                          <p className="text-xs text-gray-700 mt-1">
+                            Último indicador: Estudantes {latest.student_percent}% • Orientador {latest.advisor_percent}% • Coordenação {latest.coordinator_percent}%
+                          </p>
+                          <p className="text-xs text-gray-600 mt-1 whitespace-pre-line">Base: {latest.analysis_basis}</p>
+                          {latest.recommendation && (
+                            <p className="text-xs text-blue-700 mt-1 whitespace-pre-line">Recomendação: {latest.recommendation}</p>
+                          )}
+                        </>
+                      ) : (
+                        <p className="text-xs text-gray-500 mt-1">Nenhum indicador manual registrado ainda para esta seção.</p>
+                      )}
+
+                      <p className="text-xs text-indigo-700 mt-1">
+                        Sugestão automática (pelo histórico de versões): Estudantes {suggestion.student}% • Orientador {suggestion.advisor}% • Coordenação {suggestion.coordinator}%
+                      </p>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            {canManageAuthorshipIndicator && (
+              <form action={handleAddAuthorshipIndicator} className="space-y-3 border-t border-gray-100 pt-4">
+                <div>
+                  <label htmlFor="authorship-section" className="block text-sm text-gray-700 mb-1">Seção para análise</label>
+                  <select
+                    id="authorship-section"
+                    name="section_id"
+                    defaultValue={query.authorship_section || ""}
+                    className="w-full md:w-96 px-3 py-2 border border-gray-300 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">Selecione uma seção...</option>
+                    {sections.map((section) => (
+                      <option key={String(section.id)} value={String(section.id)}>
+                        {section.section_order}. {section.section_title}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div>
+                    <label htmlFor="authorship-student" className="block text-sm text-gray-700 mb-1">Estudantes (%)</label>
+                    <input
+                      id="authorship-student"
+                      name="student_percent"
+                      type="number"
+                      min={0}
+                      max={100}
+                      defaultValue={0}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white"
+                    />
+                  </div>
+
+                  <div>
+                    <label htmlFor="authorship-advisor" className="block text-sm text-gray-700 mb-1">Orientador (%)</label>
+                    <input
+                      id="authorship-advisor"
+                      name="advisor_percent"
+                      type="number"
+                      min={0}
+                      max={100}
+                      defaultValue={0}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white"
+                    />
+                  </div>
+
+                  <div>
+                    <label htmlFor="authorship-coordinator" className="block text-sm text-gray-700 mb-1">Coordenação (%)</label>
+                    <input
+                      id="authorship-coordinator"
+                      name="coordinator_percent"
+                      type="number"
+                      min={0}
+                      max={100}
+                      defaultValue={0}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label htmlFor="authorship-basis" className="block text-sm text-gray-700 mb-1">Base da análise</label>
+                  <textarea
+                    id="authorship-basis"
+                    name="analysis_basis"
+                    rows={2}
+                    placeholder="Ex.: análise baseada no histórico de versões, participação em encontros e qualidade da produção escrita."
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white"
+                  />
+                </div>
+
+                <div>
+                  <label htmlFor="authorship-recommendation" className="block text-sm text-gray-700 mb-1">Recomendação pedagógica (opcional)</label>
+                  <textarea
+                    id="authorship-recommendation"
+                    name="recommendation"
+                    rows={2}
+                    placeholder="Ex.: reforçar registro individual de contribuição em cada entrega parcial."
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  className="bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2 rounded-md text-sm"
+                >
+                  Registrar indicador de autoria
+                </button>
+              </form>
+            )}
+          </div>
+        </details>
+
+        <details className="bg-white border border-gray-200 rounded-lg p-6 shadow-sm mb-6">
+          <summary className="flex cursor-pointer list-none items-start justify-between gap-4">
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="text-lg font-semibold text-gray-900">Notificações internas do sistema</h2>
+                <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-800 border border-amber-200">
+                  Em desenvolvimento
+                </span>
+              </div>
+              <p className="text-sm text-gray-600 mt-1">
+                Módulo retraído ao final da página para reduzir ruído visual durante o uso principal do projeto.
+              </p>
+            </div>
+          </summary>
+
+          <div className="mt-4">
+            {query.notification_status === "success" && query.notification_action === "add" && (
+              <p className="text-sm text-green-700 bg-green-50 border border-green-200 rounded-md px-3 py-2 mb-3">
+                Notificação interna registrada com sucesso.
+              </p>
+            )}
+            {query.notification_status === "invalid" && (
+              <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2 mb-3">
+                Dados inválidos para notificação. Revise título e mensagem.
+              </p>
+            )}
+            {query.notification_status === "error" && (
+              <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2 mb-3">
+                Não foi possível registrar a notificação interna. Tente novamente.
+              </p>
+            )}
+            {query.notification_status === "forbidden" && (
+              <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md px-3 py-2 mb-3">
+                Apenas orientadores (ou coordenação) podem registrar notificações internas nesta etapa.
+              </p>
+            )}
+
+            <div className="space-y-2 mb-4">
+              {internalNotifications.length === 0 ? (
+                <p className="text-sm text-gray-500">Ainda não há notificações internas para este grupo.</p>
+              ) : (
+                internalNotifications.map((notification) => (
+                  <div key={String(notification.id)} className="border border-gray-100 rounded-md px-3 py-2 bg-gray-50">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-medium text-gray-900">{notification.title}</p>
+                        <p className="text-sm text-gray-800 mt-1 whitespace-pre-line">{notification.message}</p>
+                        <p className="text-xs text-gray-500 mt-1">
+                          {notification.author_name} ({notification.author_role === "advisor" ? "orientador" : "coordenação"})
+                          {notification.section_id
+                            ? ` • ${sectionTitleById.get(String(notification.section_id)) || "Seção"}`
+                            : " • Geral"}
+                          {notification.created_at
+                            ? ` • ${new Date(notification.created_at).toLocaleString("pt-BR", {
+                                day: "2-digit",
+                                month: "2-digit",
+                                year: "numeric",
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })}`
+                            : ""}
+                        </p>
+                      </div>
+
+                      <span
+                        className={`text-xs font-semibold px-2 py-1 rounded-full ${
+                          notification.notification_type === "prazo"
+                            ? "bg-amber-100 text-amber-700"
+                            : notification.notification_type === "encontro"
+                              ? "bg-blue-100 text-blue-700"
+                              : notification.notification_type === "orientacao"
+                                ? "bg-indigo-100 text-indigo-700"
+                                : "bg-gray-200 text-gray-700"
+                        }`}
+                      >
+                        {notification.notification_type === "prazo"
+                          ? "Prazo"
+                          : notification.notification_type === "encontro"
+                            ? "Encontro"
+                            : notification.notification_type === "orientacao"
+                              ? "Orientação"
+                              : "Aviso"}
+                      </span>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            {canManageInternalNotifications && (
+              <form action={handleAddInternalNotification} className="space-y-3 border-t border-gray-100 pt-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div>
+                    <label htmlFor="notification-type" className="block text-sm text-gray-700 mb-1">Tipo</label>
+                    <select
+                      id="notification-type"
+                      name="notification_type"
+                      defaultValue="aviso"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="aviso">Aviso</option>
+                      <option value="prazo">Prazo</option>
+                      <option value="encontro">Encontro</option>
+                      <option value="orientacao">Orientação</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label htmlFor="notification-section" className="block text-sm text-gray-700 mb-1">Seção (opcional)</label>
+                    <select
+                      id="notification-section"
+                      name="section_id"
+                      defaultValue=""
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="">Geral (sem seção específica)</option>
+                      {sections.map((section) => (
+                        <option key={String(section.id)} value={String(section.id)}>
+                          {section.section_order}. {section.section_title}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label htmlFor="notification-title" className="block text-sm text-gray-700 mb-1">Título</label>
+                    <input
+                      id="notification-title"
+                      name="title"
+                      type="text"
+                      placeholder="Ex.: Atualização do cronograma"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label htmlFor="notification-message" className="block text-sm text-gray-700 mb-1">Mensagem</label>
+                  <textarea
+                    id="notification-message"
+                    name="message"
+                    rows={3}
+                    placeholder="Descreva a notificação para o grupo..."
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-black bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  className="bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2 rounded-md text-sm"
+                >
+                  Publicar notificação interna
+                </button>
+              </form>
+            )}
+          </div>
+        </details>
 
       </section>
     </main>
