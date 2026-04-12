@@ -20,16 +20,16 @@ export function ProgressBar({
   return (
     <div className={`w-full ${className}`}>
       {(label || showPercent) && (
-        <div className="flex justify-between items-center mb-2">
-          {label && <span className="text-sm text-[#6B7280]">{label}</span>}
+        <div className="mb-2 flex items-center justify-between gap-3">
+          {label && <span className="text-sm font-medium text-[var(--tca-text-soft)]">{label}</span>}
           {showPercent && (
-            <span className="text-sm font-semibold text-[#1F2937]">{percent}%</span>
+            <span className="rounded-full border border-[var(--tca-border)] bg-white px-2.5 py-1 text-sm font-semibold text-[var(--foreground)] shadow-[0_8px_18px_-18px_rgba(15,23,42,0.7)]">{percent}%</span>
           )}
         </div>
       )}
-      <div className="w-full h-3 bg-gray-100 rounded-full overflow-hidden">
+      <div className="h-3.5 w-full overflow-hidden rounded-full border border-[var(--tca-border)] bg-[linear-gradient(180deg,#eef2f7_0%,#e7edf4_100%)] shadow-[inset_0_1px_1px_rgba(255,255,255,0.65)]">
         <div
-          className={`h-full rounded-full transition-all duration-500 ${colorClass}`}
+          className={`h-full rounded-full transition-all duration-500 shadow-[0_6px_18px_-10px_rgba(91,110,225,0.85)] ${colorClass}`}
           style={{ width: `${percent}%` }}
           role="progressbar"
           aria-valuenow={percent}
